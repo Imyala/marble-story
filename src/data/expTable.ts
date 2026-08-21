@@ -66,8 +66,8 @@ export const EXP_TABLE: readonly number[] = buildTable();
 
 /** EXP needed to go from `level` to `level + 1`. 0 at max level. */
 export function expToNext(level: number): number {
-  if (level < 1 || level >= MAX_LEVEL) return 0;
-  return EXP_TABLE[level];
+  if (!Number.isFinite(level) || level < 1 || level >= MAX_LEVEL) return 0;
+  return EXP_TABLE[Math.floor(level)] ?? 0;
 }
 
 /** Total EXP from level 1 to the given level. Useful for progress readouts. */

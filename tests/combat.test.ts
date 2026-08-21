@@ -229,4 +229,13 @@ describe('exp table', () => {
     expect(expToNext(MAX_LEVEL)).toBe(0);
     expect(expToNext(MAX_LEVEL + 10)).toBe(0);
   });
+
+  it('never returns undefined for a bad level', () => {
+    // The HUD calls .toLocaleString() on this every frame; a nullish return
+    // would crash rendering rather than merely showing a wrong number.
+    for (const bad of [0, -5, NaN, Infinity, 1.5, 1e9]) {
+      expect(typeof expToNext(bad), String(bad)).toBe('number');
+      expect(Number.isFinite(expToNext(bad)), String(bad)).toBe(true);
+    }
+  });
 });

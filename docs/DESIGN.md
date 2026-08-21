@@ -752,3 +752,46 @@ src/
 
 Phase 8 is deliberately left empty. Everything above it is the machine; the
 story is what you put into it.
+
+---
+
+## Appendix — where the implementation deviates
+
+Every clone makes simplifications. These are ours, and why.
+
+**Magic damage uses the same formula as physical.** Section 5.1 describes magic
+as a separate nonlinear curve. We unify it: a wand or staff is a weapon class
+with a multiplier, INT is its primary stat, LUK its secondary, and MATK
+substitutes for WATK. One formula is far easier to balance and to test, and the
+spell's own `damagePercent` and element carry the class identity anyway.
+
+**Storage is inventory expansion.** Rather than a second parallel inventory,
+the keeper NPC sells +8 slots per tab. This engages the same slot-pressure
+mechanic — the thing that actually drives the behaviour — without a whole
+second window.
+
+**Scrolls apply to the equipped item in their target slot.** The real game
+drags a scroll onto an item. Without drag-and-drop, targeting what you are
+wearing preserves the decision (which item do I gamble on?) with a click.
+
+**Ring slots are four, everything else is one.** Matching convention, but there
+are no face/eye accessory items in the database yet — the slots exist and are
+drawn, waiting for content.
+
+**3rd and 4th job skill trees are not populated.** Jobs, requirements, HP/MP
+bonuses and advancement all exist for all four tiers. Only the 1st and 2nd tier
+*skills* are written. Extending is mechanical: add entries to `src/data/skills.ts`
+with the matching `jobId`.
+
+**No party, guild, trade, or chat.** Single-player. Every state change already
+routes through an explicit system rather than mutating globals, so a
+client/server split remains possible, but nothing here is networked.
+
+**No audio.** The `bgm` field exists in the map model and is unused.
+
+### Tuning constants that differ from the doc
+
+- `JUMP_SPEED` is 620, not 555 — a ~96px apex gives map authoring a cleaner
+  vertical clearance budget than ~77px did.
+- Ground mass under a foothold fades out over 220px rather than ending in a
+  hard edge, purely a rendering choice.

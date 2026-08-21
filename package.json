@@ -10,7 +10,9 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "smoke": "node scripts/smoke-run.mjs",
+    "check": "tsc --noEmit && vitest run"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

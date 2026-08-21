@@ -6,7 +6,9 @@
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
 
-const URL = process.env.GAME_URL ?? 'http://localhost:4173/';
+// A fixed seed makes damage rolls, drop rolls and mob AI reproducible.
+const SEED = process.env.GAME_SEED ?? '20260821';
+const URL = `${process.env.GAME_URL ?? 'http://localhost:4173/'}?seed=${SEED}`;
 const OUT = 'scripts/out';
 mkdirSync(OUT, { recursive: true });
 
@@ -14,7 +16,7 @@ const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromi
 const page = await browser.newPage({ viewport: { width: 1280, height: 860 } });
 
 const errors = [];
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}\n${e.stack ?? ''}`));
 page.on('console', (m) => {
   if (m.type() === 'error') errors.push(`console: ${m.text()}`);
 });
@@ -197,6 +199,172 @@ const equipped = await page.evaluate(() => {
 });
 check('equipping a better weapon raises attack', equipped.ok && equipped.after > equipped.before,
       `watk ${equipped.before} -> ${equipped.after}`);
+
+
+/* ------------------------------------------------- systems: quests, shop -- */
+
+// Quest lifecycle: offer -> track kills -> ready -> turn in -> rewarded.
+const questFlow = await page.evaluate(() => {
+  const g = window.marble;
+  g.quests.start('first_steps');
+  const started = g.quests.stateOf('first_steps', g.player, g.player.inventory);
+  for (let i = 0; i < 8; i++) g.quests.recordKill('snail');
+  const ready = g.quests.stateOf('first_steps', g.player, g.player.inventory);
+  const mesoBefore = g.player.inventory.mesos;
+  const potionsBefore = g.player.inventory.countOf('red_potion');
+  g.hooks.completeQuest('first_steps');
+  return {
+    started, ready,
+    done: g.quests.completed.has('first_steps'),
+    mesoGain: g.player.inventory.mesos - mesoBefore,
+    potionGain: g.player.inventory.countOf('red_potion') - potionsBefore,
+  };
+});
+check('quest tracks kills to completion',
+      questFlow.started === 'active' && questFlow.ready === 'ready', JSON.stringify(questFlow));
+check('quest turn-in pays out',
+      questFlow.done && questFlow.mesoGain > 0 && questFlow.potionGain > 0, JSON.stringify(questFlow));
+
+// A collect quest must consume the items it asked for.
+const collectFlow = await page.evaluate(() => {
+  const g = window.marble;
+  g.player.inventory.addStack('snail_shell', 12);
+  g.quests.start('shells_for_pell');
+  const before = g.player.inventory.countOf('snail_shell');
+  const readyState = g.quests.stateOf('shells_for_pell', g.player, g.player.inventory);
+  g.hooks.completeQuest('shells_for_pell');
+  return { before, readyState, after: g.player.inventory.countOf('snail_shell') };
+});
+check('collect quests consume their items',
+      collectFlow.readyState === 'ready' && collectFlow.after === collectFlow.before - 10,
+      JSON.stringify(collectFlow));
+
+// Shop: buying costs mesos and delivers goods; selling reverses it.
+const shopFlow = await page.evaluate(() => {
+  const g = window.marble;
+  g.player.inventory.addMesos(50000);
+  const mesoStart = g.player.inventory.mesos;
+  const potStart = g.player.inventory.countOf('orange_potion');
+  g.hooks.buy('orange_potion', 10);
+  const afterBuy = {
+    mesos: g.player.inventory.mesos,
+    potions: g.player.inventory.countOf('orange_potion'),
+  };
+  const idx = g.player.inventory.tabs.use.findIndex(
+    (sl) => sl?.kind === 'stack' && sl.itemId === 'orange_potion');
+  g.hooks.sell('use', idx);
+  return {
+    spent: mesoStart - afterBuy.mesos,
+    got: afterBuy.potions - potStart,
+    refunded: g.player.inventory.mesos - afterBuy.mesos,
+  };
+});
+check('buying costs mesos and delivers items',
+      shopFlow.spent > 0 && shopFlow.got === 10, JSON.stringify(shopFlow));
+check('selling refunds less than the purchase price',
+      shopFlow.refunded > 0 && shopFlow.refunded < shopFlow.spent, JSON.stringify(shopFlow));
+
+// Potions: hotkey heals and consumes a potion.
+const potionFlow = await page.evaluate(() => {
+  const g = window.marble;
+  g.player.inventory.addStack('red_potion', 5);
+  g.player.hp = 1;
+  g.player.potionCooldown = 0;
+  return { hp: g.player.hp, count: g.player.inventory.countOf('red_potion') };
+});
+await page.keyboard.press('x');
+await page.waitForTimeout(200);
+const healed = await page.evaluate(() => ({
+  hp: window.marble.player.hp,
+  count: window.marble.player.inventory.countOf('red_potion'),
+}));
+check('potion hotkey heals and is consumed',
+      healed.hp > potionFlow.hp && healed.count === potionFlow.count - 1,
+      `hp ${potionFlow.hp}->${healed.hp}, potions ${potionFlow.count}->${healed.count}`);
+
+// Skill casting: an attack skill spends MP and damages a monster.
+const skillFlow = await page.evaluate(() => {
+  const g = window.marble;
+  g.player.sp += 3;
+  g.player.learnSkill('power_strike');
+  g.hooks.bindQuickSlot(0, 'power_strike');
+  g.player.mp = g.player.stats.maxMp;
+  const mob = g.world.livingMobs().find((m) => m.alive);
+  if (mob) {
+    g.player.body.x = mob.body.x - 30;
+    g.player.body.y = mob.body.y;
+    g.player.body.facing = 1;
+  }
+  g.player.attackCooldown = 0;
+  return { mp: g.player.mp, mobHp: mob ? mob.hp : 0, mobId: mob ? mob.id : -1 };
+});
+await page.keyboard.press('1');
+await page.waitForTimeout(250);
+const cast = await page.evaluate((mobId) => {
+  const g = window.marble;
+  const mob = g.world.livingMobs().find((m) => m.id === mobId);
+  return { mp: g.player.mp, mobHp: mob ? mob.hp : 0, gone: !mob };
+}, skillFlow.mobId);
+check('attack skill spends MP', cast.mp < skillFlow.mp, `mp ${skillFlow.mp} -> ${cast.mp}`);
+check('attack skill damages the target',
+      cast.gone || cast.mobHp < skillFlow.mobHp,
+      `hp ${skillFlow.mobHp} -> ${cast.mobHp} gone=${cast.gone}`);
+
+// A buff skill applies and shows up in the buff list.
+const buffed = await page.evaluate(() => {
+  const g = window.marble;
+  g.player.mp = g.player.stats.maxMp;
+  const speedBefore = g.player.stats.speed;
+  const ok = g.player.castSupport('nimble_feet');
+  return { ok, speedBefore, speedAfter: g.player.stats.speed, buffs: g.player.buffs.length };
+});
+check('buff skill raises the stat it advertises',
+      buffed.ok && buffed.speedAfter > buffed.speedBefore && buffed.buffs > 0,
+      JSON.stringify(buffed));
+
+// Walking into a portal and pressing Up changes maps.
+await page.evaluate(() => {
+  const g = window.marble;
+  const portal = g.world.map.portals.find((p) => p.toMap && p.type === 'visible');
+  g.player.body.x = portal.x;
+  g.player.body.y = g.world.groundAt(portal.x, portal.y);
+});
+await page.waitForTimeout(200);
+const beforeWarp = await state();
+await page.keyboard.press('ArrowUp');
+await page.waitForTimeout(900);
+const afterWarp = await state();
+check('walking into a portal changes map',
+      afterWarp.map !== beforeWarp.map, `${beforeWarp.map} -> ${afterWarp.map}`);
+await shot('08-portal');
+
+// Level-gated portals must refuse an under-levelled character.
+const gated = await page.evaluate(() => {
+  const g = window.marble;
+  g.warpTo('slime_hollow', 'spawn');
+  return true;
+});
+void gated;
+await page.waitForTimeout(900);
+const gateResult = await page.evaluate(() => {
+  const g = window.marble;
+  const portal = g.world.map.portals.find((p) => p.type === 'scripted');
+  if (!portal) return { skipped: true };
+  g.player.level = 1;
+  g.player.body.x = portal.x;
+  g.player.body.y = g.world.groundAt(portal.x, portal.y);
+  const before = g.mapId;
+  return { skipped: false, before, required: portal.requireLevel };
+});
+if (!gateResult.skipped) {
+  await page.keyboard.press('ArrowUp');
+  await page.waitForTimeout(700);
+  const stillHere = await page.evaluate(() => window.marble.mapId);
+  check('level-gated portals refuse an under-levelled character',
+        stillHere === gateResult.before, `needed ${gateResult.required}, map=${stillHere}`);
+  // Put the level back so later checks see the character we built up.
+  await page.evaluate((lv) => { window.marble.player.level = lv; }, 11);
+}
 
 // Save round-trip.
 const saved = await page.evaluate(() => {

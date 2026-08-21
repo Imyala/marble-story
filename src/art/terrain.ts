@@ -30,7 +30,7 @@ export const THEMES: Record<TerrainTheme, ThemeColors> = {
 };
 
 /** How far the solid ground extends below a foothold line. */
-const GROUND_DEPTH = 220;
+const GROUND_DEPTH = 300;
 const CAP_HEIGHT = 7;
 
 export function drawTerrain(
@@ -55,7 +55,7 @@ export function drawTerrain(
     const top = Math.min(y1, y2);
     const grad = ctx.createLinearGradient(0, top, 0, top + GROUND_DEPTH);
     grad.addColorStop(0, c.body);
-    grad.addColorStop(0.55, c.body);
+    grad.addColorStop(0.68, c.body);
     grad.addColorStop(1, rgba(c.bodyDark, 0));
     ctx.fillStyle = grad;
     ctx.beginPath();

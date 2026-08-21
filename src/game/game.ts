@@ -34,6 +34,24 @@ import { trySkill } from '../data/skills';
 import { clearSave, loadRaw, restore, save, serialise } from './save';
 import { createStarterCharacter } from './newgame';
 
+/**
+ * The world RNG is seeded from `?seed=` when present, so a session can be
+ * reproduced exactly — which is what makes the headless smoke test stable and
+ * makes a "this drop never happens" bug report actionable.
+ */
+function seedFromUrl(): number {
+  try {
+    const raw = new URLSearchParams(location.search).get('seed');
+    if (raw !== null) {
+      const parsed = Number(raw);
+      if (Number.isFinite(parsed)) return parsed >>> 0 || 1;
+    }
+  } catch {
+    // No location (tests, workers): fall through to a random seed.
+  }
+  return (Math.random() * 0xffffffff) >>> 0;
+}
+
 const AUTOSAVE_INTERVAL = 25;
 /** How long the map-transition fade takes, each way. */
 const FADE_TIME = 0.22;
@@ -44,7 +62,7 @@ export class Game {
   private readonly input = new Input();
   private readonly ui = new UiInput();
   private readonly loop: GameLoop;
-  private readonly rng = new Rng((Math.random() * 0xffffffff) >>> 0);
+  private readonly rng = new Rng(seedFromUrl());
 
   player: Player;
   quests: QuestLog;

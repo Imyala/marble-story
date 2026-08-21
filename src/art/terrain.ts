@@ -50,8 +50,14 @@ export function drawTerrain(
     const x2 = fh.x2 + ox;
     const y2 = fh.y2 + oy;
 
-    // Solid mass below the surface.
-    ctx.fillStyle = c.body;
+    // Solid mass below the surface, fading out so a raised platform does not
+    // end in a hard floating edge.
+    const top = Math.min(y1, y2);
+    const grad = ctx.createLinearGradient(0, top, 0, top + GROUND_DEPTH);
+    grad.addColorStop(0, c.body);
+    grad.addColorStop(0.55, c.body);
+    grad.addColorStop(1, rgba(c.bodyDark, 0));
+    ctx.fillStyle = grad;
     ctx.beginPath();
     ctx.moveTo(x1, y1);
     ctx.lineTo(x2, y2);

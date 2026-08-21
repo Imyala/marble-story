@@ -6,6 +6,7 @@
  * Everything is immediate-mode canvas paths — no sprite sheets, no assets.
  */
 import { rgba, shade } from './palette';
+import { drawFlashed } from './flash';
 import type { MoveState } from '../physics/body';
 
 export type WeaponArt = 'none' | 'sword' | 'axe' | 'spear' | 'bow' | 'wand' | 'claw' | 'gun';
@@ -56,37 +57,27 @@ export function drawCharacter(
   look: CharacterLook,
   pose: CharacterPose,
 ): void {
-  ctx.save();
-  ctx.globalAlpha = pose.alpha;
-  ctx.translate(Math.round(x), Math.round(y));
+  drawFlashed(ctx, x, y, pose.flash, pose.alpha, (c) => {
+    // Contact shadow grounds the character against the foothold.
+    if (pose.state !== 'climb') {
+      c.fillStyle = 'rgba(0,0,0,0.28)';
+      c.beginPath();
+      c.ellipse(0, 1, 15, 4.5, 0, 0, Math.PI * 2);
+      c.fill();
+    }
 
-  // Contact shadow grounds the character against the foothold.
-  if (pose.state !== 'climb') {
-    ctx.fillStyle = 'rgba(0,0,0,0.28)';
-    ctx.beginPath();
-    ctx.ellipse(0, 1, 15, 4.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.scale(pose.facing, 1);
-
-  switch (pose.state) {
-    case 'prone': drawProne(ctx, look); break;
-    case 'climb': drawClimb(ctx, look, pose); break;
-    case 'jump':
-    case 'fall':  drawAirborne(ctx, look, pose); break;
-    case 'dead':  drawDead(ctx, look); break;
-    default:      drawUpright(ctx, look, pose); break;
-  }
-
-  if (pose.flash > 0) {
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = rgba('#ffffff', pose.flash * 0.75);
-    ctx.fillRect(-30, -80, 60, 84);
-    ctx.globalCompositeOperation = 'source-over';
-  }
-
-  ctx.restore();
+    c.save();
+    c.scale(pose.facing, 1);
+    switch (pose.state) {
+      case 'prone': drawProne(c, look); break;
+      case 'climb': drawClimb(c, look, pose); break;
+      case 'jump':
+      case 'fall':  drawAirborne(c, look, pose); break;
+      case 'dead':  drawDead(c, look); break;
+      default:      drawUpright(c, look, pose); break;
+    }
+    c.restore();
+  });
 }
 
 /* ---------------------------------------------------------------- poses -- */

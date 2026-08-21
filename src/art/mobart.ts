@@ -7,6 +7,7 @@
  * matters far more than detail.
  */
 import { rgba, shade } from './palette';
+import { drawFlashed } from './flash';
 import { roundedRect } from './character';
 
 export type MobShape =
@@ -38,30 +39,23 @@ export function drawMob(
   art: MobArt,
   pose: MobPose,
 ): void {
-  ctx.save();
-  ctx.globalAlpha = pose.alpha;
-  ctx.translate(Math.round(x), Math.round(y));
+  drawFlashed(ctx, x, y, pose.flash, pose.alpha, (c) => {
+    if (art.shape !== 'bat' && art.shape !== 'spirit') {
+      c.fillStyle = 'rgba(0,0,0,0.25)';
+      c.beginPath();
+      c.ellipse(0, 1, 16 * art.scale, 4.5 * art.scale, 0, 0, Math.PI * 2);
+      c.fill();
+    }
 
-  if (art.shape !== 'bat' && art.shape !== 'spirit') {
-    ctx.fillStyle = 'rgba(0,0,0,0.25)';
-    ctx.beginPath();
-    ctx.ellipse(0, 1, 16 * art.scale, 4.5 * art.scale, 0, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.scale(pose.facing * art.scale, art.scale);
-  const t = pose.animTime;
-  const bounce = pose.moving ? Math.abs(Math.sin(t * 7)) : Math.abs(Math.sin(t * 2.4)) * 0.4;
-
-  SHAPES[art.shape](ctx, art, t, bounce, pose);
-
-  if (pose.flash > 0) {
-    ctx.globalCompositeOperation = 'source-atop';
-    ctx.fillStyle = rgba('#ffffff', pose.flash * 0.8);
-    ctx.fillRect(-60, -80, 120, 84);
-    ctx.globalCompositeOperation = 'source-over';
-  }
-  ctx.restore();
+    c.save();
+    c.scale(pose.facing * art.scale, art.scale);
+    const t = pose.animTime;
+    const bounce = pose.moving
+      ? Math.abs(Math.sin(t * 7))
+      : Math.abs(Math.sin(t * 2.4)) * 0.4;
+    SHAPES[art.shape](c, art, t, bounce, pose);
+    c.restore();
+  });
 }
 
 type ShapeFn = (

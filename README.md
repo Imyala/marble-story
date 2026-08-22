@@ -8,10 +8,16 @@ foothold physics, the damage formula, AP/SP progression, job advancement, drop
 tables, equipment instances and scrolling — with original art, original class
 and place names, and no story yet. The story is the part you write.
 
+**Play it: https://imyala.github.io/marble-story/**
+
 ```bash
 npm install
 npm run dev      # play at http://localhost:5173
 ```
+
+The site is built and published by `.github/workflows/pages.yml` on every push.
+It also ships `marble-story.html` — the whole game as one self-contained file
+you can download and open offline.
 
 | Command | What it does |
 | --- | --- |
@@ -20,6 +26,7 @@ npm run dev      # play at http://localhost:5173
 | `npm test` | Unit tests (physics, combat math, data integrity) |
 | `npm run check` | Typecheck + unit tests |
 | `npm run smoke` | Builds, serves, and drives the real game in a headless browser |
+| `npm run build:artifact` | Packages the game into one self-contained HTML file |
 
 Append `?seed=123` to the URL to fix the world RNG — damage rolls, drop rolls
 and monster AI all become reproducible, which is how the smoke test stays

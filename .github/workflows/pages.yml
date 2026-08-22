@@ -1,0 +1,74 @@
+# Builds the game and publishes it to GitHub Pages.
+#
+# Pages must be switched on once by hand: Settings -> Pages -> Build and
+# deployment -> Source: "GitHub Actions". Until that is done this workflow
+# builds fine but the deploy step has nowhere to publish to.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      # The game currently lives on this branch; drop this line once it merges.
+      - claude/maplestory-game-clone-nug9fo
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deploy finish rather than cancelling it half-published.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      # Playwright is only needed for the local smoke test; CI must not spend
+      # a minute downloading browsers it will not launch.
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: '1'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      # Don't publish a build that does not pass its own tests.
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # Also ship the standalone single-file build, so the game can be
+      # downloaded and opened offline from the same site.
+      - name: Build single-file version
+        run: npm run build:artifact
+
+      # Pages serves through Jekyll by default, which drops files starting
+      # with an underscore. Nothing here does, but the guard is free.
+      - name: Disable Jekyll processing
+        run: touch dist/.nojekyll
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

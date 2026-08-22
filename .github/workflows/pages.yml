@@ -45,6 +45,17 @@ jobs:
       - name: Build
         run: npm run build
 
+      # play/ is a committed copy of the built site, served when Pages is on
+      # the older "deploy from a branch" source. If it drifts from source, the
+      # site silently serves a stale game — so fail loudly instead.
+      - name: Check the committed play/ build is current
+        run: |
+          if ! git diff --quiet -- play; then
+            echo "::error::play/ is out of date. Run 'npm run build' and commit the result."
+            git diff --stat -- play
+            exit 1
+          fi
+
       # Also ship the standalone single-file build, so the game can be
       # downloaded and opened offline from the same site.
       - name: Build single-file version

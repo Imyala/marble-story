@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%235fbf6a'/%3E%3Ccircle cx='11' cy='13' r='2.6' fill='%230b0e17'/%3E%3Ccircle cx='21' cy='13' r='2.6' fill='%230b0e17'/%3E%3C/svg%3E" />
+    <title>Marble Story</title>
+    <style>
+      html, body {
+        margin: 0; padding: 0; height: 100%;
+        background: #0a0c14; color: #cdd6f4;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+        overflow: hidden;
+      }
+      #app { width: 100%; height: 100%; display: grid; place-items: center; }
+      canvas {
+        image-rendering: pixelated;
+        background: #000;
+        box-shadow: 0 0 0 1px #1e2030, 0 24px 60px rgba(0,0,0,.6);
+        max-width: 100vw; max-height: 100vh;
+      }
+      #boot { position: fixed; inset: 0; display: grid; place-items: center;
+              background: #0a0c14; z-index: 10; letter-spacing: .3em; font-size: 13px;
+              padding: 24px; text-align: center; }
+      #boot.hidden { display: none; }
+      #boot.failed { letter-spacing: normal; font-size: 13px; line-height: 1.7; color: #ff8a3d; }
+      #boot.failed b { display: block; margin-bottom: 10px; letter-spacing: .2em; color: #f2c14e; }
+      #boot.failed span.hint { color: #8f9dc0; font-size: 12px; }
+    </style>
+    <script type="module" crossorigin src="./assets/dev-BXKEQqK4.js"></script>
+  </head>
+  <body>
+    <div id="app"><canvas id="game"></canvas></div>
+    <div id="boot"><span id="boot-text">MARBLE&nbsp;STORY</span></div>
+    <script>
+      /*
+       * If the game module never runs, the boot screen would otherwise sit
+       * there forever looking like a hang. Say what happened instead.
+       *
+       * The usual cause is this file being served as a plain static page
+       * rather than built: the module below points at TypeScript source,
+       * which only Vite can serve. A GitHub Pages site stuck on the older
+       * "deploy from a branch" source publishes the repo root and hits this.
+       */
+      window.__marbleBootTimer = setTimeout(function () {
+        if (window.marble) return;
+        var boot = document.getElementById('boot');
+        if (!boot || boot.classList.contains('hidden')) return;
+        boot.classList.add('failed');
+        boot.innerHTML =
+          '<div><b>MARBLE STORY</b>' +
+          'The game could not start &mdash; its code was not loaded.<br />' +
+          '<span class="hint">This page is the development entry point. ' +
+          'Run <code>npm run dev</code>, or open a built copy of the site.</span></div>';
+      }, 6000);
+    </script>
+  </body>
+</html>

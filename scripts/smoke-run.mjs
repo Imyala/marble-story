@@ -23,7 +23,8 @@ function run(cmd, args) {
   });
 }
 
-await run('npx', ['vite', 'build']);
+// Use the project's build script so the post-build finish step runs too.
+await run('npm', ['run', 'build']);
 
 const server = createServer((req, res) => {
   const url = (req.url ?? '/').split('?')[0];

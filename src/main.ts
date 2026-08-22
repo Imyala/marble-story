@@ -9,6 +9,8 @@ if (!canvas) throw new Error('#game canvas not found');
 const game = new Game(canvas);
 game.start();
 
+// The game is up, so cancel the "failed to start" message.
+clearTimeout((window as unknown as { __marbleBootTimer?: number }).__marbleBootTimer);
 document.getElementById('boot')?.classList.add('hidden');
 canvas.focus();
 

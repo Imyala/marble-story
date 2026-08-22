@@ -3,30 +3,50 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='%235fbf6a'/%3E%3Ccircle cx='11' cy='13' r='2.6' fill='%230b0e17'/%3E%3Ccircle cx='21' cy='13' r='2.6' fill='%230b0e17'/%3E%3C/svg%3E" />
     <title>Marble Story</title>
+    <!--
+      This is the published landing page, not the app.
+
+      GitHub Pages can serve this repo two ways, and the game works under both:
+
+        * Source "GitHub Actions" — the workflow publishes dist/ and this file
+          is never served at all.
+        * Source "deploy from a branch" — GitHub publishes the repo root
+          through Jekyll, which cannot run a build, so this page forwards to
+          play/: a pre-built copy committed alongside the source.
+
+      The development entry point is dev.html, which Vite serves.
+    -->
+    <link rel="canonical" href="./play/" />
     <style>
       html, body {
-        margin: 0; padding: 0; height: 100%;
-        background: #0a0c14; color: #cdd6f4;
+        margin: 0; height: 100%;
+        background: #0a0c14; color: #dbe4f5;
         font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-        overflow: hidden;
       }
-      #app { width: 100%; height: 100%; display: grid; place-items: center; }
-      canvas {
-        image-rendering: pixelated;
-        background: #000;
-        box-shadow: 0 0 0 1px #1e2030, 0 24px 60px rgba(0,0,0,.6);
-        max-width: 100vw; max-height: 100vh;
-      }
-      #boot { position: fixed; inset: 0; display: grid; place-items: center;
-              background: #0a0c14; z-index: 10; letter-spacing: .3em; font-size: 13px; }
-      #boot.hidden { display: none; }
+      main { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; }
+      h1 { margin: 0 0 12px; font-size: 15px; letter-spacing: .3em; color: #f2c14e; font-weight: 700; }
+      p { margin: 0; font-size: 13px; color: #8f9dc0; }
+      a { color: #8fd14f; }
     </style>
   </head>
   <body>
-    <div id="app"><canvas id="game"></canvas></div>
-    <div id="boot">MARBLE&nbsp;STORY</div>
-    <script type="module" src="/src/main.ts"></script>
+    <main>
+      <div>
+        <h1>MARBLE&nbsp;STORY</h1>
+        <p>Loading&hellip; if nothing happens, <a href="./play/">open the game</a>.</p>
+        <noscript><p><a href="./play/">Open the game</a></p></noscript>
+      </div>
+    </main>
+    <script>
+      // On the Vite dev server this file would otherwise send you to the
+      // committed build — stale source, silently. Send developers to the live
+      // entry instead. The port is pinned in vite.config.ts.
+      var target = location.port === '5173' ? './dev.html' : './play/';
+      document.write(
+        '<meta http-equiv="refresh" content="0; url=' + target + '">'
+      );
+      location.replace(target);
+    </script>
   </body>
 </html>

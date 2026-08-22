@@ -19,7 +19,8 @@ function run(cmd, args) {
   });
 }
 
-await run('npx', ['vite', 'build']);
+// Use the project's build script so the post-build finish step runs too.
+await run('npm', ['run', 'build']);
 
 const assets = readdirSync('dist/assets');
 const jsName = assets.find((f) => f.endsWith('.js'));

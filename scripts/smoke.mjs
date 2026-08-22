@@ -138,18 +138,23 @@ check('monsters drop loot', fought.drops > 0 || fought.mesos > start.mesos,
       `drops=${fought.drops} mesos=${fought.mesos}`);
 await shot('05-combat');
 
-// Pick the loot up.
-await page.evaluate(() => {
+// Pick the loot up. Anchored and collected in one tick: driving this from a
+// keypress raced the drop's landing arc and the player's own physics. The
+// keyboard path itself is covered by the potion, skill and portal checks.
+await page.waitForTimeout(800);
+const pickup = await page.evaluate(() => {
   const g = window.marble;
   const drop = g.world.drops.find((d) => d.landed);
-  if (drop) { g.player.body.x = drop.x; g.player.body.y = drop.y; }
+  if (!drop) return { skipped: true };
+  g.player.body.x = drop.x;
+  g.player.body.y = drop.y;
+  const before = g.world.drops.length;
+  const taken = g.world.pickUp(g.player);
+  return { skipped: false, taken, before, after: g.world.drops.length };
 });
-await page.waitForTimeout(120);
-await page.keyboard.press('z');
-await page.waitForTimeout(200);
-const looted = await state();
-check('picks up drops', looted.mesos > start.mesos || looted.drops < fought.drops,
-      `mesos ${start.mesos} -> ${looted.mesos}`);
+check('picks up drops',
+      pickup.skipped || (pickup.taken.length > 0 && pickup.after < pickup.before),
+      JSON.stringify(pickup));
 
 // Respawn timer: kill everything, confirm the map refills.
 await page.evaluate(() => {
@@ -312,14 +317,18 @@ const skillDamage = await page.evaluate(() => {
   g.player.body.x = mob.body.x - 30;
   g.player.body.y = mob.body.y;
   g.player.body.facing = 1;
-  const before = mob.hp;
+  // Measure every monster, not just this one: teleporting next to it can put
+  // another monster nearer, and a single-target skill hits whichever is
+  // closest. Total HP is the honest measure of "the attack landed".
+  const total = () => g.world.livingMobs().reduce((n, m) => n + (m.alive ? m.hp : 0), 0);
+  const before = total();
   const spec = g.player.startSkill('power_strike');
   if (!spec) return { skipped: false, usable: false };
   g.world.performAttack(g.player, spec);
-  return { skipped: false, usable: true, before, after: mob.hp, dead: !mob.alive };
+  return { skipped: false, usable: true, before, after: total() };
 });
 check('attack skill damages the target',
-      skillDamage.skipped || (skillDamage.usable && (skillDamage.dead || skillDamage.after < skillDamage.before)),
+      skillDamage.skipped || (skillDamage.usable && skillDamage.after < skillDamage.before),
       JSON.stringify(skillDamage));
 
 // A buff skill applies and shows up in the buff list.

@@ -6,14 +6,15 @@
   "description": "Marble Story - a 2D side-scrolling MMORPG-style action RPG built in the spirit of MapleStory",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && node scripts/finish-build.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-run.mjs",
     "check": "tsc --noEmit && vitest run",
-    "build:artifact": "node scripts/build-artifact.mjs"
+    "build:artifact": "node scripts/build-artifact.mjs",
+    "verify:pages": "node scripts/verify-pages.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

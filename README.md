@@ -19,6 +19,14 @@ The site is built and published by `.github/workflows/pages.yml` on every push.
 It also ships `marble-story.html` — the whole game as one self-contained file
 you can download and open offline.
 
+GitHub Pages can serve a repo two ways, and this one works under both. With the
+**GitHub Actions** source the workflow publishes `dist/`. With the older
+**deploy from a branch** source GitHub publishes the repo root through Jekyll,
+which cannot run a build — so the root `index.html` forwards to `play/`, a
+pre-built copy committed alongside the source. `npm run verify:pages` checks
+both arrangements in a real browser. The development entry point is `dev.html`;
+`npm run dev` opens it for you.
+
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Dev server with hot reload |
@@ -27,6 +35,7 @@ you can download and open offline.
 | `npm run check` | Typecheck + unit tests |
 | `npm run smoke` | Builds, serves, and drives the real game in a headless browser |
 | `npm run build:artifact` | Packages the game into one self-contained HTML file |
+| `npm run verify:pages` | Checks the published site boots under both Pages sources |
 
 Append `?seed=123` to the URL to fix the world RNG — damage rolls, drop rolls
 and monster AI all become reproducible, which is how the smoke test stays

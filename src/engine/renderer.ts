@@ -10,6 +10,7 @@ export const VIEW_H = 700;
 export class Renderer {
   readonly ctx: CanvasRenderingContext2D;
   scale = 1;
+  private observer: ResizeObserver | null = null;
 
   constructor(readonly canvas: HTMLCanvasElement) {
     const ctx = canvas.getContext('2d', { alpha: false });
@@ -19,18 +20,29 @@ export class Renderer {
     canvas.height = VIEW_H;
     this.resize();
     window.addEventListener('resize', this.resize);
+
+    // Size to the containing element rather than the window, so the game can
+    // be embedded in a page that has its own chrome around it.
+    const host = canvas.parentElement;
+    if (host && typeof ResizeObserver !== 'undefined') {
+      this.observer = new ResizeObserver(this.resize);
+      this.observer.observe(host);
+    }
   }
 
   destroy(): void {
     window.removeEventListener('resize', this.resize);
+    this.observer?.disconnect();
+    this.observer = null;
   }
 
   private resize = (): void => {
-    const sx = window.innerWidth / VIEW_W;
-    const sy = window.innerHeight / VIEW_H;
+    const host = this.canvas.parentElement;
+    const availW = host?.clientWidth || window.innerWidth;
+    const availH = host?.clientHeight || window.innerHeight;
     // Prefer whole-number scaling; fall back to fractional on small screens.
-    const raw = Math.min(sx, sy);
-    this.scale = raw >= 1 ? Math.floor(raw * 20) / 20 : raw;
+    const raw = Math.min(availW / VIEW_W, availH / VIEW_H);
+    this.scale = raw >= 1 ? Math.floor(raw * 20) / 20 : Math.max(0.2, raw);
     this.canvas.style.width = `${Math.floor(VIEW_W * this.scale)}px`;
     this.canvas.style.height = `${Math.floor(VIEW_H * this.scale)}px`;
   };

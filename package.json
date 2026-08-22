@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "smoke": "node scripts/smoke-run.mjs",
-    "check": "tsc --noEmit && vitest run"
+    "check": "tsc --noEmit && vitest run",
+    "build:artifact": "node scripts/build-artifact.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

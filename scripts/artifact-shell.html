@@ -1,0 +1,270 @@
+<title>Marble Story</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link
+  rel="stylesheet"
+  href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Pixelify+Sans:wght@400..700&display=swap"
+/>
+
+<style>
+  /*
+   * The palette is lifted from the game's own src/art/palette.ts so the page
+   * and the canvas read as one object rather than a frame around a picture.
+   *
+   * This page commits to a single dark theme on purpose: it is a game screen,
+   * and the canvas paints its own night sky and lamplight. Rendering that on a
+   * light ground would look broken, not themed. Every colour is therefore
+   * painted explicitly and nothing is inherited from the host.
+   */
+  :root {
+    --ink: #0b0e17;
+    --panel: #141a2b;
+    --panel-lit: #1e2740;
+    --border: #3a4766;
+    --border-lit: #596b9c;
+    --text: #dbe4f5;
+    --dim: #8f9dc0;
+    --faint: #5d6f88;
+    --gold: #f2c14e;
+    --exp: #8fd14f;
+
+    --mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --display: "Pixelify Sans", "IBM Plex Mono", ui-monospace, monospace;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--ink);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .frame {
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+  }
+
+  /* ------------------------------------------------------------- header -- */
+
+  .bar {
+    display: flex;
+    align-items: baseline;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 12px 18px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--panel) 0%, var(--ink) 100%);
+  }
+
+  .wordmark {
+    margin: 0;
+    font-family: var(--display);
+    font-weight: 700;
+    font-size: 20px;
+    letter-spacing: 0.06em;
+    color: var(--gold);
+    text-wrap: balance;
+  }
+
+  .tagline {
+    color: var(--dim);
+    font-size: 12px;
+  }
+
+  .bar-end {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--faint);
+    font-size: 11px;
+  }
+
+  .dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--exp);
+    box-shadow: 0 0 8px var(--exp);
+  }
+
+  /* -------------------------------------------------------------- stage -- */
+
+  .stage {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-height: 0;
+    padding: 14px;
+    background:
+      radial-gradient(120% 90% at 50% 0%, #121a2c 0%, var(--ink) 70%);
+  }
+
+  canvas {
+    display: block;
+    image-rendering: pixelated;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+    background: #000;
+  }
+
+  /*
+   * Embedded pages only receive key events once they have focus, so an
+   * unfocused game would silently ignore the arrow keys. The veil says so
+   * instead of leaving the player pressing keys at a dead canvas.
+   */
+  .veil {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    gap: 10px;
+    background: rgba(7, 10, 18, 0.72);
+    cursor: pointer;
+    transition: opacity 160ms ease;
+  }
+
+  .veil[hidden] { display: none; }
+
+  .veil-inner {
+    display: grid;
+    justify-items: center;
+    gap: 8px;
+    padding: 20px 30px;
+    border: 1px solid var(--border-lit);
+    border-radius: 6px;
+    background: var(--panel);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+  }
+
+  .veil-title {
+    font-family: var(--display);
+    font-size: 17px;
+    font-weight: 700;
+    color: var(--gold);
+    letter-spacing: 0.05em;
+  }
+
+  .veil-sub {
+    color: var(--dim);
+    font-size: 12px;
+  }
+
+  /* ------------------------------------------------------------- legend -- */
+
+  .legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    align-items: center;
+    padding: 11px 18px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+    color: var(--dim);
+    font-size: 12px;
+  }
+
+  .binding {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+  }
+
+  kbd {
+    display: inline-block;
+    min-width: 20px;
+    padding: 2px 6px;
+    border: 1px solid var(--border-lit);
+    border-bottom-width: 2px;
+    border-radius: 4px;
+    background: var(--panel-lit);
+    color: var(--text);
+    font: inherit;
+    font-size: 12px;
+    line-height: 1.25;
+    text-align: center;
+  }
+
+  .legend-note {
+    margin-left: auto;
+    color: var(--faint);
+    font-size: 11px;
+  }
+
+  @media (max-width: 640px) {
+    .legend-note { margin-left: 0; }
+    .wordmark { font-size: 17px; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .veil { transition: none; }
+  }
+</style>
+
+<div class="frame">
+  <header class="bar">
+    <h1 class="wordmark">MARBLE STORY</h1>
+    <span class="tagline">a 2D side-scrolling action RPG</span>
+    <span class="bar-end"><span class="dot"></span>autosaves to this browser</span>
+  </header>
+
+  <main class="stage" id="stage">
+    <canvas id="game"></canvas>
+    <div class="veil" id="veil">
+      <div class="veil-inner">
+        <span class="veil-title">CLICK TO PLAY</span>
+        <span class="veil-sub">the game needs keyboard focus</span>
+      </div>
+    </div>
+  </main>
+
+  <footer class="legend">
+    <span class="binding"><kbd>&larr;</kbd><kbd>&rarr;</kbd> move</span>
+    <span class="binding"><kbd>Alt</kbd> jump</span>
+    <span class="binding"><kbd>Ctrl</kbd> attack</span>
+    <span class="binding"><kbd>&darr;</kbd>+<kbd>Alt</kbd> drop through</span>
+    <span class="binding"><kbd>&uarr;</kbd> climb / talk / portal</span>
+    <span class="binding"><kbd>Z</kbd> loot</span>
+    <span class="binding"><kbd>X</kbd><kbd>C</kbd> potions</span>
+    <span class="binding"><kbd>1</kbd>&ndash;<kbd>8</kbd> skills</span>
+    <span class="binding"><kbd>A</kbd><kbd>I</kbd><kbd>S</kbd><kbd>Q</kbd> windows</span>
+    <span class="binding"><kbd>F1</kbd> all controls</span>
+    <span class="legend-note">Talk to Mira, then head east.</span>
+  </footer>
+</div>
+
+<div id="boot" hidden></div>
+
+<script type="module">/*BUNDLE*/</script>
+
+<script type="module">
+  // Keyboard events only reach an embedded page once it has focus, so the veil
+  // tracks focus rather than just dismissing itself on the first click.
+  const veil = document.getElementById('veil');
+  const stage = document.getElementById('stage');
+  const canvas = document.getElementById('game');
+
+  const show = () => { if (veil) veil.hidden = false; };
+  const hide = () => { if (veil) veil.hidden = true; };
+
+  const focusGame = () => {
+    window.focus();
+    canvas?.focus?.();
+    hide();
+  };
+
+  stage?.addEventListener('pointerdown', focusGame);
+  window.addEventListener('focus', hide);
+  window.addEventListener('blur', show);
+  window.addEventListener('keydown', hide);
+
+  if (document.hasFocus()) hide();
+</script>

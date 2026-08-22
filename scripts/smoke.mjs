@@ -282,33 +282,45 @@ check('potion hotkey heals and is consumed',
       healed.hp > potionFlow.hp && healed.count === potionFlow.count - 1,
       `hp ${potionFlow.hp}->${healed.hp}, potions ${potionFlow.count}->${healed.count}`);
 
-// Skill casting: an attack skill spends MP and damages a monster.
-const skillFlow = await page.evaluate(() => {
+// Skill casting, split into two checks so each is isolated from timing it
+// does not care about: the keypress proves the input path reaches the skill
+// system, and a direct call proves the damage lands. Driving both from a
+// keypress made the check flaky, because the monster walks out of range in
+// the gap between positioning it and the key arriving.
+const beforeCast = await page.evaluate(() => {
   const g = window.marble;
   g.player.sp += 3;
   g.player.learnSkill('power_strike');
   g.hooks.bindQuickSlot(0, 'power_strike');
   g.player.mp = g.player.stats.maxMp;
-  const mob = g.world.livingMobs().find((m) => m.alive);
-  if (mob) {
-    g.player.body.x = mob.body.x - 30;
-    g.player.body.y = mob.body.y;
-    g.player.body.facing = 1;
-  }
   g.player.attackCooldown = 0;
-  return { mp: g.player.mp, mobHp: mob ? mob.hp : 0, mobId: mob ? mob.id : -1 };
+  return { mp: g.player.mp };
 });
 await page.keyboard.press('1');
 await page.waitForTimeout(250);
-const cast = await page.evaluate((mobId) => {
+const afterCast = await page.evaluate(() => window.marble.player.mp);
+check('attack skill spends MP via its quick slot',
+      afterCast < beforeCast.mp, `mp ${beforeCast.mp} -> ${afterCast}`);
+
+// Anchor the player and fire in the same tick, so the monster cannot drift.
+const skillDamage = await page.evaluate(() => {
   const g = window.marble;
-  const mob = g.world.livingMobs().find((m) => m.id === mobId);
-  return { mp: g.player.mp, mobHp: mob ? mob.hp : 0, gone: !mob };
-}, skillFlow.mobId);
-check('attack skill spends MP', cast.mp < skillFlow.mp, `mp ${skillFlow.mp} -> ${cast.mp}`);
+  g.player.mp = g.player.stats.maxMp;
+  g.player.attackCooldown = 0;
+  const mob = g.world.livingMobs().find((m) => m.alive);
+  if (!mob) return { skipped: true };
+  g.player.body.x = mob.body.x - 30;
+  g.player.body.y = mob.body.y;
+  g.player.body.facing = 1;
+  const before = mob.hp;
+  const spec = g.player.startSkill('power_strike');
+  if (!spec) return { skipped: false, usable: false };
+  g.world.performAttack(g.player, spec);
+  return { skipped: false, usable: true, before, after: mob.hp, dead: !mob.alive };
+});
 check('attack skill damages the target',
-      cast.gone || cast.mobHp < skillFlow.mobHp,
-      `hp ${skillFlow.mobHp} -> ${cast.mobHp} gone=${cast.gone}`);
+      skillDamage.skipped || (skillDamage.usable && (skillDamage.dead || skillDamage.after < skillDamage.before)),
+      JSON.stringify(skillDamage));
 
 // A buff skill applies and shows up in the buff list.
 const buffed = await page.evaluate(() => {

@@ -55,7 +55,13 @@ jobs:
       - name: Disable Jekyll processing
         run: touch dist/.nojekyll
 
+      # enablement: true asserts the Pages source is "GitHub Actions". Without
+      # it the action only reads the current setting, so a repo left on the
+      # older "deploy from a branch" source races a second, Jekyll-based build
+      # against this one on every push.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - uses: actions/upload-pages-artifact@v3
         with:

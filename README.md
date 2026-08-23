@@ -36,8 +36,11 @@ both arrangements in a real browser. The development entry point is `dev.html`;
 | `npm run smoke` | Builds, serves, and drives the real game in a headless browser |
 | `npm run build:artifact` | Packages the game into one self-contained HTML file |
 | `npm run verify:pages` | Checks the published site boots under both Pages sources |
+| `npm run verify:frontend` | Drives world → character → class select in a browser |
 
-Append `?seed=123` to the URL to fix the world RNG — damage rolls, drop rolls
+Append `?quickstart=warrior` to skip the front-end screens and drop straight
+into a new character (`novice`, `warrior`, `mage`, `archer`, `rogue`,
+`corsair`). Append `?seed=123` to fix the world RNG — damage rolls, drop rolls
 and monster AI all become reproducible, which is how the smoke test stays
 stable and how a "this never drops" report becomes debuggable.
 
@@ -83,6 +86,13 @@ slot pressure, drop tables, ground-item physics, shops, and mesos.
 **World** — ten hand-authored maps across three regions, connected by named
 portals, with spawn points on respawn timers, NPCs with scripted dialogue,
 quests that inject themselves into NPC conversations, and localStorage saves.
+
+**Front end** — the flow the genre puts in front of the game: pick a world,
+pick a character slot, pick a class. Four worlds across two rulesets, up to
+eight character slots each, and six starting classes — the five branches, which
+begin you in that job, plus a "classic" Novice that starts you class-less and
+sends you to an instructor at level 10. Esc in-game returns you to character
+select.
 
 **Art** — every sprite, tile, icon and backdrop is drawn procedurally from code.
 There is no asset pipeline and no third-party art.

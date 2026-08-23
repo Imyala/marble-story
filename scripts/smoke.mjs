@@ -8,7 +8,7 @@ import { mkdirSync } from 'node:fs';
 
 // A fixed seed makes damage rolls, drop rolls and mob AI reproducible.
 const SEED = process.env.GAME_SEED ?? '20260821';
-const URL = `${process.env.GAME_URL ?? 'http://localhost:4173/'}?seed=${SEED}`;
+const URL = `${process.env.GAME_URL ?? 'http://localhost:4173/'}?seed=${SEED}&quickstart=novice`;
 const OUT = 'scripts/out';
 mkdirSync(OUT, { recursive: true });
 
@@ -390,13 +390,23 @@ if (!gateResult.skipped) {
 // Save round-trip.
 const saved = await page.evaluate(() => {
   window.marble.saveGame(false);
-  return !!localStorage.getItem('marble-story.save.v1');
+  return !!localStorage.getItem('marble-story.profile.v2');
 });
 check('writes a save', saved);
 
-await page.reload({ waitUntil: 'networkidle' });
+// Reload WITHOUT quickstart: the shell should come back to character select
+// with the character we just played, and re-entering it restores everything.
+await page.goto(URL.replace('&quickstart=novice', ''), { waitUntil: 'networkidle' });
+await page.waitForFunction(() => !!window.marbleApp, null, { timeout: 10000 });
+await page.waitForTimeout(400);
+const landed = await page.evaluate(() => window.marbleApp.currentScreen);
+check('reload returns to character select', landed === 'characters', landed);
+await page.evaluate(() => {
+  const app = window.marbleApp;
+  app.play(0);
+});
 await page.waitForFunction(() => !!window.marble, null, { timeout: 10000 });
-await page.waitForTimeout(500);
+await page.waitForTimeout(400);
 const reloaded = await state();
 check('restores the save on reload', reloaded.job === 100 && reloaded.level >= levelled.level,
       JSON.stringify(reloaded));

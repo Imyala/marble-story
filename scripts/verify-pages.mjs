@@ -52,7 +52,9 @@ async function probe(label, root, port) {
 
   await page.goto(`http://localhost:${port}${PREFIX}`, { waitUntil: 'networkidle' }).catch(() => {});
   // Long enough to land after any redirect and boot the game.
-  await page.waitForFunction(() => !!window.marble, null, { timeout: 12000 }).catch(() => {});
+  await page.waitForFunction(() => !!window.marbleApp, null, { timeout: 12000 }).catch(() => {});
+  await page.evaluate(() => window.marbleApp?.quickStart('novice')).catch(() => {});
+  await page.waitForFunction(() => !!window.marble, null, { timeout: 8000 }).catch(() => {});
 
   const state = await page.evaluate(() => ({
     booted: !!window.marble,

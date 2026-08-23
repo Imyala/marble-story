@@ -183,6 +183,42 @@ export const ITEMS: readonly ItemDef[] = [
     },
   },
   {
+    id: 'apprentice_wand', name: 'Apprentice Wand', tab: 'equip', price: 140,
+    desc: 'A first focus. Barely more than a stick with intent.',
+    icon: { shape: 'wand', color: '#8a5f38', accent: '#7dd8f0' },
+    equip: {
+      slot: 'weapon', weaponType: 'wand', reqLevel: 1,
+      base: { matk: 12, mp: 10 }, slots: 5, attackDelay: 520, range: 280,
+    },
+  },
+  {
+    id: 'short_bow', name: 'Short Bow', tab: 'equip', price: 140,
+    desc: 'Light draw, short range, honest work.',
+    icon: { shape: 'bow', color: '#a8763f', accent: '#e8dcc0' },
+    equip: {
+      slot: 'weapon', weaponType: 'bow', reqLevel: 1,
+      base: { watk: 11, acc: 2 }, slots: 5, twoHanded: true, attackDelay: 560, range: 360,
+    },
+  },
+  {
+    id: 'rusty_dagger', name: 'Rusty Dagger', tab: 'equip', price: 130,
+    desc: 'Someone else\'s, once. Still sharp enough.',
+    icon: { shape: 'dagger', color: '#9aa4b4' },
+    equip: {
+      slot: 'weapon', weaponType: 'dagger', reqLevel: 1,
+      base: { watk: 12 }, slots: 5, attackDelay: 430, range: 54,
+    },
+  },
+  {
+    id: 'worn_knuckle', name: 'Worn Knuckle', tab: 'equip', price: 130,
+    desc: 'Scuffed on both sides.',
+    icon: { shape: 'knuckle', color: '#c9a35e' },
+    equip: {
+      slot: 'weapon', weaponType: 'knuckle', reqLevel: 1,
+      base: { watk: 13 }, slots: 5, attackDelay: 450, range: 52,
+    },
+  },
+  {
     id: 'wooden_sword', name: 'Wooden Sword', tab: 'equip', price: 300,
     desc: 'A carved practice blade. Surprisingly effective.',
     icon: { shape: 'sword', color: '#b98a4f' },

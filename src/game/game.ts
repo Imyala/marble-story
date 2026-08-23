@@ -5,7 +5,6 @@
  * The split is deliberate — systems below this file never reach for global
  * state, so they stay testable and a client/server split stays possible.
  */
-import { GameLoop } from '../engine/loop';
 import { Input } from '../engine/input';
 import { Camera } from '../engine/camera';
 import { Renderer, VIEW_H, VIEW_W } from '../engine/renderer';
@@ -16,7 +15,7 @@ import { drawScene, drawVignette } from '../render/scene';
 import { drawDeathOverlay, drawHud, drawLevelUp, HudState, LogLine } from '../ui/hud';
 import { UiInput } from '../ui/imgui';
 import { drawEquipment, drawInventory, drawQuests, drawSkills, drawStats, rewardLines } from '../ui/windows';
-import { DialogueView, drawAdvancement, drawDialogue, drawHelp, drawShop, drawWorldMap } from '../ui/dialogs';
+import { DialogueView, drawAdvancement, drawDialogue, drawHelp, drawShop, drawSystemMenu, drawWorldMap } from '../ui/dialogs';
 import { isModal, newUiState, UiHooks, UiState, WindowId } from '../ui/state';
 import { Player } from './player';
 import { QuestLog } from './quests';
@@ -31,8 +30,7 @@ import { EquippedSlot } from './equipment';
 import { applyScroll } from './equipment';
 import { BaseStats, emptyStats } from './stats';
 import { trySkill } from '../data/skills';
-import { clearSave, loadRaw, restore, save, serialise } from './save';
-import { createStarterCharacter } from './newgame';
+import { SaveData, serialise } from './save';
 
 /**
  * The world RNG is seeded from `?seed=` when present, so a session can be
@@ -56,12 +54,27 @@ const AUTOSAVE_INTERVAL = 25;
 /** How long the map-transition fade takes, each way. */
 const FADE_TIME = 0.22;
 
+/** What the shell hands the game when a character is entered. */
+export interface GameSession {
+  player: Player;
+  quests: QuestLog;
+  quickSlots: (string | null)[];
+  mapId: string;
+  portalName: string;
+  /** True for a character that has just been created. */
+  fresh: boolean;
+}
+
+/** How the game reaches back out to the shell that owns it. */
+export interface GameHooks {
+  /** Persist this character. Called on autosave, map change, and exit. */
+  persist(data: SaveData): boolean;
+  /** Leave the world and return to character select. */
+  exitToMenu(): void;
+}
+
 export class Game {
-  private readonly renderer: Renderer;
   private readonly cam = new Camera(VIEW_W, VIEW_H);
-  private readonly input = new Input();
-  private readonly ui = new UiInput();
-  private readonly loop: GameLoop;
   private readonly rng = new Rng(seedFromUrl());
 
   player: Player;
@@ -84,68 +97,29 @@ export class Game {
   private dialogueActions: (() => void)[] = [];
   private dialogueView: DialogueView | null = null;
 
-  constructor(canvas: HTMLCanvasElement) {
-    this.renderer = new Renderer(canvas);
-
-    const saved = loadRaw();
-    if (saved) {
-      const restored = restore(saved);
-      this.player = restored.player;
-      this.quests = restored.quests;
-      this.mapId = restored.mapId;
-      this.uiState.quickSlots = restored.quickSlots;
-      this.enterMap(restored.mapId, restored.portalName, true);
-      this.pushLog('Welcome back.', PAL.exp);
-    } else {
-      const fresh = createStarterCharacter(this.rng);
-      this.player = fresh.player;
-      this.quests = new QuestLog();
-      this.uiState.quickSlots = fresh.quickSlots;
-      this.enterMap(STARTING_MAP, 'spawn', true);
-      this.pushLog('Press F1 for controls. Talk to Mira to get started.', PAL.gold);
-    }
-
-    this.bindPointer(canvas);
-    this.loop = new GameLoop({
-      update: (dt) => this.update(dt),
-      render: (alpha, frameDt) => this.render(alpha, frameDt),
-    });
-  }
-
-  start(): void {
-    this.loop.start();
-  }
-
-  stop(): void {
-    this.loop.stop();
-    this.input.destroy();
-    this.renderer.destroy();
-  }
-
-  /* ---------------------------------------------------------- pointer -- */
-
-  private bindPointer(canvas: HTMLCanvasElement): void {
-    canvas.addEventListener('mousemove', (e) => {
-      const p = this.renderer.toViewSpace(e.clientX, e.clientY);
-      this.ui.move(p.x, p.y);
-    });
-    canvas.addEventListener('mousedown', (e) => {
-      if (e.button === 0) this.ui.press();
-      if (e.button === 2) this.ui.rightPress();
-    });
-    canvas.addEventListener('mouseup', () => this.ui.release());
-    canvas.addEventListener('dblclick', () => this.ui.doublePress());
-    canvas.addEventListener('wheel', (e) => {
-      e.preventDefault();
-      this.ui.scroll(e.deltaY * 0.5);
-    }, { passive: false });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    canvas.addEventListener('mouseleave', () => this.ui.move(-999, -999));
+  constructor(
+    private readonly renderer: Renderer,
+    private readonly input: Input,
+    private readonly ui: UiInput,
+    session: GameSession,
+    private readonly shell: GameHooks,
+  ) {
+    this.player = session.player;
+    this.quests = session.quests;
+    this.uiState.quickSlots = session.quickSlots;
+    this.mapId = session.mapId;
+    this.enterMap(session.mapId, session.portalName, true);
+    this.pushLog(
+      session.fresh
+        ? 'Press F1 for controls. Talk to Mira to get started.'
+        : 'Welcome back.',
+      session.fresh ? PAL.gold : PAL.exp,
+    );
   }
 
   /* ----------------------------------------------------------- update -- */
 
-  private update(dt: number): void {
+  update(dt: number): void {
     this.time += dt;
     this.updateFade(dt);
     this.updateLog(dt);
@@ -237,7 +211,9 @@ export class Game {
       }
       if (this.input.pressed('uiClose')) {
         this.input.consume('uiClose');
-        this.closeDialogue();
+        // The system menu is its own modal; Esc backs out of it directly.
+        if (this.uiState.open.has('system')) this.uiState.open.delete('system');
+        else this.closeDialogue();
       }
       return;
     }
@@ -257,7 +233,9 @@ export class Game {
 
     if (this.input.pressed('uiClose')) {
       this.input.consume('uiClose');
+      // Esc closes whatever is open; with nothing open it is the way out.
       if (this.uiState.open.size > 0) this.uiState.open.clear();
+      else this.uiState.open.add('system');
     }
   }
 
@@ -833,20 +811,25 @@ export class Game {
 
   /* -------------------------------------------------------------- save -- */
 
+  /** Serialise the current character for the shell to store. */
+  snapshot(): SaveData {
+    return serialise(this.player, this.quests, this.mapId, 'spawn', this.uiState.quickSlots);
+  }
+
   saveGame(announce = true): void {
-    const data = serialise(this.player, this.quests, this.mapId, 'spawn', this.uiState.quickSlots);
-    const ok = save(data);
+    const ok = this.shell.persist(this.snapshot());
     if (announce) this.pushLog(ok ? 'Game saved.' : 'Could not save.', ok ? PAL.exp : PAL.hp);
   }
 
-  resetSave(): void {
-    clearSave();
-    location.reload();
+  /** Save and hand control back to character select. */
+  exitToMenu(): void {
+    this.saveGame(false);
+    this.shell.exitToMenu();
   }
 
   /* ------------------------------------------------------------ render -- */
 
-  private render(alpha: number, frameDt: number): void {
+  render(alpha: number, frameDt: number): void {
     const ctx = this.renderer.ctx;
     this.ui.beginFrame();
     this.renderer.clear(PAL.sky);
@@ -897,6 +880,16 @@ export class Game {
       if (!s.open.has('shop')) this.closeDialogue();
     }
     if (s.open.has('advance')) drawAdvancement(ctx, this.ui, s, this.player, this.hooks);
+
+    if (s.open.has('system')) {
+      const choice = drawSystemMenu(ctx, this.ui, s);
+      if (choice.resume) s.open.delete('system');
+      if (choice.save) {
+        this.saveGame(true);
+        s.open.delete('system');
+      }
+      if (choice.characters) this.exitToMenu();
+    }
 
     if (s.open.has('dialogue')) {
       this.dialogueView = this.buildDialogue();

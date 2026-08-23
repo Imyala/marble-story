@@ -10,7 +10,7 @@ import type { BaseStats } from '../game/stats';
 
 export type WindowId =
   | 'inventory' | 'equip' | 'stats' | 'skills' | 'quests'
-  | 'worldmap' | 'help' | 'shop' | 'dialogue' | 'advance';
+  | 'worldmap' | 'help' | 'shop' | 'dialogue' | 'advance' | 'system';
 
 export interface DialogueSession {
   npcId: string;
@@ -79,5 +79,6 @@ export function toggleWindow(state: UiState, id: WindowId): void {
 
 /** True when a window is capturing input (movement should still work). */
 export function isModal(state: UiState): boolean {
-  return state.open.has('dialogue') || state.open.has('shop') || state.open.has('advance');
+  return state.open.has('dialogue') || state.open.has('shop') ||
+         state.open.has('advance') || state.open.has('system');
 }

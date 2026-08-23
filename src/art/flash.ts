@@ -45,7 +45,9 @@ export function drawFlashed(
 ): void {
   if (flash <= 0.01) {
     ctx.save();
-    ctx.globalAlpha = alpha;
+    // Multiply, never assign: a caller may already have dimmed the context
+    // (ghosted slots, fades) and assigning would throw that away.
+    ctx.globalAlpha *= alpha;
     ctx.translate(Math.round(x), Math.round(y));
     draw(ctx);
     ctx.restore();
@@ -56,7 +58,7 @@ export function drawFlashed(
   if (!buf || !buffer) {
     // No DOM (tests, SSR): fall back to the untinted path rather than failing.
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha *= alpha;
     ctx.translate(Math.round(x), Math.round(y));
     draw(ctx);
     ctx.restore();
@@ -77,7 +79,7 @@ export function drawFlashed(
   buf.restore();
 
   ctx.save();
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha *= alpha;
   ctx.drawImage(buffer, Math.round(x) - ORIGIN_X, Math.round(y) - ORIGIN_Y);
   ctx.restore();
 }

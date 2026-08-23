@@ -40,6 +40,9 @@ page.on('requestfailed', (r) => {
 });
 
 await page.goto('http://localhost:4199/', { waitUntil: 'networkidle' });
+await page.waitForFunction(() => !!window.marbleApp, null, { timeout: 10000 });
+// The shell opens on world select; drop into a character for the checks below.
+await page.evaluate(() => window.marbleApp.quickStart('novice'));
 await page.waitForFunction(() => !!window.marble, null, { timeout: 10000 });
 await page.waitForTimeout(800);
 

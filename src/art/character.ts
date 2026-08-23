@@ -231,12 +231,22 @@ function drawHead(ctx: CanvasRenderingContext2D, look: CharacterLook, dy: number
   drawHair(ctx, look, cy);
 }
 
+/**
+ * Hairline angles. The fill closes on the chord between the arc's endpoints,
+ * so an arc that ends below the eyes paints straight over them — which is
+ * exactly what these used to do. Keep the chord above the eye line.
+ */
+const HAIR_START = Math.PI * 1.12;
+const HAIR_END = Math.PI * 1.88;
+
 function drawHair(ctx: CanvasRenderingContext2D, look: CharacterLook, cy: number): void {
   ctx.fillStyle = look.hair;
   switch (look.hairStyle) {
     case 'long':
       ctx.beginPath();
-      ctx.arc(0, cy, HEAD_R + 1, Math.PI * 0.92, Math.PI * 2.08);
+      // The long style keeps a fall of hair down one side, drawn as a separate
+      // shape so the face itself stays clear.
+      ctx.arc(0, cy, HEAD_R + 1, HAIR_START, HAIR_END);
       ctx.lineTo(-HEAD_R - 1, cy + 16);
       ctx.lineTo(-HEAD_R + 5, cy + 16);
       ctx.closePath();
@@ -244,20 +254,20 @@ function drawHair(ctx: CanvasRenderingContext2D, look: CharacterLook, cy: number
       break;
     case 'spiky':
       ctx.beginPath();
-      ctx.moveTo(-HEAD_R, cy + 1);
+      ctx.moveTo(-HEAD_R + 1, cy - 5);
       for (let i = 0; i <= 5; i++) {
         const t = i / 5;
         const px = -HEAD_R + t * HEAD_R * 2;
         ctx.lineTo(px, cy - HEAD_R - (i % 2 === 0 ? 7 : 1));
         ctx.lineTo(px + 3, cy - HEAD_R + 2);
       }
-      ctx.lineTo(HEAD_R, cy + 1);
+      ctx.lineTo(HEAD_R - 1, cy - 5);
       ctx.closePath();
       ctx.fill();
       break;
     case 'ponytail':
       ctx.beginPath();
-      ctx.arc(0, cy, HEAD_R + 1, Math.PI * 0.9, Math.PI * 2.1);
+      ctx.arc(0, cy, HEAD_R + 1, HAIR_START, HAIR_END);
       ctx.fill();
       ctx.beginPath();
       ctx.ellipse(-HEAD_R - 3, cy + 4, 5, 11, 0.4, 0, Math.PI * 2);
@@ -265,10 +275,11 @@ function drawHair(ctx: CanvasRenderingContext2D, look: CharacterLook, cy: number
       break;
     default:
       ctx.beginPath();
-      ctx.arc(0, cy, HEAD_R + 1, Math.PI * 0.95, Math.PI * 2.05);
+      ctx.arc(0, cy, HEAD_R + 1, HAIR_START, HAIR_END);
       ctx.fill();
+      // A swept fringe across the brow, kept above the eyes.
       ctx.beginPath();
-      ctx.ellipse(6, cy - HEAD_R + 5, 9, 5, -0.35, 0, Math.PI * 2);
+      ctx.ellipse(5, cy - HEAD_R + 4, 9, 4, -0.3, 0, Math.PI * 2);
       ctx.fill();
       break;
   }

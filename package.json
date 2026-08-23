@@ -14,7 +14,8 @@
     "smoke": "node scripts/smoke-run.mjs",
     "check": "tsc --noEmit && vitest run",
     "build:artifact": "node scripts/build-artifact.mjs",
-    "verify:pages": "node scripts/verify-pages.mjs"
+    "verify:pages": "node scripts/verify-pages.mjs",
+    "verify:frontend": "node scripts/verify-frontend.mjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

@@ -677,6 +677,33 @@ Default keys (and ours):
 
 ---
 
+## Part 10.5 — The front end
+
+Before a player ever sees a map, the genre asks three questions in a fixed
+order, and the order is doing real work:
+
+1. **Which world?** Parallel servers, grouped by ruleset — a self-found ladder
+   where nothing can be traded, and an open-market one where it can. Choosing
+   here is choosing an economy, which is why it comes first and why it is not
+   easily reversible.
+2. **Which character?** A grid of slots, most of them empty. Slots are the
+   pitch for alt characters: the empty ones are an invitation, and the filled
+   ones are a record of what you have already invested.
+3. **Which class?** A card grid on one side, a detail panel on the other —
+   portrait, category, tagline, and a small stat table (origin, how it moves,
+   what stat it scales from). The table matters more than the prose: it is the
+   only place a new player learns that a class is a *movement* style as much as
+   a damage style.
+
+Only then does the world load. We reproduce all three (`src/ui/screens.ts`,
+driven by `src/app.ts`), with one addition: alongside the five branch classes
+there is a **classic** option that starts you as a Novice with no class at all
+and defers the choice to an instructor at level 10 — the original progression,
+which our job tree still implements underneath.
+
+Character storage follows from this: an account holds worlds, a world holds
+slots, a slot holds one character (`src/game/profile.ts`).
+
 ## Part 11 — Our architecture
 
 ### 11.1 Module map

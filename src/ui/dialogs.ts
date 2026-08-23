@@ -371,7 +371,7 @@ const HELP_ROWS: [string, string][] = [
   ['Quest log', 'Q'],
   ['World map', 'M'],
   ['Minimap toggle', 'M (hold Shift)'],
-  ['Close window', 'Esc'],
+  ['Close window / menu', 'Esc'],
   ['This help', 'F1'],
 ];
 
@@ -405,3 +405,47 @@ export function drawHelp(
 
 /** Exported so the settings screen can show the raw key codes. */
 export { DEFAULT_BINDINGS, JOBS };
+
+/* ---------------------------------------------------------- system menu -- */
+
+export interface SystemChoice {
+  resume: boolean;
+  save: boolean;
+  characters: boolean;
+}
+
+/**
+ * Esc with nothing else open. Small on purpose: the only thing a player
+ * genuinely needs here is a way out that does not lose progress.
+ */
+export function drawSystemMenu(
+  ctx: CanvasRenderingContext2D, ui: UiInput, state: UiState,
+): SystemChoice {
+  ctx.fillStyle = 'rgba(6,9,16,0.55)';
+  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
+
+  const r = rect(VIEW_W / 2 - 150, VIEW_H / 2 - 110, 300, 210);
+  panel(ctx, r, 'Menu');
+
+  const choice: SystemChoice = { resume: false, save: false, characters: false };
+
+  if (button(ctx, ui, rect(r.x + 26, r.y + 56, r.w - 52, 34), 'Resume', { tone: 'primary' })) {
+    choice.resume = true;
+  }
+  if (button(ctx, ui, rect(r.x + 26, r.y + 100, r.w - 52, 34), 'Save Now')) {
+    choice.save = true;
+  }
+  if (button(ctx, ui, rect(r.x + 26, r.y + 144, r.w - 52, 34), 'Character Select', { tone: 'ghost' })) {
+    choice.characters = true;
+  }
+
+  text(ctx, 'Your progress is saved automatically.', r.x + r.w / 2, r.y + r.h - 10, {
+    color: PAL.textFaint, font: '10px ui-monospace, monospace', align: 'center',
+  });
+
+  if (state.open.has('system') && ui.rightClicked) {
+    ui.consume();
+    choice.resume = true;
+  }
+  return choice;
+}

@@ -221,7 +221,8 @@ export class BreathController {
         let a = Math.atan2(bx, bz) - p.yaw;
         while (a > Math.PI) a -= Math.PI * 2;
         while (a < -Math.PI) a += Math.PI * 2;
-        if (Math.abs(a) < 1.1) out.push({ h, d: 0.1 });
+        // Ranked by distance from the body, so the target straight ahead still comes first.
+        if (Math.abs(a) < 1.1) out.push({ h, d: bd * 0.5 + Math.abs(a) });
       }
     }
     out.sort((a, b) => a.d - b.d);

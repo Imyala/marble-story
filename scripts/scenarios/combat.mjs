@@ -45,8 +45,16 @@ export default async function (h) {
   await waitGame(0.08);
   await press('tail', false);
   await press('jump', true);
-  await waitGame(0.75);
-  const mid = await h.eval(() => ({ py: window.wyrm.player.y, ey: window.__e.y, ps: window.wyrm.player.state, st: window.__e.state }));
+  // Track the peak heights: a single sample can land after both have come back down.
+  const mid = { py: -99, ey: -99 };
+  const t0 = await h.eval(() => window.wyrm.time);
+  for (let i = 0; i < 200; i++) {
+    const s = await h.eval(() => ({ py: window.wyrm.player.y, ey: window.__e.y, t: window.wyrm.time }));
+    mid.py = Math.max(mid.py, s.py);
+    mid.ey = Math.max(mid.ey, s.ey);
+    if (s.t - t0 > 0.9) break;
+    await h.wait(30);
+  }
   await press('jump', false);
   h.check('launcher lifts enemy and player', mid.ey > 2 && mid.py > 2, JSON.stringify(mid));
   await h.tap('KeyJ', 3, 250);

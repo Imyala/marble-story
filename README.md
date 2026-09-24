@@ -108,7 +108,7 @@ graphics quality and difficulty (Story, Adventurer, Legend).
 | `npm test` | Unit tests: collision, statuses and reactions, style, progression, terrain |
 | `npm run check` | Typecheck and unit tests |
 | `npm run smoke` | Builds, serves `dist/`, and plays the real game in headless Chromium |
-| `npm run play <scenario>` | Runs `scripts/scenarios/<scenario>.mjs` against the dev server |
+| `npm run play <scenario>[:<part>]` | Runs `scripts/scenarios/<scenario>.mjs` (or one named export of it, e.g. `puzzles:keep`) against the dev server |
 
 URL parameters for development: `?level=<id>` skips the title and loads a realm
 (`fen`, `sanctum`, `falls`, `frostworks`, `plains`, `keep`), `&cp=<wardstone>`

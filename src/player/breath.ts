@@ -201,15 +201,28 @@ export class BreathController {
 
   private coneTargets(range: number, halfAngle: number, max: number): Hittable[] {
     const out: { h: Hittable; d: number }[] = [];
+    const p = this.player;
     for (const h of this.game.hittables()) {
       if (!h.alive) continue;
       to.set(h.x, h.y + h.height * 0.5, h.z).sub(mouth);
       const d = to.length();
-      if (d > range + h.radius) continue;
       const ang = aim.angleTo(to);
       const slack = Math.atan2(h.radius + h.height * 0.3, Math.max(0.5, d));
-      if (ang > halfAngle + slack) continue;
-      out.push({ h, d });
+      if (d <= range + h.radius && ang <= halfAngle + slack) {
+        out.push({ h, d });
+        continue;
+      }
+      // Point-blank: the mouth sits well ahead of the body, so a target
+      // pressed up against the snout would otherwise fall behind the cone.
+      const bx = h.x - p.x;
+      const bz = h.z - p.z;
+      const bd = Math.hypot(bx, bz);
+      if (bd < h.radius + 1.9 && h.y < p.y + 2.5 && h.y + h.height > p.y - 0.5) {
+        let a = Math.atan2(bx, bz) - p.yaw;
+        while (a > Math.PI) a -= Math.PI * 2;
+        while (a < -Math.PI) a += Math.PI * 2;
+        if (Math.abs(a) < 1.1) out.push({ h, d: 0.1 });
+      }
     }
     out.sort((a, b) => a.d - b.d);
     return out.slice(0, max).map((o) => o.h);

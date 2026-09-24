@@ -239,6 +239,7 @@ export class Game {
       opts = { ...opts, checkpoint: null };
     }
     this.clearLevel();
+    this.hud.clearFlick();
     const level = new Level(def);
     this.level = level;
     this.scene.add(level.root);

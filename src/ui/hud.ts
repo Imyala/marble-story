@@ -297,7 +297,14 @@ export class Hud {
       this.flickBox.classList.toggle('hidden', talking);
       if (!talking) {
         this.flickT -= dt;
-        if (this.flickT <= 0) this.flickBox.classList.add('hidden');
+        this.flickShown += dt;
+        // Long lines get longer before a queued one takes over.
+        const minShow = Math.min(this.flickDur, 2 + (this.flickText.textContent?.length ?? 0) * 0.035);
+        const next = this.flickQueue.length > 0 && (this.flickT <= 0 || this.flickShown >= minShow);
+        if (next) {
+          const [text, secs] = this.flickQueue.shift()!;
+          this.showFlick(text, secs);
+        } else if (this.flickT <= 0) this.flickBox.classList.add('hidden');
       }
     }
     if (this.relicBox) {
@@ -443,10 +450,39 @@ export class Hud {
     this.game.renderer.canvas.classList.toggle('dtime', on);
   }
 
+  /**
+   * Flick says something. A line that arrives while another is showing waits
+   * its turn; the current line then gets at least three seconds on screen.
+   */
   flick(text: string, seconds = 5): void {
+    if (this.flickT > 0) {
+      if (this.flickText.textContent === text) {
+        this.flickT = Math.max(this.flickT, seconds);
+        return;
+      }
+      if (this.flickQueue.length < 3 && !this.flickQueue.some(([t]) => t === text)) this.flickQueue.push([text, seconds]);
+      return;
+    }
+    this.showFlick(text, seconds);
+  }
+
+  private flickQueue: [string, number][] = [];
+  private flickShown = 0;
+  private flickDur = 0;
+
+  /** Drops whatever Flick was saying or about to say (a new level, say). */
+  clearFlick(): void {
+    this.flickQueue.length = 0;
+    this.flickT = 0;
+    this.flickBox.classList.add('hidden');
+  }
+
+  private showFlick(text: string, seconds: number): void {
     this.flickText.textContent = text;
     this.flickBox.classList.remove('hidden');
     this.flickT = seconds;
+    this.flickDur = seconds;
+    this.flickShown = 0;
   }
 
   relic(title: string, text: string): void {

@@ -1,0 +1,308 @@
+import * as THREE from 'three';
+import type { LevelDef, Builder } from '../world/level';
+import { ambient, paint, jitter } from './common';
+import { EMBERHOLD, STORMCREST, FROSTFANG, STONEHIDE, NYXA } from '../game/story';
+import type { Game } from '../game/game';
+import { Water } from '../render/water';
+import { DragonRig, defaultPose, type DragonLook } from '../player/dragonRig';
+import { makeCyl } from '../world/collision';
+import type { Line } from '../ui/dialogue';
+
+/**
+ * The Warden Sanctum: the hub. Emberhold teaches fire here; the Wardgate
+ * sends Aster to each realm; rescued Wardens return here and teach their
+ * element's secrets.
+ */
+
+const COLORS = paint({
+  under: 0x6a6a72, shore: 0x8a8a7a, grass: 0x6a9a4a, grass2: 0x7aa854, rock: 0x9a9488, path: 0xc8bca4, high: 0x8aa860, highAt: 6, water: -100,
+});
+
+const STONE = 0xc8bca4;
+const STONE_DARK = 0x9a9080;
+
+export const sanctum: LevelDef = {
+  id: 'sanctum',
+  name: 'Warden Sanctum',
+  subtitle: 'The temple above the clouds',
+  music: 'sanctum',
+  killY: -18,
+  spawn: [0, -18, 0],
+  sky: {
+    top: 0x3a6ab8, horizon: 0xf0c890, bottom: 0xf8e8d0, sunDir: [-0.5, 0.35, 0.6], sunColor: 0xffe0b0, sunIntensity: 2.2,
+    hemiSky: 0xc0d8ff, hemiGround: 0x8a7a60, hemiIntensity: 1.05, fogNear: 60, fogFar: 260,
+  },
+  terrain: {
+    x0: -80, z0: -60, sizeX: 160, sizeZ: 150, cell: 1.5,
+    color: COLORS,
+    skirt: { depth: 16, color: 0x8a8274 },
+    shape: (s) => {
+      s.void();
+      s.island(0, 0, 32, 0, 3, 0.2);
+      s.island(0, 44, 13, 4.5, 2, 0.1);
+      s.path([[0, 28, 0], [0, 33, 0]], 8, 1);
+      s.island(46, 4, 15, 0.2, 2, 0.2);
+      s.island(-46, -6, 13, 1.0, 2, 0.2);
+      s.island(-24, -34, 6, 3, 1.5, 0.1);
+      s.island(-38, -42, 5, 6, 1.5, 0.1);
+      s.island(22, -40, 5, 1.5, 1.5, 0.1);
+    },
+  },
+
+  build(b: Builder) {
+    const g = b.game;
+    ambient(b, 'pollen', 10);
+    // A sea of clouds below.
+    const clouds = new Water(-16, 700, 0xf0d8c8, 0xfff4e8, 0xffffff, 0.95);
+    b.level.root.add(clouds.mesh);
+    b.level.props.push({ update: () => clouds.update(g.realTime * 0.3, g.camera.position.x, g.camera.position.z) });
+
+    // --- Courtyard ------------------------------------------------------------------
+    b.platform(0, 0.25, 0, 26, 26, STONE, 0.5, { trim: STONE_DARK });
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + Math.PI / 12;
+      const x = Math.sin(a) * 17;
+      const z = Math.cos(a) * 17;
+      if (Math.abs(x) < 5 && z > 0) continue;
+      if (i % 3 === 1) b.decor.pillar(x, 0, z, 0.8, 3.5, STONE, true);
+      else b.pillar(x, z, 0.8, -1, 7, STONE);
+    }
+    // Central brazier.
+    b.torch(0, 0, 'hearth', true, 0, 0.25);
+    // Warden statues around the brazier, lit as each element returns.
+    const statues: [number, number, DragonLook, string][] = [
+      [-8, -8, EMBERHOLD, 'fire'], [8, -8, STORMCREST, 'lightning'], [8, 8, FROSTFANG, 'ice'], [-8, 8, STONEHIDE, 'earth'],
+    ];
+    for (const [x, z, look, el] of statues) statue(b, x, z, look, g.save.elements.includes(el as never));
+
+    // --- Wardgate terrace -----------------------------------------------------------------
+    b.stairs(0, 28.5, 7, 0, 0.25, 4.5, 6);
+    b.platform(0, 4.6, 44, 22, 18, STONE, 0.6, { trim: STONE_DARK });
+    b.arch(-9, 40, 0, 3, 5, STONE);
+    b.arch(9, 40, 0, 3, 5, STONE);
+    const gate = b.portal(0, 48, Math.PI, 'wardgate', 'Step through the Wardgate', 0xc9a2ff, () => g.menus.showTravel());
+    b.gate(0, 34.5, 8, 5, 0, 'stone', 'wardgate-open', 0.25);
+    if (g.save.found['story:sanctum:lesson-done']) b.level.emit('wardgate-open');
+    void gate;
+    b.checkpoint('courtyard', -5, 20, Math.PI);
+
+    // --- Training grounds (east) --------------------------------------------------------------
+    b.bridge(16, 2, 0.25, 32, 3, 0.2, 4);
+    b.platform(46, 0.4, 4, 18, 18, STONE_DARK, 0.4, { trim: STONE });
+    const dummySpots: [number, number][] = [[42, 0], [50, 0], [46, 9], [40, 8], [52, 8]];
+    for (const [x, z] of dummySpots) dummy(g, x, z);
+    b.torch(38, -4, 'lesson', false, 0, 0.4);
+    b.torch(54, -4, 'lesson', false, 0, 0.4);
+    b.torch(38, 12, 'lesson', false, 0, 0.4);
+    b.torch(54, 12, 'lesson', false, 0, 0.4);
+    b.torchGroup('lesson', 'lesson-torches');
+    b.level.on('lesson-torches', () => lessonTorchesDone(g));
+    b.crystal(58, 2, 'green', 6);
+    b.crystal(58, 7, 'red', 4);
+
+    // --- Hatchery (west) -------------------------------------------------------------------------
+    b.bridge(-16, -2, 0.25, -34, -5, 1.0, 3.5);
+    b.platform(-46, 1.2, -6, 14, 14, STONE, 0.5, { trim: STONE_DARK });
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      egg(b, -46 + Math.sin(a) * 4, -6 + Math.cos(a) * 4, 1.2);
+    }
+    b.collectible('relic1', 'relic', -46, -6, 1.2, 'sanc1');
+    b.wall(-53, -13, -39, -13, 1.2, 3, 1, STONE_DARK);
+    b.wall(-53, -13, -53, 1, 1.2, 2.2, 1, STONE_DARK);
+    // Stepping islets south of the hatchery hide the second relic and a shard.
+    b.islet(-30, 3, -24, 2.2, 0x6a9a4a);
+    b.collectible('relic2', 'relic', -38, -42, undefined, 'sanc2');
+    b.collectible('mana1', 'mana', -24, -34);
+    b.updraft(-30, -24, 2, 3, 12, 30);
+    b.islet(-8, 5, -38, 2.5, 0x6a9a4a);
+    b.islet(8, 3, -40, 2.5, 0x6a9a4a);
+    b.collectible('heart1', 'heart', 22, -40);
+    b.gemLine([[-8, -38], [8, -40], [22, -40]]);
+    b.crystal(20, -42, 'blue', 15);
+
+    b.scatter(50, 0, 0, 30, (x, z, y) => b.decor.grass(x, y, z, 0.9, 0x6a9a4a), (x, z) => Math.hypot(x, z) > 18);
+    b.scatter(18, 0, 0, 30, (x, z) => b.tree(x, z, 1 + Math.abs(jitter(x + z)) * 0.5, 'round', { leaf: 0x5a8a3a }), (x, z) => Math.hypot(x, z) > 21 && Math.abs(x) > 6);
+    b.scatter(20, 46, 4, 14, (x, z, y) => b.decor.flower(x, y, z, 0xffd070), (x, z) => Math.abs(x - 46) > 9 || Math.abs(z - 4) > 9);
+
+    // --- Wardens ----------------------------------------------------------------------------------
+    b.npc('emberhold', EMBERHOLD, 4, 8, Math.PI * 0.8, 'Talk to Emberhold', () => talkEmberhold(g));
+    if (g.save.levelsDone.falls) b.npc('stormcrest', STORMCREST, 12, 22, -Math.PI * 0.8, 'Talk to Stormcrest', () => talkWarden(g, 'stormcrest'));
+    if (g.save.levelsDone.frostworks) b.npc('frostfang', FROSTFANG, -12, 22, Math.PI * 0.8, 'Talk to Frostfang', () => talkWarden(g, 'frostfang'));
+    if (g.save.levelsDone.plains) b.npc('stonehide', STONEHIDE, -14, 6, Math.PI * 0.5, 'Talk to Stonehide', () => talkWarden(g, 'stonehide'));
+    if (g.save.levelsDone.keep) b.npc('nyxa', NYXA, 14, 6, -Math.PI * 0.5, 'Talk to Nyxa', () => talkWarden(g, 'nyxa'));
+  },
+
+  onEnter(g, fresh) {
+    if (!g.save.found['story:sanctum:arrive']) {
+      g.save.found['story:sanctum:arrive'] = true;
+      g.say(ARRIVE, () => startLesson(g));
+      return;
+    }
+    if (!g.save.found['story:sanctum:lesson-done'] && g.save.elements.includes('fire')) {
+      g.hud.flick('Emberhold wanted us on the training grounds to the east. Burn those dummies!', 6);
+      return;
+    }
+    // Returning from a realm.
+    const returns: [string, string, Line[]][] = [
+      ['falls', 'story:sanctum:back-falls', BACK_FALLS],
+      ['frostworks', 'story:sanctum:back-frost', BACK_FROST],
+      ['plains', 'story:sanctum:back-plains', BACK_PLAINS],
+    ];
+    for (const [lvl, key, lines] of returns) {
+      if (g.save.levelsDone[lvl] && !g.save.found[key]) {
+        g.save.found[key] = true;
+        g.say(lines, () => g.saveNow());
+        return;
+      }
+    }
+    if (fresh) g.hud.flick('The Wardgate is up the north stairs. Wardstones let you spend gems on new abilities.', 5);
+  },
+};
+
+// --- scenery helpers ------------------------------------------------------------------------------
+
+function statue(b: Builder, x: number, z: number, look: DragonLook, lit: boolean): void {
+  const y = 0.25;
+  b.box(x, y, z, 3, 1.2, 3, STONE_DARK, { trim: STONE });
+  const stoneLook: DragonLook = { ...look, body: 0xa89e8a, belly: 0xb8ae9a, horn: lit ? look.body : 0x8a8272, membrane: 0x9a9080, spikes: 0x8a8272, eye: lit ? look.eye : 0x6a6458, scale: 1.3 };
+  const rig = new DragonRig(stoneLook);
+  const p = defaultPose();
+  p.attack = 'roar';
+  p.attackT = 0.5;
+  for (let i = 0; i < 30; i++) rig.update(0.05, p);
+  rig.root.position.set(x, y + 1.2, z);
+  rig.root.rotation.y = Math.atan2(-x, -z);
+  rig.root.traverse((o) => {
+    if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+  });
+  b.level.root.add(rig.root);
+  b.col.add(makeCyl(x, z, 1.5, y, y + 3.5));
+  if (lit) b.beacon(x, y + 5, z, look.eye, 0.6);
+}
+
+function egg(b: Builder, x: number, z: number, y: number): void {
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 10), new THREE.MeshStandardMaterial({ color: 0x6a6070, roughness: 0.4 }));
+  m.scale.set(1, 1.3, 1);
+  m.position.set(x, y + 0.6, z);
+  m.castShadow = true;
+  b.level.root.add(m);
+  const nest = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.18, 6, 14), new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 1 }));
+  nest.rotation.x = Math.PI / 2;
+  nest.position.set(x, y + 0.15, z);
+  b.level.root.add(nest);
+}
+
+function dummy(g: Game, x: number, z: number): void {
+  const y = g.col.groundAt(x, z, 20, 0.2).y;
+  const spawn = () => {
+    const e = g.spawnEnemy('dummy', x, y + 0.05, z, Math.PI, false);
+    e.onDeath = () => {
+      setTimeout(() => {
+        if (g.level?.def.id === 'sanctum') {
+          spawn();
+          g.fx.sparkle(x, y + 1, z, 0xf5c46b, 10);
+        }
+      }, 3000);
+    };
+  };
+  spawn();
+}
+
+// --- story ---------------------------------------------------------------------------------------------
+
+const ARRIVE: Line[] = [
+  { who: 'emberhold', text: 'Welcome to the Warden Sanctum, Aster. Or what the Hollow King left of it.' },
+  { who: 'flick', text: 'Whoa. It\'s... floating. Why is it floating?' },
+  { who: 'emberhold', text: 'Because it was built by dragons, firefly. We do not care for walking.' },
+  { who: 'emberhold', text: 'Four Wardens once taught the four breaths here. Fire, lightning, ice and earth. On the night of the Eclipse, three of them were taken.' },
+  { who: 'aster', text: 'Taken by who?' },
+  { who: 'emberhold', text: 'By a young shadow dragoness named Nyxa. She serves the Hollow King now. I escaped only because I stayed to save one egg.' },
+  { who: 'aster', text: 'Me.' },
+  { who: 'emberhold', text: 'You. Now, let us see if you have your father\'s fire. Come to me.' },
+];
+
+function startLesson(g: Game): void {
+  g.learnElement('fire');
+  g.say([
+    { who: 'emberhold', text: 'Breathe in. Feel the heat under your scales. Now let it out.', action: () => g.fx.explosion(g.player.x, g.player.y + 1, g.player.z, 1.5, 0xffa040) },
+    { who: 'aster', text: 'I... I breathed FIRE!' },
+    { who: 'flick', text: 'You singed my wings! Watch where you point that thing!' },
+    { who: 'emberhold', text: 'Hold your right claw (Right Mouse) to breathe flame. It burns your mana, the green light, so watch it.' },
+    { who: 'emberhold', text: 'Press Q to hurl a fireball. Go to the training grounds east of here. Burn the dummies, then light the four braziers.' },
+  ], () => g.hud.flick('Training grounds are across the east bridge. Hold Right Mouse to breathe fire, Q for a fireball!', 7));
+}
+
+function lessonTorchesDone(g: Game): void {
+  if (g.save.found['story:sanctum:lesson-done']) return;
+  g.save.found['story:sanctum:lesson-done'] = true;
+  if (!g.save.unlocked.includes('falls')) g.save.unlocked.push('falls');
+  g.level?.emit('wardgate-open');
+  g.player.fury = 100;
+  g.say([
+    { who: 'emberhold', text: 'Well done! Now: fire is anger made useful. Strike hard and fast, and fury builds inside you.' },
+    { who: 'emberhold', text: 'When the ring around your emblem glows, press X to release your Fury. I have lent you mine. Try it.' },
+    { who: 'emberhold', text: 'And one thing more. Hold C and the world will slow for you. We call it Dragon Time.' },
+    { who: 'emberhold', text: 'Stormcrest, the Lightning Warden, was dragged to Stormspire Falls. The Wardgate at the top of the north stairs is open.' },
+    { who: 'aster', text: 'Then that\'s where I\'m going.' },
+    { who: 'emberhold', text: 'Wardstones like the one by the stairs will let you spend the spirit gems you gather. Grow strong, Aster.' },
+  ], () => g.saveNow());
+}
+
+function talkEmberhold(g: Game): void {
+  const s = g.save;
+  let lines: Line[];
+  if (!s.found['story:sanctum:lesson-done']) {
+    lines = [{ who: 'emberhold', text: 'The training grounds are across the east bridge. Burn the dummies, then light all four braziers with fire.' }];
+  } else if (!s.levelsDone.falls) {
+    lines = [
+      { who: 'emberhold', text: 'Stormcrest waits at Stormspire Falls. Take the Wardgate at the top of the north stairs.' },
+      { who: 'emberhold', text: 'Remember: a guarded foe fears your tail. A burning foe fears ice. And a frozen foe shatters under a heavy blow.' },
+    ];
+  } else if (!s.levelsDone.keep) {
+    lines = [
+      { who: 'emberhold', text: 'Every Warden you free makes you stronger, and makes Nyxa more desperate.' },
+      { who: 'emberhold', text: 'Combine your breaths. Fire on a shocked enemy overloads. Ice on a burning one bursts into steam.' },
+    ];
+  } else {
+    lines = [{ who: 'emberhold', text: 'The Sanctum has two young dragons again. I had stopped hoping I would ever say that.' }];
+  }
+  g.say(lines);
+}
+
+function talkWarden(g: Game, who: string): void {
+  const lines: Record<string, Line[]> = {
+    stormcrest: [
+      { who: 'stormcrest', text: 'Kid! Hey! Did you know that lightning is five times hotter than the sun? I read it. Well, I made it up. But it FEELS true.' },
+      { who: 'stormcrest', text: 'Arc Breath jumps between enemies. More targets, more fun. Shock them and they take extra damage from everything!' },
+    ],
+    frostfang: [
+      { who: 'frostfang', text: 'Patience, young one. Chill an enemy enough and it freezes solid. Then strike with your tail, and it shatters like winter glass.' },
+    ],
+    stonehide: [
+      { who: 'stonehide', text: '...Earth does not hurry. Earth does not need to.' },
+      { who: 'stonehide', text: 'My Boulder cracks stone walls. There may be old walls in places you have already been.' },
+    ],
+    nyxa: [
+      { who: 'nyxa', text: 'I keep waking up and expecting the voice to be there. It isn\'t. It\'s very quiet without it.' },
+      { who: 'aster', text: 'Quiet\'s not so bad. You get used to it.' },
+    ],
+  };
+  g.say(lines[who] ?? []);
+}
+
+const BACK_FALLS: Line[] = [
+  { who: 'emberhold', text: 'Stormcrest is home, and his lightning is yours. You have done in days what I could not do in years.' },
+  { who: 'emberhold', text: 'Frostfang, our Ice Warden, is chained in the Frostworks, the old ice forges. The Wardgate will take you there.' },
+  { who: 'flick', text: 'Ice forges. Great. My wings are going to freeze off.' },
+];
+const BACK_FROST: Line[] = [
+  { who: 'emberhold', text: 'Frostfang returns, and so does the cold wisdom of ice. Only Stonehide remains.' },
+  { who: 'emberhold', text: 'He was taken to the Stonewild Plains. The ground itself has turned on the Sanctum there.' },
+];
+const BACK_PLAINS: Line[] = [
+  { who: 'emberhold', text: 'All four breaths, in one young dragon. It has not happened in a thousand years.' },
+  { who: 'emberhold', text: 'Nyxa will come for you now with everything she has. Better we go to her. Eclipse Keep lies open through the Wardgate.' },
+  { who: 'aster', text: 'I\'m ready.' },
+  { who: 'emberhold', text: 'No one is ever ready, Aster. Go anyway.' },
+];

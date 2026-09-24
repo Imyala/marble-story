@@ -1,90 +1,63 @@
-/**
- * Shared world types: maps, portals, spawn points, NPC placements.
- * See docs/DESIGN.md §1.3.
- */
-import type { Rect } from '../physics/body';
-import type { FootholdSet } from '../physics/foothold';
-import type { LadderRope } from '../physics/ladder';
-import type { Backdrop, TerrainTheme } from '../art/terrain';
+export type Element = 'fire' | 'lightning' | 'ice' | 'earth';
+export const ELEMENTS: readonly Element[] = ['fire', 'lightning', 'ice', 'earth'];
+export type DamageType = Element | 'physical' | 'shadow';
 
-export type PortalType = 'spawn' | 'visible' | 'hidden' | 'scripted' | 'townwarp';
+export const ELEMENT_NAMES: Record<Element, string> = {
+  fire: 'Fire',
+  lightning: 'Lightning',
+  ice: 'Ice',
+  earth: 'Earth',
+};
 
-export interface Portal {
-  /** Unique within its map. Links target portals by name, not coordinate. */
-  name: string;
-  x: number;
-  y: number;
-  type: PortalType;
-  /** Destination map id, absent for pure spawn points. */
-  toMap?: string;
-  /** Destination portal name in the target map. */
-  toPortal?: string;
-  /** Scripted gate: minimum level to pass. */
-  requireLevel?: number;
-  /** Scripted gate: quest that must be complete. */
-  requireQuest?: string;
-  /** Shown on the world map / when standing in the portal. */
-  label?: string;
+export type HitSource = 'melee' | 'breath' | 'burst' | 'fury' | 'reaction' | 'env' | 'charge' | 'enemy';
+
+export interface Hit {
+  damage: number;
+  type: DamageType;
+  /** Push direction on the XZ plane, normalized. */
+  dirX: number;
+  dirZ: number;
+  knockback: number;
+  /** Upward velocity given to the target. */
+  launch: number;
+  /** Poise damage; enough of it staggers heavy enemies. */
+  stagger: number;
+  /** Freeze-frame duration on contact. */
+  hitstop: number;
+  /** Elemental status buildup. */
+  buildup: number;
+  /** Heavy hits break guards and shatter frozen targets. */
+  heavy: boolean;
+  /** Slams an airborne target into the ground. */
+  spike: boolean;
+  source: HitSource;
+  /** Move id, used to reward variety in the style meter. */
+  move: string;
+  fromPlayer: boolean;
+  /** World position of the attacker, for guards that block from the front. */
+  ox: number;
+  oz: number;
 }
 
-export interface MobSpawn {
-  mobId: string;
-  x: number;
-  y: number;
-  /** Overrides the monster's default respawn time. */
-  respawnMs?: number;
-  /** Spawn a boss here instead of a regular monster. */
-  boss?: boolean;
+export function makeHit(p: Partial<Hit> & { damage: number }): Hit {
+  return {
+    type: 'physical', dirX: 0, dirZ: 1, knockback: 0, launch: 0, stagger: 0, hitstop: 0, buildup: 0,
+    heavy: false, spike: false, source: 'melee', move: 'hit', fromPlayer: true, ox: 0, oz: 0, ...p,
+  };
 }
 
-export interface NpcPlacement {
-  npcId: string;
-  x: number;
-  y: number;
-  facing?: 1 | -1;
-}
+export type HitResult = 'none' | 'hit' | 'blocked' | 'immune' | 'killed' | 'dodged';
 
-/** Decorative, non-colliding scenery placed by map data. */
-export interface Decoration {
-  kind: 'tree' | 'rock' | 'sign' | 'lamp' | 'crate' | 'flower' | 'bush' | 'banner';
-  x: number;
-  y: number;
-  scale?: number;
-  color?: string;
-}
-
-export interface GameMap {
-  id: string;
-  name: string;
-  /** Towns have no monsters and no death penalty. */
-  town: boolean;
-  theme: TerrainTheme;
-  backdrop: Backdrop;
-  bounds: Rect;
-  footholds: FootholdSet;
-  ladders: LadderRope[];
-  portals: Portal[];
-  spawns: MobSpawn[];
-  npcs: NpcPlacement[];
-  decorations: Decoration[];
-  /** Multiplier on how many spawn points are active. */
-  mobRate: number;
-  /** Where death and town-scrolls send you. */
-  returnMap: string;
-  /** Suggested level range, shown on the world map. */
-  levelRange: [number, number];
-  /** Region this map belongs to, for the world map grouping. */
-  region: string;
-}
-
-export function findPortal(map: GameMap, name: string): Portal | null {
-  return map.portals.find((p) => p.name === name) ?? null;
-}
-
-export function spawnPortal(map: GameMap): Portal {
-  return (
-    map.portals.find((p) => p.type === 'spawn' && p.name === 'spawn') ??
-    map.portals.find((p) => p.type === 'spawn') ??
-    map.portals[0]
-  );
+/** Anything the player's attacks can connect with. */
+export interface Hittable {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+  readonly radius: number;
+  readonly height: number;
+  alive: boolean;
+  /** Enemies count toward combos, fury and the style meter. */
+  readonly isEnemy: boolean;
+  /** Breath and bursts ignore targets that do not want them (e.g. switches of another element). */
+  takeHit(hit: Hit): HitResult;
 }

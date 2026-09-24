@@ -1,921 +1,969 @@
-/**
- * Top-level orchestration: owns the player, the current world, the camera,
- * input routing, the UI, and persistence.
- *
- * The split is deliberate — systems below this file never reach for global
- * state, so they stay testable and a client/server split stays possible.
- */
-import { Input } from '../engine/input';
-import { Camera } from '../engine/camera';
-import { Renderer, VIEW_H, VIEW_W } from '../engine/renderer';
-import { Rng } from '../engine/rng';
-import { MoveIntent, stepBody } from '../physics/body';
-import { PAL } from '../art/palette';
-import { drawScene, drawVignette } from '../render/scene';
-import { drawDeathOverlay, drawHud, drawLevelUp, HudState, LogLine } from '../ui/hud';
-import { UiInput } from '../ui/imgui';
-import { drawEquipment, drawInventory, drawQuests, drawSkills, drawStats, rewardLines } from '../ui/windows';
-import { DialogueView, drawAdvancement, drawDialogue, drawHelp, drawShop, drawSystemMenu, drawWorldMap } from '../ui/dialogs';
-import { isModal, newUiState, UiHooks, UiState, WindowId } from '../ui/state';
-import { Player } from './player';
-import { QuestLog } from './quests';
-import { World } from './world';
-import { loadMap, STARTING_MAP } from '../data/maps';
-import { findPortal, Portal, spawnPortal } from './types';
-import { getNpc, DialogueAction, NpcDef } from '../data/npcs';
-import { getQuest } from '../data/quests';
-import { getMob } from '../data/mobs';
-import { ItemTab, getItem, sellPrice } from '../data/items';
-import { EquippedSlot } from './equipment';
-import { applyScroll } from './equipment';
-import { BaseStats, emptyStats } from './stats';
-import { trySkill } from '../data/skills';
-import { SaveData, serialise } from './save';
+import * as THREE from 'three';
+import { Renderer } from '../render/renderer';
+import { Input } from '../core/input';
+import { audio, THEMES, type Audio, type Sfx } from '../core/audio';
+import { FX } from '../fx/fx';
+import { CameraRig } from './camera';
+import { Player } from '../player/player';
+import { Enemy } from '../enemies/enemy';
+import { ENEMIES, TOTEM_WARD } from '../enemies/defs';
+import { Projectile, Shockwave, type ProjectileSpec } from '../entities/projectile';
+import { Gem, splitValue, type GemKind, GEM_COLORS } from '../entities/gems';
+import { StyleMeter } from '../combat/style';
+import { REACTION_INFO, type Reaction } from '../combat/status';
+import { makeHit, type DamageType, type Hit, type Hittable, type Element } from './types';
+import {
+  DIFFICULTY, loadOptions, loadSave, newSave, writeOptions, writeSave, maxHp, maxMana, SHARDS_PER_UPGRADE, learnElement,
+  type Options, type SaveData, type Difficulty,
+} from './progress';
+import { Level, Builder, type LevelDef } from '../world/level';
+import type { Wardstone, Collectible, Arena } from '../entities/props';
+import { LEVELS } from '../levels';
+import { Hud } from '../ui/hud';
+import { Menus } from '../ui/menus';
+import { Dialogue, type Line } from '../ui/dialogue';
+import { Flick } from '../player/flick';
+import { RELICS } from './story';
+import type { Boss } from '../enemies/boss';
+import { rng } from '../core/rng';
 
-/**
- * The world RNG is seeded from `?seed=` when present, so a session can be
- * reproduced exactly — which is what makes the headless smoke test stable and
- * makes a "this drop never happens" bug report actionable.
- */
-function seedFromUrl(): number {
-  try {
-    const raw = new URLSearchParams(location.search).get('seed');
-    if (raw !== null) {
-      const parsed = Number(raw);
-      if (Number.isFinite(parsed)) return parsed >>> 0 || 1;
-    }
-  } catch {
-    // No location (tests, workers): fall through to a random seed.
+export type GameState = 'title' | 'play' | 'pause' | 'dialogue' | 'transition' | 'dead' | 'menu' | 'ending';
+
+/** Limits how many enemies may attack at once, so fights stay readable. */
+export class CombatDirector {
+  private melee = new Set<Enemy>();
+  private ranged = new Set<Enemy>();
+  constructor(private game: Game) {}
+  request(e: Enemy, ranged: boolean): boolean {
+    const d = this.game.save.difficulty;
+    const maxMelee = d === 'story' ? 1 : d === 'normal' ? 2 : 3;
+    const maxRanged = d === 'story' ? 1 : 2;
+    const set = ranged ? this.ranged : this.melee;
+    if (set.has(e)) return true;
+    if (set.size >= (ranged ? maxRanged : maxMelee)) return false;
+    set.add(e);
+    return true;
   }
-  return (Math.random() * 0xffffffff) >>> 0;
+  release(e: Enemy): void {
+    this.melee.delete(e);
+    this.ranged.delete(e);
+  }
+  clear(): void {
+    this.melee.clear();
+    this.ranged.clear();
+  }
 }
 
-const AUTOSAVE_INTERVAL = 25;
-/** How long the map-transition fade takes, each way. */
-const FADE_TIME = 0.22;
-
-/** What the shell hands the game when a character is entered. */
-export interface GameSession {
-  player: Player;
-  quests: QuestLog;
-  quickSlots: (string | null)[];
-  mapId: string;
-  portalName: string;
-  /** True for a character that has just been created. */
-  fresh: boolean;
+interface FirePatch {
+  x: number;
+  y: number;
+  z: number;
+  r: number;
+  t: number;
+  tick: number;
 }
 
-/** How the game reaches back out to the shell that owns it. */
-export interface GameHooks {
-  /** Persist this character. Called on autosave, map change, and exit. */
-  persist(data: SaveData): boolean;
-  /** Leave the world and return to character select. */
-  exitToMenu(): void;
+interface Spikes {
+  meshes: THREE.Mesh[];
+  t: number;
 }
 
 export class Game {
-  private readonly cam = new Camera(VIEW_W, VIEW_H);
-  private readonly rng = new Rng(seedFromUrl());
-
+  readonly renderer: Renderer;
+  readonly scene: THREE.Scene;
+  readonly camera: THREE.PerspectiveCamera;
+  readonly input: Input;
+  readonly audio: Audio = audio;
+  readonly fx: FX;
+  readonly cam = new CameraRig();
+  readonly hud: Hud;
+  readonly menus: Menus;
+  readonly dialogue: Dialogue;
+  save: SaveData;
+  options: Options;
   player: Player;
-  quests: QuestLog;
-  world!: World;
-  mapId = STARTING_MAP;
+  flick: Flick;
+  level: Level | null = null;
+  enemies: Enemy[] = [];
+  projectiles: Projectile[] = [];
+  shockwaves: Shockwave[] = [];
+  gems: Gem[] = [];
+  readonly director: CombatDirector;
+  readonly style = new StyleMeter();
+  state: GameState = 'title';
+  time = 0;
+  realTime = 0;
+  readonly stats = { damageTaken: 0 };
+  pendingSpawns: { type: string; x: number; y: number; z: number; yaw: number }[] = [];
+  dialogueSpeaker: string | null = null;
+  boss: Boss | null = null;
+  private hitstopT = 0;
+  private slowScale = 1;
+  private slowT = 0;
+  private hitList: Hittable[] = [];
+  private deadT = 0;
+  private combatHold = 0;
+  private gemChain = 0;
+  private gemChainT = 0;
+  private firePatches: FirePatch[] = [];
+  private spikes: Spikes[] = [];
+  private transitionFn: (() => void) | null = null;
+  private transitionT = 0;
+  private transitionPhase: 'out' | 'in' = 'out';
+  private stateBeforeTransition: GameState = 'play';
+  private interactTarget: import('../entities/props').Interactable | null = null;
+  private autosaveT = 0;
+  activeArena: Arena | null = null;
+  private titleT = 0;
+  /** Level flags set by story scripts during this visit. */
+  readonly sessionFlags = new Set<string>();
 
-  private readonly uiState: UiState = newUiState();
-  private readonly log: LogLine[] = [];
-  private levelUpTimer = 0;
-  private autosaveTimer = AUTOSAVE_INTERVAL;
-  private time = 0;
-
-  /** Pending map change, applied at the midpoint of the fade. */
-  private pendingWarp: { mapId: string; portal: string } | null = null;
-  private fade = 0;
-  private fadingOut = false;
-
-  /** Actions for the dialogue options currently on screen. */
-  private dialogueActions: (() => void)[] = [];
-  private dialogueView: DialogueView | null = null;
-
-  constructor(
-    private readonly renderer: Renderer,
-    private readonly input: Input,
-    private readonly ui: UiInput,
-    session: GameSession,
-    private readonly shell: GameHooks,
-  ) {
-    this.player = session.player;
-    this.quests = session.quests;
-    this.uiState.quickSlots = session.quickSlots;
-    this.mapId = session.mapId;
-    this.enterMap(session.mapId, session.portalName, true);
-    this.pushLog(
-      session.fresh
-        ? 'Press F1 for controls. Talk to Mira to get started.'
-        : 'Welcome back.',
-      session.fresh ? PAL.gold : PAL.exp,
-    );
+  constructor(root: HTMLElement) {
+    this.renderer = new Renderer(root);
+    this.scene = this.renderer.scene;
+    this.camera = this.renderer.camera;
+    this.input = new Input(this.renderer.canvas);
+    this.fx = new FX(this.camera);
+    this.scene.add(this.fx.root);
+    this.options = loadOptions();
+    this.save = loadSave() ?? newSave();
+    this.director = new CombatDirector(this);
+    this.player = new Player(this);
+    this.flick = new Flick(this);
+    this.hud = new Hud(this, root);
+    this.dialogue = new Dialogue(this, root);
+    this.menus = new Menus(this, root);
+    this.applyOptions();
+    window.addEventListener('resize', () => this.fx.setViewport(this.renderer.height, this.camera.fov));
+    this.fx.setViewport(this.renderer.height, this.camera.fov);
+    // Audio can only start after a user gesture.
+    const unlock = () => this.audio.unlock();
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', unlock);
   }
 
-  /* ----------------------------------------------------------- update -- */
+  // --- accessors ---------------------------------------------------------------
 
-  update(dt: number): void {
-    this.time += dt;
-    this.updateFade(dt);
-    this.updateLog(dt);
-
-    if (this.levelUpTimer > 0) this.levelUpTimer -= dt * 0.6;
-
-    this.handleWindowKeys();
-
-    const frozen = isModal(this.uiState) || this.player.dead || this.fade > 0;
-    const intent = frozen ? { moveX: 0, moveY: 0, jump: false } : this.readIntent();
-
-    if (!frozen) this.handleActionKeys();
-
-    this.player.update(dt);
-    stepBody(this.player.body, intent, dt, this.world.terrain);
-    this.world.update(dt, this.player);
-
-    // Falling out of the world is a map-design failure, not a death; put the
-    // player back at the spawn portal rather than punishing them for it.
-    if (this.player.body.fellOut) {
-      this.player.body.fellOut = false;
-      this.placeAtPortal(spawnPortal(this.world.map));
-      this.player.takeDamage(Math.floor(this.player.stats.maxHp * 0.1));
-      this.pushLog('You fell out of the map.', PAL.dmgTaken);
-    }
-
-    this.cam.follow(this.player.body.x, this.player.body.y, this.world.map.bounds, dt);
-
-    this.autosaveTimer -= dt;
-    if (this.autosaveTimer <= 0) {
-      this.autosaveTimer = AUTOSAVE_INTERVAL;
-      this.saveGame(false);
-    }
-
-    this.input.endTick();
+  get col() {
+    return this.level!.col;
+  }
+  get waterLevel(): number {
+    return this.level ? this.level.waterLevel : -1e4;
+  }
+  get killY(): number {
+    return this.level ? this.level.killY : -50;
+  }
+  get difficultyInfo() {
+    return DIFFICULTY[this.save.difficulty];
   }
 
-  private updateFade(dt: number): void {
-    if (this.fadingOut) {
-      this.fade += dt / FADE_TIME;
-      if (this.fade >= 1) {
-        this.fade = 1;
-        this.fadingOut = false;
-        if (this.pendingWarp) {
-          this.enterMap(this.pendingWarp.mapId, this.pendingWarp.portal, true);
-          this.pendingWarp = null;
+  applyOptions(): void {
+    const o = this.options;
+    this.audio.volume = o.volume;
+    this.audio.musicVolume = o.music;
+    this.audio.sfxVolume = o.sfx;
+    this.audio.applyVolumes();
+    this.input.mouseSensitivity = o.sensitivity;
+    this.input.invertY = o.invertY;
+    if (this.renderer.quality !== o.quality) this.renderer.setQuality(o.quality);
+    this.fx.density = o.quality === 'low' ? 0.5 : o.quality === 'medium' ? 0.8 : 1;
+    writeOptions(o);
+  }
+
+  // --- lifecycle ------------------------------------------------------------------
+
+  showTitle(): void {
+    this.state = 'title';
+    this.input.wantPointerLock = false;
+    this.input.releaseLock();
+    this.loadLevel('fen', { title: true });
+    this.menus.showTitle();
+    this.audio.setMusic(THEMES.title!);
+  }
+
+  newGame(difficulty: Difficulty): void {
+    this.save = newSave(difficulty);
+    writeSave(this.save);
+    this.player.element = null;
+    this.startPlaying(this.save.level, null);
+  }
+
+  continueGame(): void {
+    const s = loadSave();
+    if (!s) return;
+    this.save = s;
+    this.player.element = s.elements[0] ?? null;
+    this.startPlaying(s.level, s.checkpoint);
+  }
+
+  private startPlaying(levelId: string, checkpoint: string | null): void {
+    this.menus.hideAll();
+    this.fadeTo(() => {
+      this.input.wantPointerLock = true;
+      this.input.requestLock();
+      this.loadLevel(levelId, { checkpoint });
+    });
+  }
+
+  /** Fade out, run fn, fade in. fn may change the state it resumes to. */
+  fadeTo(fn: () => void): void {
+    if (this.state !== 'transition') this.stateBeforeTransition = this.state;
+    this.transitionFn = fn;
+    this.transitionT = 0;
+    this.transitionPhase = 'out';
+    this.state = 'transition';
+  }
+
+  travel(target: string): void {
+    this.audio.play('uiConfirm');
+    this.fadeTo(() => {
+      this.save.level = target;
+      this.save.checkpoint = null;
+      if (!this.save.unlocked.includes(target)) this.save.unlocked.push(target);
+      writeSave(this.save);
+      this.loadLevel(target, { checkpoint: null });
+    });
+  }
+
+  loadLevel(id: string, opts: { checkpoint?: string | null; title?: boolean } = {}): void {
+    const def: LevelDef | undefined = LEVELS[id];
+    if (!def) throw new Error(`no level ${id}`);
+    this.clearLevel();
+    const level = new Level(def);
+    this.level = level;
+    this.scene.add(level.root);
+    this.renderer.applySky(def.sky);
+    const b = new Builder(this, level);
+    if (def.terrain) b.terrain(def.terrain);
+    if (def.water) b.water(def.water);
+    def.build(b);
+    b.finish();
+    for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
+    this.pendingSpawns = [];
+    // Place the player.
+    let [sx, sz, syaw] = def.spawn;
+    const cp = opts.checkpoint ? level.wardstones.get(opts.checkpoint) : undefined;
+    if (cp) {
+      sx = cp.x + Math.sin(cp.yaw) * 2.5;
+      sz = cp.z + Math.cos(cp.yaw) * 2.5;
+      syaw = cp.yaw;
+    }
+    const sy = level.col.groundAt(sx, sz, 1e4, 0.2).y;
+    this.player.place(sx, (sy > -1e3 ? sy : 0) + 0.1, sz, syaw);
+    this.player.resetForLevel();
+    this.player.hidden = !!opts.title;
+    this.flick.reset();
+    this.cam.snapBehind(syaw, 0.32);
+    this.cam.extraDist = 0;
+    this.time = 0;
+    this.style.reset();
+    this.audio.stopAllLoops();
+    if (!opts.title) {
+      this.state = 'play';
+      this.audio.setMusic(THEMES[def.music] ?? THEMES.fen!);
+      this.hud.show(true);
+      this.hud.levelTitle(def.name, def.subtitle);
+      const fresh = !this.sessionFlags.has(`entered:${id}`);
+      this.sessionFlags.add(`entered:${id}`);
+      def.onEnter?.(this, fresh);
+    } else this.hud.show(false);
+  }
+
+  private clearLevel(): void {
+    for (const e of this.enemies) e.dispose();
+    for (const p of this.projectiles) p.kill();
+    for (const s of this.shockwaves) s.kill();
+    for (const g of this.gems) g.kill();
+    for (const s of this.spikes) for (const m of s.meshes) this.scene.remove(m);
+    this.enemies = [];
+    this.projectiles = [];
+    this.shockwaves = [];
+    this.gems = [];
+    this.firePatches = [];
+    this.spikes = [];
+    this.boss = null;
+    this.activeArena = null;
+    this.director.clear();
+    this.fx.clear();
+    this.hud.bossBar(null);
+    this.cam.clearShot();
+    if (this.level) this.level.dispose(this.scene);
+    this.level = null;
+  }
+
+  // --- frame ----------------------------------------------------------------------
+
+  /** Longest frame simulated in real time; slower frames run in slow motion. */
+  maxDt = 0.05;
+
+  frame(rawDt: number): void {
+    const dt = Math.min(rawDt, this.maxDt);
+    this.realTime += dt;
+    this.input.update(dt);
+
+    switch (this.state) {
+      case 'title':
+      case 'menu':
+        this.menus.update(dt);
+        this.titleCamera(dt);
+        break;
+      case 'pause':
+        this.menus.update(dt);
+        break;
+      case 'play':
+        if (this.input.take('pause', 0.2)) {
+          this.pause();
+          break;
         }
-      }
-    } else if (this.fade > 0) {
-      this.fade = Math.max(0, this.fade - dt / FADE_TIME);
+        this.updateInteract();
+        this.simulate(dt);
+        break;
+      case 'dialogue':
+        this.dialogue.update(dt);
+        this.simulate(dt);
+        break;
+      case 'dead':
+        this.simulate(dt);
+        this.deadT += dt;
+        if (this.deadT > 2.6) this.respawnAtCheckpoint();
+        break;
+      case 'ending':
+        this.menus.update(dt);
+        this.simulate(dt);
+        break;
+      case 'transition':
+        this.updateTransition(dt);
+        if (this.stateBeforeTransition !== 'title' && this.level && !this.player.hidden) this.simulate(dt * 0.2);
+        break;
+    }
+
+    if (this.state !== 'title' && this.state !== 'menu' && this.level) this.cam.update(dt, this);
+    this.hud.update(dt);
+    this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
+    if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
+    this.renderer.render(this.realTime);
+  }
+
+  private titleCamera(dt: number): void {
+    this.titleT += dt;
+    const t = this.titleT * 0.05;
+    const cx = Math.sin(t) * 26;
+    const cz = Math.cos(t) * 26 + 10;
+    this.camera.position.set(cx, 9 + Math.sin(this.titleT * 0.2) * 1.5, cz);
+    this.camera.lookAt(0, 3, 10);
+    this.fx.update(dt);
+    if (this.level) {
+      this.level.update(dt);
+      this.flick.updateTitle(dt);
     }
   }
 
-  private updateLog(dt: number): void {
-    for (const line of this.log) line.life -= dt;
-    while (this.log.length > 40) this.log.shift();
+  private updateTransition(dt: number): void {
+    this.transitionT += dt;
+    if (this.transitionPhase === 'out') {
+      this.hud.fade(Math.min(1, this.transitionT / 0.45));
+      if (this.transitionT >= 0.45) {
+        const fn = this.transitionFn;
+        this.transitionFn = null;
+        this.transitionPhase = 'in';
+        this.transitionT = 0;
+        this.state = this.stateBeforeTransition;
+        fn?.();
+        // Whatever state fn left us in is where the fade-in lands.
+        this.stateBeforeTransition = this.state;
+        this.state = 'transition';
+      }
+    } else {
+      this.hud.fade(1 - Math.min(1, this.transitionT / 0.5));
+      if (this.transitionT >= 0.5) {
+        this.hud.fade(0);
+        this.state = this.stateBeforeTransition;
+      }
+    }
   }
 
-  private readIntent(): MoveIntent {
-    const jump = this.input.pressed('jump');
-    if (jump) this.input.consume('jump');
-    return {
-      moveX: this.input.moveAxis(),
-      moveY: this.input.verticalAxis(),
-      jump,
-    };
+  pause(): void {
+    this.state = 'pause';
+    this.input.wantPointerLock = false;
+    this.input.releaseLock();
+    this.audio.stopAllLoops();
+    this.player.breath.stop();
+    this.menus.showPause();
+    this.audio.play('uiBack');
   }
 
-  /* ------------------------------------------------------- input: keys -- */
+  resume(): void {
+    this.menus.hideAll();
+    this.state = 'play';
+    this.input.wantPointerLock = true;
+    this.input.requestLock();
+    this.input.clearBuffers();
+  }
 
-  private handleWindowKeys(): void {
-    const toggles: [Parameters<Input['pressed']>[0], WindowId][] = [
-      ['uiInventory', 'inventory'],
-      ['uiStats', 'stats'],
-      ['uiSkills', 'skills'],
-      ['uiQuests', 'quests'],
-      ['uiEquip', 'equip'],
-      ['uiHelp', 'help'],
-    ];
+  quitToTitle(): void {
+    writeSave(this.save);
+    this.menus.hideAll();
+    this.fadeTo(() => this.showTitle());
+  }
 
-    if (isModal(this.uiState)) {
-      // While a modal is up, the number keys pick dialogue options.
-      for (let i = 0; i < 8; i++) {
-        const action = (`skill${i + 1}`) as 'skill1';
-        if (this.input.pressed(action)) {
-          this.input.consume(action);
-          this.dialogueActions[i]?.();
-        }
-      }
-      if (this.input.pressed('uiClose')) {
-        this.input.consume('uiClose');
-        // The system menu is its own modal; Esc backs out of it directly.
-        if (this.uiState.open.has('system')) this.uiState.open.delete('system');
-        else this.closeDialogue();
-      }
+  private simulate(dt: number): void {
+    const level = this.level;
+    if (!level) return;
+    if (this.hitstopT > 0) {
+      this.hitstopT -= dt;
+      this.fx.update(dt * 0.25);
       return;
     }
+    this.slowT = Math.max(0, this.slowT - dt);
+    let worldScale = this.slowT > 0 ? this.slowScale : 1;
+    const dtime = this.player.dragonTimeActive;
+    if (dtime) worldScale = Math.min(worldScale, 0.33);
+    const playerScale = dtime ? 0.8 : 1;
+    this.hud.dragonTime(dtime);
+    const wdt = dt * worldScale;
+    const pdt = dt * playerScale;
+    this.time += wdt;
+    this.save.stats.playTime += dt;
 
-    for (const [action, id] of toggles) {
-      if (!this.input.pressed(action)) continue;
-      this.input.consume(action);
-      if (this.uiState.open.has(id)) this.uiState.open.delete(id);
-      else this.uiState.open.add(id);
+    const steps = Math.max(1, Math.ceil(Math.max(wdt, pdt) / (1 / 60)));
+    for (let i = 0; i < steps; i++) {
+      this.rebuildHitList();
+      level.update(wdt / steps);
+      this.player.update(pdt / steps);
+      for (const e of this.enemies) e.update(wdt / steps);
+      for (const p of this.projectiles) if (p.alive) p.update(wdt / steps);
+      for (const s of this.shockwaves) if (s.alive) s.update(wdt / steps);
+      this.boss?.updateBoss(wdt / steps);
     }
+    for (const g of this.gems) if (g.alive) g.update(pdt);
+    this.updatePatches(wdt);
+    this.updateSpikes(wdt);
+    this.flick.update(dt);
+    this.fx.update(wdt);
 
-    if (this.input.pressed('uiMinimap')) {
-      this.input.consume('uiMinimap');
-      if (this.uiState.open.has('worldmap')) this.uiState.open.delete('worldmap');
-      else this.uiState.open.add('worldmap');
-    }
+    // Cleanup.
+    const removed = this.enemies.filter((e) => e.removable);
+    for (const e of removed) e.dispose();
+    if (removed.length) this.enemies = this.enemies.filter((e) => !e.removable);
+    if (this.projectiles.some((p) => !p.alive)) this.projectiles = this.projectiles.filter((p) => p.alive);
+    if (this.shockwaves.some((s) => !s.alive)) this.shockwaves = this.shockwaves.filter((s) => s.alive);
+    if (this.gems.length > 20 && this.gems.some((g) => !g.alive)) this.gems = this.gems.filter((g) => g.alive);
+    for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
+    this.pendingSpawns = [];
 
-    if (this.input.pressed('uiClose')) {
-      this.input.consume('uiClose');
-      // Esc closes whatever is open; with nothing open it is the way out.
-      if (this.uiState.open.size > 0) this.uiState.open.clear();
-      else this.uiState.open.add('system');
+    // Combat music follows engaged enemies.
+    const engaged = this.enemies.some((e) => e.alive && e.aggro && Math.hypot(e.x - this.player.x, e.z - this.player.z) < 28);
+    if (engaged || this.activeArena || this.boss) this.combatHold = 3;
+    else this.combatHold = Math.max(0, this.combatHold - dt);
+    const want = this.combatHold > 0 ? 1 : 0;
+    if (want !== this.audio.combatLevel) this.audio.setCombat(want);
+    this.style.update(dt, this.combatHold > 0);
+    if (this.style.bestCombo > this.save.stats.bestCombo) this.save.stats.bestCombo = this.style.bestCombo;
+
+    // Gem chime chain.
+    this.gemChainT -= dt;
+    if (this.gemChainT <= 0) this.gemChain = 0;
+
+    // Loops that follow the dragon.
+    if (this.player.gliding) {
+      this.audio.startLoopOnce('glide', 'wind');
+      const sp = Math.hypot(this.player.body.vx, this.player.body.vz);
+      this.audio.tuneLoop('glide', 400 + sp * 60, 0.1 + sp * 0.01);
+    } else this.audio.stopLoop('glide');
+
+    this.autosaveT += dt;
+    if (this.autosaveT > 30) {
+      this.autosaveT = 0;
+      writeSave(this.save);
     }
   }
 
-  private handleActionKeys(): void {
-    // Up interacts with a portal or an NPC before it reaches the climb code.
-    if (this.input.pressed('up') && this.tryInteract()) {
-      this.input.consume('up');
-    }
+  private rebuildHitList(): void {
+    const l = this.hitList;
+    l.length = 0;
+    for (const e of this.enemies) if (e.alive) l.push(e);
+    if (this.level) for (const h of this.level.hittables) if (h.alive) l.push(h);
+  }
 
-    if (this.input.down('attack') && this.player.canAttack()) {
-      this.world.performAttack(this.player, this.player.startBasicAttack());
-    }
+  hittables(): Hittable[] {
+    return this.hitList;
+  }
 
-    for (let i = 0; i < 8; i++) {
-      const action = (`skill${i + 1}`) as 'skill1';
-      if (!this.input.pressed(action)) continue;
-      this.input.consume(action);
-      const skillId = this.uiState.quickSlots[i];
-      if (skillId) this.castSkill(skillId);
+  private updateInteract(): void {
+    const level = this.level;
+    if (!level || !this.player.alive) return;
+    const p = this.player.body;
+    let best: typeof this.interactTarget = null;
+    let bestD = Infinity;
+    for (const it of level.interactables) {
+      if (!it.enabled) continue;
+      const d = Math.hypot(it.x - p.x, it.z - p.z);
+      if (d < it.range && Math.abs(it.y - p.y) < 3 && d < bestD) {
+        bestD = d;
+        best = it;
+      }
     }
+    this.interactTarget = best;
+    this.hud.prompt(best ? best.label : null);
+    if (best && this.input.take('interact', 0.2)) best.interact();
+  }
 
-    if (this.input.pressed('pickup')) {
-      this.input.consume('pickup');
-      const taken = this.world.pickUp(this.player);
-      for (const line of taken) this.pushLog(`Picked up ${line}.`, PAL.text);
-    }
+  // --- time effects -------------------------------------------------------------------
 
-    if (this.input.pressed('potionHp')) {
-      this.input.consume('potionHp');
-      this.useFirstPotion('hp');
+  hitstop(d: number): void {
+    this.hitstopT = Math.max(this.hitstopT, Math.min(d, 0.14));
+  }
+
+  slowmo(scale: number, dur: number): void {
+    if (this.slowT <= 0 || scale < this.slowScale) this.slowScale = scale;
+    this.slowT = Math.max(this.slowT, dur);
+  }
+
+  shake(amount: number, dur = 0.2): void {
+    this.cam.shake(amount, dur);
+  }
+
+  toast(text: string, kind: 'info' | 'good' | 'warn' | 'hint' = 'info'): void {
+    this.hud.toast(text, kind);
+  }
+
+  sfx(id: Sfx, x?: number, y?: number, z?: number, pitch = 1, vol = 1): void {
+    let v = vol;
+    if (x !== undefined && z !== undefined) {
+      const d = Math.hypot(x - this.player.x, (y ?? this.player.y) - this.player.y, z - this.player.z);
+      v *= Math.max(0.08, Math.min(1, 1.25 - d / 32));
+      if (d > 60) return;
     }
-    if (this.input.pressed('potionMp')) {
-      this.input.consume('potionMp');
-      this.useFirstPotion('mp');
+    this.audio.play(id, pitch, v);
+  }
+
+  // --- spawning -----------------------------------------------------------------------
+
+  spawnEnemy(type: string, x: number, y: number, z: number, yaw: number, arena: boolean): Enemy {
+    const def = ENEMIES[type];
+    if (!def) throw new Error(`unknown enemy ${type}`);
+    const e = new Enemy(this, def, x, y, z, yaw);
+    if (!arena) {
+      e.state = 'idle';
+      e.model.root.visible = true;
+    }
+    this.enemies.push(e);
+    return e;
+  }
+
+  addBoss(b: Boss): void {
+    this.boss = b;
+    this.enemies.push(b);
+    this.hud.bossBar(b);
+  }
+
+  spawnProjectile(s: ProjectileSpec): Projectile {
+    const p = new Projectile(this, s);
+    this.projectiles.push(p);
+    return p;
+  }
+
+  spawnShockwave(x: number, y: number, z: number, r: number, speed: number, dmg: number, kb: number, _src: unknown): void {
+    this.shockwaves.push(new Shockwave(this, x, y, z, r, speed, dmg, kb));
+  }
+
+  spawnGems(x: number, y: number, z: number, amounts: Partial<Record<GemKind, number>>, auto: boolean): void {
+    for (const k of ['blue', 'red', 'green', 'purple'] as GemKind[]) {
+      const total = amounts[k] ?? 0;
+      if (total <= 0) continue;
+      for (const v of splitValue(total)) this.gems.push(new Gem(this, k, v, x, y, z, 5, auto));
     }
   }
 
-  /** Enter a portal or start a conversation. Returns true if something happened. */
-  private tryInteract(): boolean {
-    const { x, y } = this.player.body;
-    const portal = this.world.portalNear(x, y);
-    if (portal) {
-      this.usePortal(portal);
-      return true;
+  placeGem(kind: GemKind, value: number, x: number, y: number, z: number): void {
+    const g = new Gem(this, kind, value, x, y, z, 0, false);
+    g.vy = 0;
+    g.age = 1;
+    this.gems.push(g);
+  }
+
+  nearestEnemy(x: number, y: number, z: number, r: number): Enemy | null {
+    let best: Enemy | null = null;
+    let bd = r;
+    for (const e of this.enemies) {
+      if (!e.alive) continue;
+      const d = Math.hypot(e.x - x, e.y - y, e.z - z);
+      if (d < bd) {
+        bd = d;
+        best = e;
+      }
     }
-    const npc = this.world.npcNear(x, y);
-    if (npc) {
-      this.openDialogue(npc.npcId);
-      return true;
+    return best;
+  }
+
+  // --- combat events -------------------------------------------------------------------
+
+  isWarded(e: Enemy): boolean {
+    if (e.def.id === 'totem') return false;
+    for (const t of this.enemies) {
+      if (t.alive && t.def.id === 'totem' && Math.hypot(t.x - e.x, t.z - e.z) < TOTEM_WARD) return true;
     }
     return false;
   }
 
-  private castSkill(skillId: string): void {
-    const def = trySkill(skillId);
-    if (!def) return;
-    if (def.type === 'attack') {
-      if (!this.player.canAttack()) return;
-      const spec = this.player.startSkill(skillId);
-      if (!spec) {
-        this.pushLog(`Cannot use ${def.name} right now.`, PAL.textDim);
-        return;
-      }
-      this.world.performAttack(this.player, spec);
-      return;
+  onEnemyDamaged(e: Enemy, dmg: number, hit: Hit | null, reaction: Reaction | null): void {
+    if (this.options.damageNumbers && dmg >= 0.5) {
+      const col = hit ? typeColor(hit.type) : 0xff9a50;
+      this.hud.number(e.x, e.y + e.height + 0.2, e.z, Math.round(dmg), col, reaction !== null || (hit?.heavy ?? false));
     }
-    if (this.player.castSupport(skillId)) {
-      this.pushLog(`${def.name} activated.`, def.icon.color);
+  }
+
+  onEnemyKilled(e: Enemy, reaction: Reaction | null): void {
+    this.save.stats.kills++;
+    const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1);
+    const g = e.def.gems;
+    this.spawnGems(e.x, e.y + e.height * 0.5, e.z, {
+      blue: Math.round(g.blue * mul), red: g.red ?? 0, green: g.green ?? 0, purple: g.purple ?? 0,
+    }, true);
+    this.style.bonus(15 * (e.def.styleValue ?? 1));
+    this.player.gainFury(5);
+    if (this.player.lock === e) this.player.lock = null;
+  }
+
+  triggerReaction(e: Enemy, r: Reaction): void {
+    const info = REACTION_INFO[r];
+    const x = e.x;
+    const y = e.y + e.height * 0.5;
+    const z = e.z;
+    this.save.stats.reactions++;
+    this.style.bonus(90);
+    this.hud.bigText(info.name, info.color);
+    this.player.gainFury(10);
+    if (r === 'shatter') {
+      this.fx.shatter(x, y, z);
+      this.sfx('shatter', x, y, z);
+      this.slowmo(0.3, 0.25);
+      this.shake(0.3, 0.2);
+    } else if (r === 'overload') {
+      this.fx.explosion(x, y, z, 2.2, 0xffd36a, 0x8040ff);
+      for (let i = 0; i < 6; i++) {
+        const a = new THREE.Vector3(x, y, z);
+        const b = new THREE.Vector3(x + rng.signed() * 4, y + rng.signed() * 2, z + rng.signed() * 4);
+        this.fx.arc(a, b, 0xffe8a0, 0.1, 0.2, 0.4);
+      }
+      this.sfx('explosion', x, y, z, 1.2);
+      this.shake(0.4, 0.3);
+      this.aoe(x, y, z, info.radius, info.damage, 'lightning', e, { knockback: 8, launch: 5, buildup: 30, stagger: 40 });
     } else {
-      this.pushLog(`Cannot use ${def.name} right now.`, PAL.textDim);
+      this.fx.emit(x, y, z, { count: 40, speed: 6, life: [0.6, 1.1], size: [0.8, 1.4], sizeEnd: 3, color: 0xf4f8ff, alpha: 0.6, additive: false, drag: 3, gravity: -2 });
+      this.sfx('steam', x, y, z);
+      this.aoe(x, y, z, info.radius, info.damage, 'physical', e, { knockback: 4, launch: 0, buildup: 0, stagger: 60, steam: true });
     }
   }
 
-  private useFirstPotion(kind: 'hp' | 'mp'): void {
-    if (this.player.potionCooldown > 0) return;
-    const slots = this.player.inventory.tabs.use;
-    for (let i = 0; i < slots.length; i++) {
-      const slot = slots[i];
-      if (slot?.kind !== 'stack') continue;
-      const use = getItem(slot.itemId).use;
-      if (!use) continue;
-      const matches = kind === 'hp'
-        ? (use.hp ?? 0) > 0 || (use.hpPercent ?? 0) > 0
-        : (use.mp ?? 0) > 0 || (use.mpPercent ?? 0) > 0;
-      if (!matches) continue;
-      this.hooks.useItem('use', i);
-      return;
+  private aoe(x: number, y: number, z: number, r: number, dmg: number, type: DamageType, skip: Enemy | null,
+    o: { knockback: number; launch: number; buildup: number; stagger: number; steam?: boolean }): void {
+    for (const e of [...this.enemies]) {
+      if (!e.alive || e === skip) continue;
+      const dx = e.x - x;
+      const dz = e.z - z;
+      const d = Math.hypot(dx, dz);
+      if (d > r + e.radius || Math.abs(e.y - y) > 3) continue;
+      if (o.steam) e.status.steam = 1.8;
+      const n = d || 1;
+      e.takeHit(makeHit({
+        damage: dmg, type, dirX: dx / n, dirZ: dz / n, knockback: o.knockback, launch: o.launch, buildup: o.buildup,
+        stagger: o.stagger, source: 'reaction', move: 'reaction', ox: x, oz: z,
+      }));
     }
-    this.pushLog(`No ${kind.toUpperCase()} potions.`, PAL.textDim);
   }
 
-  /* ------------------------------------------------------------- maps -- */
+  explode(x: number, y: number, z: number, r: number, dmg: number, type: DamageType, fromPlayer: boolean, o: {
+    buildup: number; knockback: number; launch: number; stagger: number; heavy: boolean; move: string; color: number; burnGround: boolean;
+  }): void {
+    const col = type === 'fire' ? 0xffa040 : type === 'earth' ? 0xc8a878 : type === 'lightning' ? 0xbfe8ff : type === 'ice' ? 0xcff6ff : o.color;
+    if (type === 'earth') {
+      this.fx.rocks(x, y, z, 18);
+      this.fx.ring(x, y - 0.3, z, 0.3, r * 1.3, 0xd8c8a0, 0.4);
+      this.sfx('pound', x, y, z);
+    } else {
+      this.fx.explosion(x, y, z, r * 0.6, col);
+      this.sfx('explosion', x, y, z, type === 'lightning' ? 1.4 : 1, 0.8);
+    }
+    this.shake(0.3 * Math.min(1.5, r / 3), 0.25);
+    if (fromPlayer) {
+      for (const h of this.hittables()) {
+        if (!h.alive) continue;
+        const dx = h.x - x;
+        const dz = h.z - z;
+        const d = Math.hypot(dx, dz, (h.y + h.height * 0.5 - y) * 0.7);
+        if (d > r + h.radius) continue;
+        const fall = 1 - Math.min(1, d / (r + h.radius)) * 0.5;
+        const n = Math.hypot(dx, dz) || 1;
+        const res = h.takeHit(makeHit({
+          damage: dmg * fall, type, buildup: o.buildup, dirX: dx / n, dirZ: dz / n, knockback: o.knockback, launch: o.launch,
+          stagger: o.stagger, heavy: o.heavy, source: 'burst', move: o.move, ox: x, oz: z, hitstop: 0.03,
+        }));
+        this.player.onDealt(res, h, dmg * fall, o.move, 12);
+      }
+      if (o.burnGround) this.firePatches.push({ x, y, z, r: r * 0.8, t: 3, tick: 0 });
+    } else {
+      const p = this.player;
+      const d = Math.hypot(p.x - x, p.y + 0.6 - y, p.z - z);
+      if (d < r + p.body.radius) {
+        const n = Math.hypot(p.x - x, p.z - z) || 1;
+        p.takeHit(makeHit({ damage: dmg * this.difficultyInfo.enemyDamage, type, dirX: (p.x - x) / n, dirZ: (p.z - z) / n, knockback: o.knockback, launch: 6, source: 'enemy', fromPlayer: false, ox: x, oz: z }), null);
+      }
+    }
+  }
 
-  private enterMap(mapId: string, portalName: string, immediate: boolean): void {
-    const map = loadMap(mapId);
-    this.mapId = mapId;
-    this.world = new World(map, this.rng, {
-      log: (t, c) => this.pushLog(t, c),
-      onLevelUp: (levels) => this.onLevelUp(levels),
-      onKill: (mobId) => this.onKill(mobId),
-      shake: (amount) => this.cam.addShake(amount),
+  private updatePatches(dt: number): void {
+    for (const f of this.firePatches) {
+      f.t -= dt;
+      f.tick -= dt;
+      if (rng.chance(0.6)) {
+        const a = rng.next() * Math.PI * 2;
+        const rr = Math.sqrt(rng.next()) * f.r;
+        this.fx.emit(f.x + Math.sin(a) * rr, f.y, f.z + Math.cos(a) * rr, { count: 1, speed: 1.5, dir: [0, 1.5, 0], life: [0.3, 0.6], size: [0.4, 0.7], sizeEnd: 0.1, color: 0xffb040, colorEnd: 0xff2000, bright: 1.6, gravity: -2 });
+      }
+      if (f.tick <= 0) {
+        f.tick = 0.5;
+        for (const e of this.enemies) {
+          if (!e.alive || Math.hypot(e.x - f.x, e.z - f.z) > f.r + e.radius || Math.abs(e.y - f.y) > 1.5) continue;
+          e.takeHit(makeHit({ damage: 4, type: 'fire', buildup: 30, source: 'burst', move: 'firePatch', ox: f.x, oz: f.z }));
+        }
+      }
+    }
+    if (this.firePatches.some((f) => f.t <= 0)) this.firePatches = this.firePatches.filter((f) => f.t > 0);
+  }
+
+  spawnIceSpikes(x: number, y: number, z: number, r: number): void {
+    const m = new THREE.MeshStandardMaterial({ color: 0xcff6ff, roughness: 0.1, emissive: 0x3aa0d0, emissiveIntensity: 0.4, flatShading: true, transparent: true });
+    const meshes: THREE.Mesh[] = [];
+    const n = 16;
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const rr = r * (0.55 + rng.next() * 0.4);
+      const sp = new THREE.Mesh(new THREE.ConeGeometry(0.35, 2.2, 5), m);
+      sp.position.set(x + Math.sin(a) * rr, y - 1, z + Math.cos(a) * rr);
+      sp.rotation.set(Math.cos(a) * 0.35, 0, -Math.sin(a) * 0.35);
+      this.scene.add(sp);
+      meshes.push(sp);
+    }
+    this.spikes.push({ meshes, t: 0 });
+    for (const e of this.enemies) {
+      if (!e.alive || Math.hypot(e.x - x, e.z - z) > r + e.radius) continue;
+      e.takeHit(makeHit({ damage: 10, type: 'ice', buildup: 30, launch: 6, stagger: 30, source: 'burst', move: 'iceSpikes', ox: x, oz: z }));
+    }
+  }
+
+  private updateSpikes(dt: number): void {
+    for (const s of this.spikes) {
+      s.t += dt;
+      const up = Math.min(1, s.t / 0.12);
+      for (const m of s.meshes) {
+        m.position.y += (up < 1 ? 9 : 0) * dt;
+        const mm = m.material as THREE.MeshStandardMaterial;
+        if (s.t > 1.2) mm.opacity = Math.max(0, 1 - (s.t - 1.2) * 2);
+      }
+      if (s.t > 1.8) for (const m of s.meshes) this.scene.remove(m);
+    }
+    if (this.spikes.some((s) => s.t > 1.8)) this.spikes = this.spikes.filter((s) => s.t <= 1.8);
+  }
+
+  onSlam(x: number, y: number, z: number, r: number): void {
+    this.level?.slam(x, y, z, r);
+  }
+
+  // --- world queries -----------------------------------------------------------------------
+
+  isDeepWater(_x: number, _z: number, groundY: number): boolean {
+    const wl = this.waterLevel;
+    return wl > -1e3 && wl > groundY + 0.9;
+  }
+
+  inHazard(x: number, y: number, z: number): boolean {
+    return !!this.level?.hazards.some((h) => h.contains(x, y, z));
+  }
+
+  updraftAt(x: number, y: number, z: number): number {
+    let s = 0;
+    for (const u of this.level?.updrafts ?? []) if (u.contains(x, y, z)) s += u.strength;
+    return s;
+  }
+
+  // --- player events -------------------------------------------------------------------------
+
+  playerFell(): void {
+    const p = this.player;
+    if (p.state === 'fall' || p.state === 'dead') return;
+    p.setState('fall');
+    p.breath.stop();
+    this.fadeTo(() => {
+      p.respawnAtSafe();
+      p.hp = Math.max(1, p.hp - 8);
+      this.toast('-8', 'warn');
+      this.cam.snapBehind(p.yaw);
     });
-
-    const portal = findPortal(map, portalName) ?? spawnPortal(map);
-    this.placeAtPortal(portal);
-    if (immediate) {
-      this.cam.snapTo(this.player.body.x, this.player.body.y, map.bounds);
-    }
-    this.pushLog(`— ${map.name} —`, map.town ? '#7fd8e8' : PAL.textDim);
-    this.saveGame(false);
   }
 
-  private placeAtPortal(portal: Portal): void {
-    this.player.body.x = portal.x;
-    this.player.body.y = this.world.groundAt(portal.x, portal.y);
-    this.player.body.vx = 0;
-    this.player.body.vy = 0;
-    this.player.body.fh = null;
-    this.player.body.ladder = null;
-    this.player.body.state = 'fall';
-    this.player.body.iframe = 1.2;
+  onPlayerDied(): void {
+    this.state = 'dead';
+    this.deadT = 0;
+    this.save.stats.deaths++;
+    this.hud.death(true);
+    this.audio.stopAllLoops();
   }
 
-  private usePortal(portal: Portal): void {
-    if (!portal.toMap) return;
-    if (portal.requireLevel && this.player.level < portal.requireLevel) {
-      this.pushLog(`You need to be level ${portal.requireLevel} to go this way.`, PAL.hp);
-      return;
-    }
-    if (portal.requireQuest && !this.quests.completed.has(portal.requireQuest)) {
-      this.pushLog('Something is stopping you from going this way.', PAL.hp);
-      return;
-    }
-    this.warpTo(portal.toMap, portal.toPortal ?? 'spawn');
-  }
-
-  warpTo(mapId: string, portalName: string): void {
-    if (this.pendingWarp) return;
-    this.pendingWarp = { mapId, portal: portalName };
-    this.fadingOut = true;
-    this.uiState.open.clear();
-    this.closeDialogue();
-  }
-
-  /* ---------------------------------------------------------- feedback -- */
-
-  private onLevelUp(levels: number): void {
-    this.levelUpTimer = 1;
-    this.cam.addShake(0.3);
-    this.pushLog(
-      levels > 1 ? `Level up! You are now level ${this.player.level}.` : `Level up! Level ${this.player.level}.`,
-      PAL.gold,
-    );
-  }
-
-  private onKill(mobId: string): void {
-    const advanced = this.quests.recordKill(mobId);
-    for (const questId of advanced) {
-      const def = getQuest(questId);
-      const lines = this.quests.progressLines(questId, this.player.inventory);
-      const line = lines.find((l) => l.label === mobId);
-      if (!line) continue;
-      if (line.have >= line.need) {
-        this.pushLog(`${def.name}: objective complete.`, PAL.exp);
+  private respawnAtCheckpoint(): void {
+    this.hud.death(false);
+    this.fadeTo(() => {
+      for (const a of this.level?.arenas ?? []) a.reset();
+      if (this.activeArena) this.arenaEnded(this.activeArena);
+      this.boss?.resetBoss();
+      const cp = this.save.level === this.level!.def.id && this.save.checkpoint ? this.level!.wardstones.get(this.save.checkpoint) : undefined;
+      let x: number;
+      let z: number;
+      let yaw: number;
+      if (cp) {
+        x = cp.x + Math.sin(cp.yaw) * 2.5;
+        z = cp.z + Math.cos(cp.yaw) * 2.5;
+        yaw = cp.yaw;
+      } else [x, z, yaw] = this.level!.def.spawn;
+      const y = this.col.groundAt(x, z, 1e4, 0.2).y;
+      this.player.place(x, y + 0.1, z, yaw);
+      this.player.resetForLevel();
+      this.player.fury = 0;
+      for (const p of this.projectiles) p.kill();
+      for (const e of this.enemies) if (e.alive) {
+        e.aggro = false;
+        e.releaseToken();
+        e.body.setPos(e.homeX, e.body.y, e.homeZ);
       }
-    }
-  }
-
-  pushLog(text: string, color: string = PAL.text): void {
-    this.log.push({ text, color, life: 6 });
-  }
-
-  /* --------------------------------------------------------- dialogue -- */
-
-  private openDialogue(npcId: string): void {
-    this.uiState.dialogue = { npcId, node: getNpc(npcId).root, mode: 'node' };
-    this.uiState.open.add('dialogue');
-  }
-
-  private closeDialogue(): void {
-    this.uiState.dialogue = null;
-    this.uiState.shopNpc = null;
-    this.uiState.open.delete('dialogue');
-    this.uiState.open.delete('shop');
-    this.uiState.open.delete('advance');
-    this.dialogueActions = [];
-  }
-
-  /**
-   * Build the dialogue view for this frame, and the matching action list.
-   *
-   * Quest offers and turn-ins are injected into the NPC's root node so adding
-   * a quest never means editing an NPC script.
-   */
-  private buildDialogue(): DialogueView | null {
-    const session = this.uiState.dialogue;
-    if (!session) return null;
-    const npc = getNpc(session.npcId);
-    const actions: (() => void)[] = [];
-    const options: { label: string; enabled: boolean }[] = [];
-    let body = '';
-
-    const push = (label: string, fn: () => void, enabled = true): void => {
-      options.push({ label, enabled });
-      actions.push(enabled ? fn : () => {});
-    };
-
-    if (session.mode !== 'node' && session.questId) {
-      const quest = getQuest(session.questId);
-      const rewards = rewardLines(session.questId).join(', ');
-
-      if (session.mode === 'quest-offer') {
-        body = `${quest.offerText}\n\nReward: ${rewards}`;
-        push('Accept.', () => {
-          this.quests.start(quest.id);
-          this.pushLog(`Quest started: ${quest.name}`, PAL.exp);
-          session.mode = 'node';
-          session.node = npc.root;
-        });
-        push('Not right now.', () => {
-          session.mode = 'node';
-          session.node = npc.root;
-        });
-      } else if (session.mode === 'quest-progress') {
-        const lines = this.quests
-          .progressLines(quest.id, this.player.inventory)
-          .map((l) => `  ${objectiveName(l.label)}  ${Math.min(l.have, l.need)}/${l.need}`)
-          .join('\n');
-        body = `${quest.progressText}\n\n${lines}`;
-        push('Back.', () => {
-          session.mode = 'node';
-          session.node = npc.root;
-        });
-      } else {
-        body = `${quest.completeText}\n\nReward: ${rewards}`;
-        push('Take the reward.', () => {
-          this.completeQuest(quest.id);
-          session.mode = 'node';
-          session.node = npc.root;
-        });
-      }
-      return { npcName: npc.name, npcTitle: npc.title, look: npc.look, body, options };
-    }
-
-    const node = npc.nodes[session.node] ?? npc.nodes[npc.root];
-    body = node.text;
-
-    // Quest entries first — a player at an NPC usually came to hand something in.
-    if (session.node === npc.root) {
-      for (const entry of this.quests.forNpc(npc.id, this.player, this.player.inventory)) {
-        const label =
-          entry.state === 'available' ? `[!] ${entry.def.name}` :
-          entry.state === 'ready' ? `[✓] ${entry.def.name}` :
-          `[…] ${entry.def.name}`;
-        push(label, () => {
-          session.questId = entry.def.id;
-          session.mode =
-            entry.state === 'available' ? 'quest-offer' :
-            entry.state === 'ready' ? 'quest-complete' : 'quest-progress';
-        });
-      }
-    }
-
-    for (const opt of node.options ?? [{ label: 'Goodbye.', action: { kind: 'close' } as DialogueAction }]) {
-      const enabled = this.optionEnabled(opt.requires);
-      push(opt.label, () => this.runDialogueOption(opt.next, opt.action, npc), enabled);
-    }
-
-    this.dialogueActions = actions;
-    return { npcName: npc.name, npcTitle: npc.title, look: npc.look, body, options };
-  }
-
-  private optionEnabled(req: { minLevel?: number; noJob?: boolean; hasJob?: boolean } | undefined): boolean {
-    if (!req) return true;
-    if (req.minLevel !== undefined && this.player.level < req.minLevel) return false;
-    if (req.noJob && this.player.jobId !== 0) return false;
-    if (req.hasJob && this.player.jobId === 0) return false;
-    return true;
-  }
-
-  private runDialogueOption(next: string | undefined, action: DialogueAction | undefined, npc: NpcDef): void {
-    if (action) {
-      switch (action.kind) {
-        case 'close':
-          this.closeDialogue();
-          return;
-        case 'shop':
-          this.uiState.shopNpc = npc.id;
-          this.uiState.open.add('shop');
-          this.uiState.open.delete('dialogue');
-          return;
-        case 'advance':
-          this.uiState.open.add('advance');
-          this.uiState.open.delete('dialogue');
-          return;
-        case 'heal':
-          if (!this.player.inventory.spendMesos(action.cost)) {
-            this.pushLog('You cannot afford that.', PAL.hp);
-            return;
-          }
-          this.player.hp = this.player.stats.maxHp;
-          this.player.mp = this.player.stats.maxMp;
-          this.pushLog('Fully restored.', PAL.exp);
-          this.closeDialogue();
-          return;
-        case 'expand':
-          if (this.player.inventory.capacityOf(action.tab) >= 96) {
-            this.pushLog('That pack is already as big as it gets.', PAL.textDim);
-            return;
-          }
-          if (!this.player.inventory.spendMesos(action.cost)) {
-            this.pushLog('You cannot afford that.', PAL.hp);
-            return;
-          }
-          this.player.inventory.expand(action.tab, 8);
-          this.pushLog(`${action.tab.toUpperCase()} inventory expanded by 8 slots.`, PAL.exp);
-          return;
-        case 'warp':
-          if (action.cost && !this.player.inventory.spendMesos(action.cost)) {
-            this.pushLog('You cannot afford that.', PAL.hp);
-            return;
-          }
-          this.warpTo(action.mapId, action.portal);
-          return;
-        case 'quest':
-          if (this.uiState.dialogue) {
-            this.uiState.dialogue.questId = action.questId;
-            this.uiState.dialogue.mode = 'quest-offer';
-          }
-          return;
-      }
-    }
-    if (next && this.uiState.dialogue) this.uiState.dialogue.node = next;
-    else this.closeDialogue();
-  }
-
-  private completeQuest(questId: string): void {
-    if (!this.quests.complete(questId, this.player.inventory)) {
-      this.pushLog('You are not finished with that yet.', PAL.hp);
-      return;
-    }
-    const quest = getQuest(questId);
-    const r = quest.rewards;
-    if (r.exp) {
-      const levels = this.player.gainExp(r.exp, this.rng);
-      if (levels > 0) this.onLevelUp(levels);
-    }
-    if (r.meso) this.player.inventory.addMesos(r.meso);
-    if (r.sp) this.player.sp += r.sp;
-    if (r.fame) this.player.fame += r.fame;
-    for (const item of r.items ?? []) {
-      const left = this.player.inventory.addItem(item.id, item.qty, this.rng);
-      if (left > 0) this.pushLog(`No room for ${getItem(item.id).name} x${left}.`, PAL.hp);
-    }
-    this.pushLog(`Quest complete: ${quest.name}`, PAL.gold);
-  }
-
-  /* -------------------------------------------------------------- hooks -- */
-
-  readonly hooks: UiHooks = {
-    useItem: (tab, index) => this.useItem(tab, index),
-    equipItem: (index) => this.equipItem(index),
-    unequipSlot: (slot) => this.unequipSlot(slot),
-    dropItem: (tab, index) => this.dropItem(tab, index),
-    sortTab: (tab) => this.player.inventory.sort(tab),
-    allocateAp: (stat: keyof BaseStats) => {
-      if (this.player.allocateAp(stat)) this.pushLog(`${stat.toUpperCase()} increased.`, PAL.exp);
-    },
-    learnSkill: (id) => {
-      if (this.player.learnSkill(id)) {
-        const def = trySkill(id);
-        this.pushLog(`${def?.name} is now level ${this.player.skillLevelOf(id)}.`, PAL.exp);
-        this.autoBindQuickSlot(id);
-      }
-    },
-    castSkill: (id) => this.castSkill(id),
-    bindQuickSlot: (index, skillId) => {
-      // A skill can only occupy one slot at a time.
-      if (skillId) {
-        const existing = this.uiState.quickSlots.indexOf(skillId);
-        if (existing >= 0) this.uiState.quickSlots[existing] = null;
-      }
-      this.uiState.quickSlots[index] = skillId;
-    },
-    advanceJob: (jobId) => {
-      const result = this.player.advanceTo(jobId);
-      if (!result.ok) {
-        this.pushLog('You do not meet the requirements.', PAL.hp);
-        return;
-      }
-      this.pushLog(`You are now a ${result.job.name}.`, PAL.gold);
-      this.levelUpTimer = 1;
-      this.uiState.open.delete('advance');
-      this.saveGame(false);
-    },
-    dialogueOption: (index) => this.dialogueActions[index]?.(),
-    closeDialogue: () => this.closeDialogue(),
-    buy: (itemId, qty) => this.buy(itemId, qty),
-    sell: (tab, index) => this.sell(tab, index),
-    startQuest: (id) => {
-      this.quests.start(id);
-    },
-    completeQuest: (id) => this.completeQuest(id),
-    abandonQuest: (id) => {
-      if (this.quests.abandon(id)) this.pushLog(`Abandoned ${getQuest(id).name}.`, PAL.textDim);
-    },
-    log: (text, color) => this.pushLog(text, color),
-  };
-
-  /** Put a newly learned attack skill on the first free quick slot. */
-  private autoBindQuickSlot(skillId: string): void {
-    const def = trySkill(skillId);
-    if (!def || def.type === 'passive') return;
-    if (this.uiState.quickSlots.includes(skillId)) return;
-    const free = this.uiState.quickSlots.indexOf(null);
-    if (free >= 0) this.uiState.quickSlots[free] = skillId;
-  }
-
-  private useItem(tab: ItemTab, index: number): void {
-    const slot = this.player.inventory.tabs[tab][index];
-    if (!slot) return;
-    if (slot.kind === 'equip') {
-      this.equipItem(index);
-      return;
-    }
-    const def = getItem(slot.itemId);
-    const use = def.use;
-    if (!use) return;
-    if (this.player.potionCooldown > 0 && (use.hp || use.mp || use.hpPercent || use.mpPercent)) return;
-
-    if (use.scroll) {
-      this.useScroll(tab, index);
-      return;
-    }
-
-    if (use.townScroll) {
-      this.player.inventory.removeAt(tab, index, 1);
-      this.warpTo(this.world.map.returnMap, 'spawn');
-      return;
-    }
-
-    let used = false;
-    if (use.hp) used = this.player.heal(use.hp) > 0 || used;
-    if (use.mp) used = this.player.restoreMp(use.mp) > 0 || used;
-    if (use.hpPercent) used = this.player.heal(this.player.stats.maxHp * use.hpPercent) > 0 || used;
-    if (use.mpPercent) used = this.player.restoreMp(this.player.stats.maxMp * use.mpPercent) > 0 || used;
-    if (use.buff) {
-      this.player.applyBuff({
-        id: `item:${def.id}`,
-        name: use.buff.name,
-        stats: { ...emptyStats(), ...use.buff.stats },
-        remaining: use.buff.durationMs / 1000,
-        durationSec: use.buff.durationMs / 1000,
-        icon: { glyph: '+', color: def.icon.color },
-      });
-      used = true;
-    }
-
-    if (!used) {
-      this.pushLog('Nothing would be restored.', PAL.textDim);
-      return;
-    }
-    this.player.potionCooldown = (use.cooldownMs ?? 300) / 1000;
-    this.player.inventory.removeAt(tab, index, 1);
-  }
-
-  /**
-   * Scrolls apply to the equipped item in their target slot. The real game
-   * drags a scroll onto an item; targeting what you are wearing keeps the same
-   * decision without needing drag-and-drop.
-   */
-  private useScroll(tab: ItemTab, index: number): void {
-    const slot = this.player.inventory.tabs[tab][index];
-    if (slot?.kind !== 'stack') return;
-    const scroll = getItem(slot.itemId).use?.scroll;
-    if (!scroll) return;
-
-    const targetSlot: EquippedSlot | null =
-      scroll.target === 'any'
-        ? (this.player.inventory.equipped.weapon ? 'weapon' : firstEquippedSlot(this.player))
-        : (scroll.target as EquippedSlot);
-    const inst = targetSlot ? this.player.inventory.equipped[targetSlot] : null;
-
-    if (!inst) {
-      this.pushLog('Equip the item you want to scroll first.', PAL.textDim);
-      return;
-    }
-    if (inst.slotsUsed >= inst.slotsTotal) {
-      this.pushLog('That item has no upgrade slots left.', PAL.textDim);
-      return;
-    }
-
-    this.player.inventory.removeAt(tab, index, 1);
-    const result = applyScroll(inst, scroll, this.rng);
-
-    switch (result) {
-      case 'success':
-        this.pushLog(`Success! ${getItem(inst.itemId).name} is now +${inst.upgrades}.`, PAL.exp);
-        break;
-      case 'fail':
-        this.pushLog('The scroll failed. A slot was consumed.', PAL.hp);
-        break;
-      case 'destroyed':
-        delete this.player.inventory.equipped[targetSlot!];
-        this.pushLog(`${getItem(inst.itemId).name} was destroyed.`, PAL.dmgTaken);
-        break;
-      default:
-        this.pushLog('That scroll cannot be used on this item.', PAL.textDim);
-        break;
-    }
-    this.player.recompute();
-  }
-
-  private equipItem(index: number): void {
-    const result = this.player.inventory.equip(index, (id) => this.player.canWear(id));
-    if (!result.ok) {
-      const messages = {
-        'not-equip': 'That is not equipment.',
-        'no-space': 'Not enough inventory space to swap.',
-        requirements: 'You do not meet the requirements for that.',
-      };
-      this.pushLog(messages[result.reason], PAL.hp);
-      return;
-    }
-    this.player.recompute();
-    this.uiState.invSelected = -1;
-  }
-
-  private unequipSlot(slot: EquippedSlot): void {
-    if (!this.player.inventory.unequip(slot)) {
-      this.pushLog('No room in your equipment inventory.', PAL.hp);
-      return;
-    }
-    this.player.recompute();
-  }
-
-  private dropItem(tab: ItemTab, index: number): void {
-    const slot = this.player.inventory.tabs[tab][index];
-    if (!slot) return;
-    const name = slot.kind === 'equip' ? getItem(slot.inst.itemId).name : getItem(slot.itemId).name;
-    this.player.inventory.removeAt(tab, index, slot.kind === 'stack' ? slot.qty : 1);
-    this.pushLog(`Discarded ${name}.`, PAL.textDim);
-  }
-
-  private buy(itemId: string, qty: number): void {
-    const def = getItem(itemId);
-    const cost = def.price * qty;
-    if (this.player.inventory.mesos < cost) {
-      this.pushLog('You cannot afford that.', PAL.hp);
-      return;
-    }
-    const leftover = this.player.inventory.addItem(itemId, qty, this.rng);
-    const bought = qty - leftover;
-    if (bought <= 0) {
-      this.pushLog('Your inventory is full.', PAL.hp);
-      return;
-    }
-    this.player.inventory.spendMesos(def.price * bought);
-    this.pushLog(`Bought ${def.name}${bought > 1 ? ` x${bought}` : ''}.`, PAL.text);
-  }
-
-  private sell(tab: ItemTab, index: number): void {
-    const slot = this.player.inventory.tabs[tab][index];
-    if (!slot) return;
-    const itemId = slot.kind === 'equip' ? slot.inst.itemId : slot.itemId;
-    const def = getItem(itemId);
-    const qty = slot.kind === 'stack' ? slot.qty : 1;
-    const value = sellPrice(def) * qty;
-    this.player.inventory.removeAt(tab, index, qty);
-    this.player.inventory.addMesos(value);
-    this.pushLog(`Sold ${def.name}${qty > 1 ? ` x${qty}` : ''} for ${value.toLocaleString()} mesos.`, PAL.gold);
-  }
-
-  /* -------------------------------------------------------------- save -- */
-
-  /** Serialise the current character for the shell to store. */
-  snapshot(): SaveData {
-    return serialise(this.player, this.quests, this.mapId, 'spawn', this.uiState.quickSlots);
-  }
-
-  saveGame(announce = true): void {
-    const ok = this.shell.persist(this.snapshot());
-    if (announce) this.pushLog(ok ? 'Game saved.' : 'Could not save.', ok ? PAL.exp : PAL.hp);
-  }
-
-  /** Save and hand control back to character select. */
-  exitToMenu(): void {
-    this.saveGame(false);
-    this.shell.exitToMenu();
-  }
-
-  /* ------------------------------------------------------------ render -- */
-
-  render(alpha: number, frameDt: number): void {
-    const ctx = this.renderer.ctx;
-    this.ui.beginFrame();
-    this.renderer.clear(PAL.sky);
-
-    drawScene({
-      ctx, cam: this.cam, world: this.world, player: this.player,
-      time: this.time, alpha,
+      this.cam.snapBehind(yaw);
+      this.state = 'play';
     });
-
-    const hudState: HudState = {
-      log: this.log,
-      minimapOpen: !this.uiState.open.has('worldmap'),
-      quickSlots: this.uiState.quickSlots,
-    };
-    drawHud(ctx, this.ui, this.player, this.world, hudState, this.time);
-
-    this.renderWindows(ctx);
-
-    if (this.levelUpTimer > 0) drawLevelUp(ctx, this.player, this.levelUpTimer);
-
-    if (this.player.dead) {
-      const choice = drawDeathOverlay(ctx, this.ui, this.player);
-      if (choice.revive) {
-        this.player.revive();
-        this.pushLog('Revived.', PAL.exp);
-      } else if (choice.town) {
-        this.player.revive();
-        this.warpTo(this.world.map.returnMap, 'spawn');
-      }
-    }
-
-    drawVignette(ctx, '#05070c', this.fade);
-    void frameDt;
   }
 
-  private renderWindows(ctx: CanvasRenderingContext2D): void {
-    const s = this.uiState;
-    if (s.open.has('stats')) drawStats(ctx, this.ui, s, this.player, this.hooks);
-    if (s.open.has('skills')) drawSkills(ctx, this.ui, s, this.player, this.hooks);
-    if (s.open.has('quests')) drawQuests(ctx, this.ui, s, this.player, this.quests, this.hooks);
-    if (s.open.has('equip')) drawEquipment(ctx, this.ui, s, this.player, this.hooks);
-    if (s.open.has('inventory')) drawInventory(ctx, this.ui, s, this.player, this.hooks);
-    if (s.open.has('worldmap')) drawWorldMap(ctx, this.ui, s, this.mapId);
-    if (s.open.has('help')) drawHelp(ctx, this.ui, s);
+  activateCheckpoint(w: Wardstone): void {
+    this.save.checkpoint = w.id;
+    this.save.level = this.level!.def.id;
+    this.player.heal(this.player.maxHp);
+    this.player.mana = this.player.maxMana;
+    writeSave(this.save);
+  }
 
-    if (s.open.has('shop') && s.shopNpc) {
-      drawShop(ctx, this.ui, s, this.player, getNpc(s.shopNpc).shop ?? [], this.hooks);
-      if (!s.open.has('shop')) this.closeDialogue();
-    }
-    if (s.open.has('advance')) drawAdvancement(ctx, this.ui, s, this.player, this.hooks);
+  openWardstone(w: Wardstone): void {
+    this.state = 'pause';
+    this.input.wantPointerLock = false;
+    this.input.releaseLock();
+    this.audio.stopAllLoops();
+    this.menus.showWardstone(w);
+  }
 
-    if (s.open.has('system')) {
-      const choice = drawSystemMenu(ctx, this.ui, s);
-      if (choice.resume) s.open.delete('system');
-      if (choice.save) {
-        this.saveGame(true);
-        s.open.delete('system');
-      }
-      if (choice.characters) this.exitToMenu();
+  collect(c: Collectible): void {
+    const s = this.save;
+    s.found[c.id] = true;
+    const p = this.player;
+    if (c.kind === 'heart') {
+      s.heartShards++;
+      const k = s.heartShards % SHARDS_PER_UPGRADE;
+      this.sfx('shard');
+      if (k === 0) {
+        this.toast('Four Heart Shards! Maximum health increased.', 'good');
+        this.audio.play('levelUp');
+        p.hp = maxHp(s);
+      } else this.toast(`Heart Shard (${k}/${SHARDS_PER_UPGRADE})`, 'good');
+    } else if (c.kind === 'mana') {
+      s.manaShards++;
+      const k = s.manaShards % SHARDS_PER_UPGRADE;
+      this.sfx('shard');
+      if (k === 0) {
+        this.toast('Four Spirit Shards! Maximum mana increased.', 'good');
+        this.audio.play('levelUp');
+        p.mana = maxMana(s);
+      } else this.toast(`Spirit Shard (${k}/${SHARDS_PER_UPGRADE})`, 'good');
+    } else {
+      this.sfx('relic');
+      const r = RELICS[c.relicId];
+      if (r) this.hud.relic(r.title, r.text);
     }
+    this.fx.motes(c.x, c.y + 1, c.z, c.kind === 'heart' ? 0xff6a7a : c.kind === 'mana' ? 0x6af09a : 0xfff0b0, 30);
+    writeSave(s);
+  }
 
-    if (s.open.has('dialogue')) {
-      this.dialogueView = this.buildDialogue();
-      if (this.dialogueView) {
-        drawDialogue(ctx, this.ui, this.dialogueView, this.hooks, this.time);
-      }
+  collectGem(kind: GemKind, value: number, x: number, y: number, z: number): void {
+    const p = this.player;
+    this.gemChain++;
+    this.gemChainT = 0.6;
+    const pitch = 1 + Math.min(12, this.gemChain) * 0.045;
+    switch (kind) {
+      case 'blue':
+        this.save.gems += value;
+        this.hud.gemBump();
+        this.audio.play('gemBlue', pitch, 0.7);
+        break;
+      case 'red':
+        p.heal(8 * value);
+        this.audio.play('gemRed', pitch, 0.7);
+        break;
+      case 'green':
+        p.mana = Math.min(p.maxMana, p.mana + 8 * value);
+        this.audio.play('gemGreen', pitch, 0.7);
+        break;
+      case 'purple':
+        p.gainFury(6 * value);
+        this.audio.play('gemPurple', pitch, 0.7);
+        break;
     }
+    this.fx.sparkle(x, y, z, GEM_COLORS[kind], 3);
+  }
+
+  // --- arenas and bosses -------------------------------------------------------------------------
+
+  arenaStarted(a: Arena): void {
+    this.activeArena = a;
+    this.cam.extraDist = 1.5;
+  }
+
+  arenaEnded(a: Arena): void {
+    if (this.activeArena === a) this.activeArena = null;
+    this.cam.extraDist = 0;
+    writeSave(this.save);
+  }
+
+  // --- story ----------------------------------------------------------------------------------------
+
+  say(lines: Line[], onDone?: () => void): void {
+    this.player.breath.stop();
+    this.player.gliding = false;
+    const prev = this.state === 'dialogue' ? 'play' : this.state;
+    this.state = 'dialogue';
+    this.player.setState('locked');
+    this.dialogue.start(lines, () => {
+      this.dialogueSpeaker = null;
+      this.cam.clearShot();
+      this.player.setState('move');
+      this.state = prev === 'dead' ? 'dead' : 'play';
+      this.input.clearBuffers();
+      onDone?.();
+    });
+  }
+
+  learnElement(e: Element): void {
+    learnElement(this.save, e);
+    this.player.element = e;
+    this.hud.elementChanged(e);
+    writeSave(this.save);
+  }
+
+  saveNow(): void {
+    writeSave(this.save);
   }
 }
 
-function firstEquippedSlot(player: Player): EquippedSlot | null {
-  for (const [slot, inst] of Object.entries(player.inventory.equipped)) {
-    if (inst) return slot as EquippedSlot;
-  }
-  return null;
-}
-
-/** Objective ids are either mob ids or item ids; show whichever resolves. */
-function objectiveName(id: string): string {
-  try {
-    return getMob(id).name;
-  } catch {
-    try {
-      return getItem(id).name;
-    } catch {
-      return id;
-    }
+function typeColor(t: DamageType): number {
+  switch (t) {
+    case 'fire': return 0xffa040;
+    case 'lightning': return 0xbfe8ff;
+    case 'ice': return 0x9fe8ff;
+    case 'earth': return 0xb8e07a;
+    case 'shadow': return 0xd070ff;
+    default: return 0xfff6e0;
   }
 }

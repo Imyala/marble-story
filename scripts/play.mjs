@@ -1,0 +1,52 @@
+/**
+ * Dev playtest runner: drives the game in headless Chromium through a
+ * scenario in scripts/scenarios/<name>.mjs and screenshots along the way.
+ *   node scripts/play.mjs <scenario> [url]
+ */
+import { chromium } from 'playwright';
+import { mkdirSync } from 'node:fs';
+
+const name = process.argv[2] ?? 'fen';
+const BASE = process.argv[3] ?? process.env.GAME_URL ?? 'http://localhost:5173/dev.html';
+const OUT = 'scripts/out';
+mkdirSync(OUT, { recursive: true });
+const browser = await chromium.launch({
+  executablePath: '/opt/pw-browsers/chromium',
+  args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
+});
+const page = await browser.newPage({ viewport: { width: Number(process.env.W ?? 960), height: Number(process.env.H ?? 600) } });
+const errors = [];
+page.on('pageerror', (e) => { errors.push(e.message); console.log('pageerror:', e.message, e.stack); });
+page.on('console', (m) => { if (m.type() === 'error') { errors.push(m.text()); console.log('console.error:', m.text()); } });
+
+const h = {
+  base: BASE,
+  async go(q, wait = 2000) {
+    await page.goto(`${BASE}${q}`, { waitUntil: 'load' });
+    await page.waitForFunction(() => !!window.wyrm, null, { timeout: 20000 });
+    await page.waitForTimeout(wait);
+  },
+  wait: (ms) => page.waitForTimeout(ms),
+  async hold(key, ms) { await page.keyboard.down(key); await page.waitForTimeout(ms); await page.keyboard.up(key); },
+  async tap(key, n = 1, gap = 120) { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await page.waitForTimeout(gap); } },
+  eval: (fn, arg) => page.evaluate(fn, arg),
+  async shot(n) { await page.screenshot({ path: `${OUT}/${n}.png` }); console.log('shot', n); },
+  state: () => page.evaluate(() => {
+    const g = window.wyrm; const p = g.player;
+    return { state: g.state, ps: p.state, x: +p.x.toFixed(2), y: +p.y.toFixed(2), z: +p.z.toFixed(2), hp: Math.round(p.hp), mana: Math.round(p.mana),
+      gems: g.save.gems, enemies: g.enemies.filter((e) => e.alive).length, level: g.level?.def.id, fury: Math.round(p.fury), combo: g.style.combo };
+  }),
+  check(label, ok, detail = '') { console.log(`${ok ? 'PASS' : 'FAIL'}  ${label}${detail ? '  -- ' + detail : ''}`); if (!ok) h.failed = true; },
+  failed: false,
+  page,
+};
+const mod = await import(`./scenarios/${name}.mjs`);
+try {
+  await mod.default(h);
+} catch (e) {
+  console.log('scenario threw:', e);
+  h.failed = true;
+}
+console.log(errors.length ? `ERRORS: ${errors.length}` : 'no page errors');
+await browser.close();
+process.exit(h.failed || errors.length ? 1 : 0);

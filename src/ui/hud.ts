@@ -1,417 +1,414 @@
-/**
- * The permanent on-screen furniture: status bars, minimap, buff icons, and
- * the message log.
- */
-import { VIEW_H, VIEW_W, outlinedText } from '../engine/renderer';
-import { PAL, rgba, shade } from '../art/palette';
-import { roundRect } from '../engine/renderer';
-import { bar, rect, text, UiInput, hit, tooltip } from './imgui';
-import type { Player } from '../game/player';
-import type { World } from '../game/world';
-import { getJob } from '../data/jobs';
-import { MAX_LEVEL } from '../data/expTable';
-import { fhLeft, fhRight, fhTop, isWall } from '../physics/foothold';
-import { getItem } from '../data/items';
-import { drawItemIcon } from '../art/itemicons';
+import * as THREE from 'three';
+import type { Game } from '../game/game';
+import type { Element } from '../game/types';
+import { ELEMENT_NAMES } from '../game/types';
+import { RANKS } from '../combat/style';
+import type { Boss } from '../enemies/boss';
+import { SHARDS_PER_UPGRADE } from '../game/progress';
 
-export interface LogLine {
-  text: string;
-  color: string;
-  /** Seconds remaining before it fades from the transient overlay. */
-  life: number;
+const EL_COLORS: Record<Element, string> = { fire: '#ff7a2a', lightning: '#7ac8ff', ice: '#8fe4ff', earth: '#8bd05a' };
+const EL_KEYS: Record<Element, string> = { fire: '1', lightning: '2', ice: '3', earth: '4' };
+const EL_POS: Record<Element, [number, number]> = { fire: [60, 16], lightning: [104, 60], ice: [60, 104], earth: [16, 60] };
+const RANK_COLORS = ['#b8b0d0', '#ffb070', '#ff8a3a', '#ff5a3a', '#ff3a8a', '#e0a0ff'];
+
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', html = ''): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (html) e.innerHTML = html;
+  return e;
 }
 
-export const HUD_HEIGHT = 66;
-/** Height of the full-width EXP strip along the very bottom edge. */
-const EXP_STRIP = 13;
-
-export interface HudState {
-  log: LogLine[];
-  minimapOpen: boolean;
-  /** Quick-slot skill ids bound to keys 1..8. */
-  quickSlots: (string | null)[];
+interface DmgNum {
+  e: HTMLDivElement;
+  x: number;
+  y: number;
+  z: number;
+  t: number;
+  vy: number;
 }
 
-export function drawHud(
-  ctx: CanvasRenderingContext2D,
-  ui: UiInput,
-  player: Player,
-  world: World,
-  state: HudState,
-  time: number,
-): void {
-  drawStatusBar(ctx, player, time);
-  drawQuickSlots(ctx, ui, player, state);
-  if (state.minimapOpen) drawMinimap(ctx, world, player);
-  drawBuffs(ctx, ui, player);
-  drawLog(ctx, state.log);
-}
+export class Hud {
+  readonly root: HTMLDivElement;
+  private overlay: HTMLDivElement;
+  private hpFill!: HTMLElement;
+  private hpLag!: HTMLElement;
+  private manaFill!: HTMLElement;
+  private dtFill!: HTMLElement;
+  private hpBar!: HTMLElement;
+  private manaBar!: HTMLElement;
+  private furyArc!: SVGCircleElement;
+  private furyRing!: SVGSVGElement;
+  private gemText!: HTMLElement;
+  private gemsBox!: HTMLElement;
+  private shardsBox!: HTMLElement;
+  private elBoxes = new Map<Element, HTMLElement>();
+  private elName!: HTMLElement;
+  private styleBox!: HTMLElement;
+  private styleRank!: HTMLElement;
+  private styleName!: HTMLElement;
+  private styleBarFill!: HTMLElement;
+  private comboBox!: HTMLElement;
+  private promptBox!: HTMLElement;
+  private toasts!: HTMLElement;
+  private bossBox!: HTMLElement;
+  private bossFill!: HTMLElement;
+  private bossLag!: HTMLElement;
+  private bossName!: HTMLElement;
+  private bossPhase!: HTMLElement;
+  private vignette!: HTMLElement;
+  private lowhp!: HTMLElement;
+  private fadeBox!: HTMLElement;
+  private perfectBox!: HTMLElement;
+  private reticle!: HTMLElement;
+  private flickBox!: HTMLElement;
+  private flickText!: HTMLElement;
+  private deathBox!: HTMLElement;
+  private nums: DmgNum[] = [];
+  private boss: Boss | null = null;
+  private hurtT = 0;
+  private flickT = 0;
+  private lastToast = new Map<string, number>();
+  private relicBox: HTMLElement | null = null;
+  private relicT = 0;
+  private wardT = 0;
+  private proj = new THREE.Vector3();
 
-/* ---------------------------------------------------------- status bar -- */
-
-function drawStatusBar(ctx: CanvasRenderingContext2D, player: Player, time: number): void {
-  const y = VIEW_H - HUD_HEIGHT;
-
-  ctx.fillStyle = 'rgba(10,14,23,0.92)';
-  ctx.fillRect(0, y, VIEW_W, HUD_HEIGHT);
-  ctx.strokeStyle = rgba(PAL.borderLit, 0.55);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, y + 0.5);
-  ctx.lineTo(VIEW_W, y + 0.5);
-  ctx.stroke();
-
-  // Level badge.
-  const job = getJob(player.jobId);
-  ctx.fillStyle = PAL.panelLight;
-  roundRect(ctx, 12, y + 10, 62, 42, 6);
-  ctx.fill();
-  ctx.strokeStyle = PAL.border;
-  roundRect(ctx, 12.5, y + 10.5, 61, 41, 6);
-  ctx.stroke();
-  text(ctx, 'LV', 43, y + 25, { color: PAL.textDim, font: '9px ui-monospace, monospace', align: 'center' });
-  text(ctx, String(player.level), 43, y + 44, {
-    color: PAL.gold, font: '700 20px ui-monospace, monospace', align: 'center',
-  });
-
-  // Name and job.
-  text(ctx, player.name, 86, y + 22, { color: PAL.text, font: '700 13px ui-monospace, monospace' });
-  text(ctx, job.name, 86, y + 36, { color: PAL.textDim, font: '11px ui-monospace, monospace' });
-  text(ctx, `${player.inventory.mesos.toLocaleString()} mesos`, 86, y + 50, {
-    color: PAL.gold, font: '11px ui-monospace, monospace',
-  });
-
-  // HP / MP.
-  const barX = 262;
-  const barW = 236;
-  bar(ctx, rect(barX, y + 12, barW, 14), player.hp / player.stats.maxHp, PAL.hp, PAL.hpDark,
-      `${Math.ceil(player.hp)} / ${player.stats.maxHp}`);
-  bar(ctx, rect(barX, y + 34, barW, 14), player.mp / player.stats.maxMp, PAL.mp, PAL.mpDark,
-      `${Math.ceil(player.mp)} / ${player.stats.maxMp}`);
-  text(ctx, 'HP', barX - 24, y + 23, { color: PAL.hp, font: '700 11px ui-monospace, monospace' });
-  text(ctx, 'MP', barX - 24, y + 45, { color: PAL.mp, font: '700 11px ui-monospace, monospace' });
-
-  // EXP runs full width along the very bottom edge, clear of everything else.
-  const stripY = VIEW_H - EXP_STRIP;
-  const frac = player.expFraction();
-  ctx.fillStyle = PAL.expDark;
-  ctx.fillRect(0, stripY, VIEW_W, EXP_STRIP);
-  if (frac > 0) {
-    const grad = ctx.createLinearGradient(0, stripY, 0, VIEW_H);
-    grad.addColorStop(0, shade(PAL.exp, 0.3));
-    grad.addColorStop(1, shade(PAL.exp, -0.25));
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, stripY, VIEW_W * frac, EXP_STRIP);
+  constructor(private game: Game, parent: HTMLElement) {
+    this.overlay = el('div', 'ui-layer');
+    this.root = el('div', 'ui-layer');
+    parent.appendChild(this.overlay);
+    parent.appendChild(this.root);
+    this.build();
   }
-  const expLabel = player.level >= MAX_LEVEL
-    ? 'MAX LEVEL'
-    : `EXP  ${player.exp.toLocaleString()} / ${player.expToNextLevel().toLocaleString()}   ${(frac * 100).toFixed(2)}%`;
-  ctx.font = '600 10px ui-monospace, monospace';
-  ctx.textAlign = 'center';
-  outlinedText(ctx, expLabel, VIEW_W / 2, stripY + 10, '#ffffff', 'rgba(0,0,0,0.85)', 3);
 
-  // Unspent points nag — a quiet pulse rather than a modal.
-  if (player.ap > 0 || player.sp > 0) {
-    const pulse = 0.6 + Math.sin(time * 4) * 0.4;
-    const parts: string[] = [];
-    if (player.ap > 0) parts.push(`${player.ap} AP`);
-    if (player.sp > 0) parts.push(`${player.sp} SP`);
-    ctx.save();
-    ctx.globalAlpha = pulse;
-    text(ctx, `${parts.join('  ')} unspent`, 604, y + 30, {
-      color: PAL.gold, font: '700 12px ui-monospace, monospace', align: 'center',
-    });
-    text(ctx, 'press A / S to spend', 604, y + 46, {
-      color: PAL.textDim, font: '10px ui-monospace, monospace', align: 'center',
-    });
-    ctx.restore();
+  private build(): void {
+    const r = this.root;
+    const o = this.overlay;
+    this.vignette = el('div', 'vignette');
+    this.lowhp = el('div', 'lowhp');
+    this.perfectBox = el('div', 'perfect-flash');
+    o.append(this.vignette, this.lowhp, this.perfectBox);
+
+    const tl = el('div', 'hud-tl');
+    const emblem = el('div', 'hud-emblem');
+    emblem.innerHTML = `<svg viewBox="0 0 64 64"><path d="M32 12 L38 26 L52 28 L41 37 L44 51 L32 44 L20 51 L23 37 L12 28 L26 26 Z" fill="#f5c46b" opacity=".9"/></svg>`;
+    this.furyRing = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    this.furyRing.setAttribute('viewBox', '0 0 76 76');
+    this.furyRing.classList.add('fury-ring');
+    this.furyRing.innerHTML = `<circle cx="38" cy="38" r="35" fill="none" stroke="rgba(0,0,0,.45)" stroke-width="5"/>
+      <circle class="arc" cx="38" cy="38" r="35" fill="none" stroke="#c070ff" stroke-width="5" stroke-linecap="round"
+      stroke-dasharray="220" stroke-dashoffset="220" transform="rotate(-90 38 38)"/>`;
+    this.furyArc = this.furyRing.querySelector('.arc') as SVGCircleElement;
+    this.furyRing.style.width = '76px';
+    this.furyRing.style.height = '76px';
+    emblem.appendChild(this.furyRing);
+    const bars = el('div', 'bars');
+    this.hpBar = el('div', 'bar hp');
+    this.hpLag = el('i', 'lag');
+    this.hpFill = el('i', 'fill');
+    this.hpBar.append(this.hpLag, this.hpFill);
+    this.manaBar = el('div', 'bar mana');
+    this.manaFill = el('i', 'fill');
+    this.manaBar.append(this.manaFill);
+    const dt = el('div', 'bar thin dt');
+    this.dtFill = el('i', 'fill');
+    dt.append(this.dtFill);
+    bars.append(this.hpBar, this.manaBar, dt);
+    tl.append(emblem, bars);
+    r.appendChild(tl);
+
+    const tr = el('div', 'hud-tr');
+    this.gemsBox = el('div', 'gems');
+    this.gemText = el('span', '', '0');
+    this.gemsBox.append(el('i', 'gem-icon'), this.gemText);
+    this.shardsBox = el('div', 'shards');
+    tr.append(this.gemsBox, this.shardsBox);
+    r.appendChild(tr);
+
+    const br = el('div', 'hud-br');
+    const els = el('div', 'elements');
+    for (const e of ['fire', 'lightning', 'ice', 'earth'] as Element[]) {
+      const b = el('div', 'el', `<span>${EL_KEYS[e]}</span>`);
+      b.style.left = `${EL_POS[e][0]}px`;
+      b.style.top = `${EL_POS[e][1]}px`;
+      b.style.setProperty('--c', EL_COLORS[e]);
+      els.appendChild(b);
+      this.elBoxes.set(e, b);
+    }
+    this.elName = el('div', 'el-name', '');
+    br.append(els, this.elName, el('div', 'el-keys', 'Hold RMB: Breath &middot; Q: Burst'));
+    r.appendChild(br);
+
+    this.styleBox = el('div', 'style-meter');
+    this.styleRank = el('div', 'style-rank', 'D');
+    this.styleName = el('div', 'style-name', '');
+    const sb = el('div', 'style-bar');
+    this.styleBarFill = el('i');
+    sb.appendChild(this.styleBarFill);
+    this.comboBox = el('div', 'combo');
+    this.styleBox.append(this.styleRank, this.styleName, sb, this.comboBox);
+    r.appendChild(this.styleBox);
+
+    this.promptBox = el('div', 'prompt');
+    this.promptBox.style.opacity = '0';
+    r.appendChild(this.promptBox);
+    this.toasts = el('div', 'toasts');
+    r.appendChild(this.toasts);
+
+    this.bossBox = el('div', 'boss');
+    this.bossName = el('div', 'boss-name');
+    const bb = el('div', 'bar');
+    this.bossLag = el('i', 'lag');
+    this.bossFill = el('i', 'fill');
+    bb.append(this.bossLag, this.bossFill);
+    this.bossPhase = el('div', 'boss-phase');
+    this.bossBox.append(this.bossName, bb, this.bossPhase);
+    this.bossBox.style.display = 'none';
+    r.appendChild(this.bossBox);
+
+    this.reticle = el('div', 'reticle');
+    this.reticle.style.display = 'none';
+    r.appendChild(this.reticle);
+
+    this.flickBox = el('div', 'flick hidden');
+    this.flickText = el('p');
+    const fb = el('div');
+    fb.append(el('b', '', 'FLICK'), this.flickText);
+    this.flickBox.append(el('div', 'flick-face'), fb);
+    r.appendChild(this.flickBox);
+
+    this.deathBox = el('div', 'death', '<h1>The light fades...</h1>');
+    o.appendChild(this.deathBox);
+    this.fadeBox = el('div', 'fade');
+    o.appendChild(this.fadeBox);
   }
-}
 
-/* --------------------------------------------------------- quick slots -- */
+  show(on: boolean): void {
+    this.root.classList.toggle('hidden', !on);
+  }
 
-function drawQuickSlots(
-  ctx: CanvasRenderingContext2D, ui: UiInput, player: Player, state: HudState,
-): void {
-  const y = VIEW_H - HUD_HEIGHT + 10;
-  const startX = VIEW_W - 8 - 8 * 38;
+  fade(v: number): void {
+    this.fadeBox.style.opacity = String(v);
+  }
 
-  for (let i = 0; i < 8; i++) {
-    const r = rect(startX + i * 38, y, 34, 36);
-    const skillId = state.quickSlots[i];
-    const hovered = hit(r, ui.mx, ui.my);
+  update(dt: number): void {
+    const g = this.game;
+    const p = g.player;
+    const hpK = Math.max(0, p.hp / p.maxHp);
+    this.hpFill.style.width = `${hpK * 100}%`;
+    this.hpLag.style.width = `${hpK * 100}%`;
+    this.hpBar.style.width = `${200 + (p.maxHp - 100) * 0.8}px`;
+    this.manaFill.style.width = `${Math.max(0, p.mana / p.maxMana) * 100}%`;
+    this.manaBar.style.width = `${200 + (p.maxMana - 100) * 0.8}px`;
+    this.dtFill.style.width = `${(p.dtime / p.dtimeMax) * 100}%`;
+    this.furyArc.setAttribute('stroke-dashoffset', String(220 - (p.fury / 100) * 220));
+    this.furyRing.classList.toggle('ready', p.fury >= 100);
+    this.gemText.textContent = String(g.save.gems);
+    const hs = g.save.heartShards % SHARDS_PER_UPGRADE;
+    const ms = g.save.manaShards % SHARDS_PER_UPGRADE;
+    const shardHtml = `<span style="color:#ff8a9a">&#9829; <b>${hs}</b>/4</span><span style="color:#8af0aa">&#9670; <b>${ms}</b>/4</span>`;
+    if (this.shardsBox.innerHTML !== shardHtml) this.shardsBox.innerHTML = shardHtml;
 
-    ctx.fillStyle = hovered ? PAL.panelLight : 'rgba(20,26,43,0.9)';
-    roundRect(ctx, r.x, r.y, r.w, r.h, 4);
-    ctx.fill();
-    ctx.strokeStyle = PAL.border;
-    ctx.lineWidth = 1;
-    roundRect(ctx, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 4);
-    ctx.stroke();
+    // Elements.
+    const owned = g.save.elements;
+    for (const [e, b] of this.elBoxes) {
+      b.classList.toggle('owned', owned.includes(e));
+      b.classList.toggle('active', p.element === e);
+    }
+    this.elName.textContent = p.element ? ELEMENT_NAMES[p.element] : owned.length ? '' : 'No element yet';
+    this.elName.style.color = p.element ? EL_COLORS[p.element] : '#a99cc9';
 
-    text(ctx, String(i + 1), r.x + 4, r.y + 11, {
-      color: PAL.textFaint, font: '9px ui-monospace, monospace',
-    });
+    // Style meter.
+    const st = g.style;
+    const rank = st.rank;
+    const showStyle = st.points > 1 || st.combo > 1;
+    this.styleBox.style.opacity = showStyle ? '1' : '0';
+    this.styleRank.textContent = RANKS[rank]!.letter;
+    this.styleRank.style.color = RANK_COLORS[rank]!;
+    this.styleName.textContent = RANKS[rank]!.name;
+    this.styleName.style.color = RANK_COLORS[rank]!;
+    this.styleBarFill.style.width = `${st.progress * 100}%`;
+    this.styleBarFill.style.color = RANK_COLORS[rank]!;
+    this.comboBox.innerHTML = st.combo > 1 ? `${st.combo} <small>HITS</small>` : '';
 
-    if (!skillId) continue;
-    const lv = player.skillLevelOf(skillId);
-    const def = player.availableSkills().find((s) => s.id === skillId);
-    if (!def) continue;
+    // Hurt vignette.
+    this.hurtT = Math.max(0, this.hurtT - dt);
+    this.vignette.style.opacity = String(Math.min(1, this.hurtT * 2));
+    this.lowhp.style.opacity = hpK < 0.25 && p.alive ? '1' : '0';
 
-    text(ctx, def.icon.glyph, r.x + r.w / 2, r.y + 24, {
-      color: lv > 0 ? def.icon.color : PAL.textFaint,
-      font: '700 16px ui-monospace, monospace', align: 'center',
-    });
-    text(ctx, String(lv), r.x + r.w - 4, r.y + r.h - 4, {
-      color: PAL.textDim, font: '9px ui-monospace, monospace', align: 'right',
-    });
+    // Boss.
+    if (this.boss) {
+      const k = Math.max(0, this.boss.hp / this.boss.maxHp);
+      this.bossFill.style.width = `${k * 100}%`;
+      this.bossLag.style.width = `${k * 100}%`;
+      const n = this.boss.phases;
+      let html = '';
+      for (let i = 0; i < n; i++) html += `<i class="${i < this.boss.phase ? 'on' : ''}"></i>`;
+      if (this.bossPhase.innerHTML !== html) this.bossPhase.innerHTML = html;
+      if (!this.boss.alive && this.boss.deadT > 1.5) this.bossBar(null);
+    }
 
-    // Cooldown sweep.
-    const cd = player.skillCooldowns.get(skillId);
-    if (cd !== undefined) {
-      const total = (def.levels[Math.max(0, lv - 1)]?.cooldown ?? 1000) / 1000;
-      ctx.fillStyle = 'rgba(0,0,0,0.62)';
-      ctx.fillRect(r.x + 1, r.y + 1, r.w - 2, (r.h - 2) * Math.min(1, cd / total));
+    // Lock-on reticle.
+    const lock = p.lock;
+    if (lock && lock.alive) {
+      const s = this.toScreen(lock.x, lock.y + lock.height * 0.6, lock.z);
+      if (s) {
+        this.reticle.style.display = 'block';
+        this.reticle.style.left = `${s[0]}px`;
+        this.reticle.style.top = `${s[1]}px`;
+      } else this.reticle.style.display = 'none';
+    } else this.reticle.style.display = 'none';
+
+    // Damage numbers.
+    for (const n of this.nums) {
+      n.t += dt;
+      n.y += n.vy * dt;
+      n.vy -= 4 * dt;
+      const s = this.toScreen(n.x, n.y, n.z);
+      if (s && n.t < 0.9) {
+        n.e.style.display = 'block';
+        n.e.style.left = `${s[0]}px`;
+        n.e.style.top = `${s[1]}px`;
+        n.e.style.opacity = String(Math.min(1, (0.9 - n.t) * 3));
+      } else n.e.style.display = 'none';
+    }
+    const done = this.nums.filter((n) => n.t >= 0.9);
+    for (const d of done) d.e.remove();
+    if (done.length) this.nums = this.nums.filter((n) => n.t < 0.9);
+
+    // Flick bubble: waits while a conversation is on screen.
+    const talking = g.state === 'dialogue';
+    if (this.flickT > 0) {
+      this.flickBox.classList.toggle('hidden', talking);
+      if (!talking) {
+        this.flickT -= dt;
+        if (this.flickT <= 0) this.flickBox.classList.add('hidden');
+      }
+    }
+    if (this.relicBox) {
+      this.relicT -= dt;
+      if (this.relicT <= 0 || (this.relicT < 7 && (g.input.pressed('confirm') || g.input.pressed('interact')))) {
+        this.relicBox.remove();
+        this.relicBox = null;
+      }
+    }
+    this.wardT -= dt;
+  }
+
+  private toScreen(x: number, y: number, z: number): [number, number] | null {
+    const v = this.proj.set(x, y, z).project(this.game.camera);
+    if (v.z > 1 || v.z < -1) return null;
+    return [(v.x * 0.5 + 0.5) * window.innerWidth, (-v.y * 0.5 + 0.5) * window.innerHeight];
+  }
+
+  prompt(label: string | null): void {
+    if (label) {
+      const html = `<kbd>F</kbd>${label}`;
+      if (this.promptBox.innerHTML !== html) this.promptBox.innerHTML = html;
+      this.promptBox.style.opacity = '1';
+    } else this.promptBox.style.opacity = '0';
+  }
+
+  toast(text: string, kind: 'info' | 'good' | 'warn' | 'hint' = 'info'): void {
+    const now = performance.now();
+    if ((this.lastToast.get(text) ?? 0) > now - 1500) return;
+    this.lastToast.set(text, now);
+    const t = el('div', `toast ${kind}`, text);
+    this.toasts.appendChild(t);
+    while (this.toasts.children.length > 4) this.toasts.firstChild!.remove();
+    setTimeout(() => t.classList.add('out'), 2200);
+    setTimeout(() => t.remove(), 2800);
+  }
+
+  bigText(text: string, color: number): void {
+    const t = el('div', 'big-text', text);
+    t.style.color = `#${color.toString(16).padStart(6, '0')}`;
+    this.root.appendChild(t);
+    setTimeout(() => t.remove(), 1200);
+  }
+
+  levelTitle(name: string, sub: string): void {
+    const t = el('div', 'level-title', `<h1>${name}</h1><div class="rule"></div><p>${sub}</p>`);
+    this.root.appendChild(t);
+    setTimeout(() => t.remove(), 4600);
+  }
+
+  number(x: number, y: number, z: number, n: number, color: number, crit: boolean): void {
+    if (this.nums.length > 30) return;
+    const e = el('div', `dmg${crit ? ' crit' : ''}`, String(n));
+    e.style.color = `#${color.toString(16).padStart(6, '0')}`;
+    e.style.display = 'none';
+    this.root.appendChild(e);
+    this.nums.push({ e, x: x + (Math.random() - 0.5) * 0.6, y, z: z + (Math.random() - 0.5) * 0.6, t: 0, vy: 2.5 });
+  }
+
+  bossBar(b: Boss | null): void {
+    this.boss = b;
+    this.bossBox.style.display = b ? 'block' : 'none';
+    if (b) this.bossName.textContent = b.displayName;
+  }
+
+  hurt(frac: number): void {
+    this.hurtT = Math.max(this.hurtT, 0.3 + frac * 2);
+  }
+
+  flashMana(): void {
+    this.manaBar.classList.remove('flash');
+    void this.manaBar.offsetWidth;
+    this.manaBar.classList.add('flash');
+  }
+
+  furyReady(): void {
+    this.flick('Your fury is full! Press X to unleash it!', 4);
+  }
+
+  furyUsed(): void {
+    this.perfectBox.style.opacity = '1';
+    setTimeout(() => (this.perfectBox.style.opacity = '0'), 250);
+  }
+
+  perfect(): void {
+    this.perfectBox.style.opacity = '1';
+    setTimeout(() => (this.perfectBox.style.opacity = '0'), 350);
+  }
+
+  gemBump(): void {
+    this.gemsBox.classList.remove('bump');
+    void this.gemsBox.offsetWidth;
+    this.gemsBox.classList.add('bump');
+  }
+
+  elementChanged(e: Element): void {
+    const b = this.elBoxes.get(e);
+    if (b) {
+      b.animate([{ transform: 'translate(-50%,-50%) rotate(45deg) scale(1.4)' }, { transform: 'translate(-50%,-50%) rotate(45deg) scale(1)' }], { duration: 250 });
     }
   }
-}
 
-/* -------------------------------------------------------------- buffs -- */
-
-function drawBuffs(ctx: CanvasRenderingContext2D, ui: UiInput, player: Player): void {
-  let x = VIEW_W - 40;
-  const y = 12;
-  for (const buff of player.buffs) {
-    const r = rect(x, y, 30, 30);
-    ctx.fillStyle = 'rgba(20,26,43,0.9)';
-    roundRect(ctx, r.x, r.y, r.w, r.h, 5);
-    ctx.fill();
-    ctx.strokeStyle = rgba(buff.icon.color, 0.8);
-    ctx.lineWidth = 1.4;
-    roundRect(ctx, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 5);
-    ctx.stroke();
-
-    text(ctx, buff.icon.glyph, r.x + 15, r.y + 21, {
-      color: buff.icon.color, font: '700 15px ui-monospace, monospace', align: 'center',
-    });
-
-    // Remaining-time drain from the bottom.
-    const frac = buff.durationSec > 0 ? buff.remaining / buff.durationSec : 1;
-    ctx.fillStyle = rgba(buff.icon.color, 0.75);
-    ctx.fillRect(r.x + 2, r.y + r.h - 3, (r.w - 4) * Math.max(0, frac), 2);
-
-    if (hit(r, ui.mx, ui.my)) {
-      tooltip(ctx, ui.mx, ui.my, [
-        { text: buff.name, color: buff.icon.color, font: '700 12px ui-monospace, monospace' },
-        { text: `${Math.ceil(buff.remaining)}s remaining`, color: PAL.textDim },
-      ], VIEW_W, VIEW_H);
-    }
-    x -= 34;
-  }
-}
-
-/* ------------------------------------------------------------ minimap -- */
-
-const MINIMAP_W = 208;
-const MINIMAP_H = 132;
-
-function drawMinimap(ctx: CanvasRenderingContext2D, world: World, player: Player): void {
-  const map = world.map;
-  const r = rect(12, 12, MINIMAP_W, MINIMAP_H);
-
-  ctx.fillStyle = 'rgba(10,14,23,0.82)';
-  roundRect(ctx, r.x, r.y, r.w, r.h, 6);
-  ctx.fill();
-  ctx.strokeStyle = rgba(PAL.borderLit, 0.7);
-  ctx.lineWidth = 1;
-  roundRect(ctx, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 6);
-  ctx.stroke();
-
-  text(ctx, map.name, r.x + 9, r.y + 16, {
-    color: PAL.text, font: '700 11px ui-monospace, monospace',
-  });
-  text(ctx, `Lv.${map.levelRange[0]}-${map.levelRange[1]}`, r.x + r.w - 9, r.y + 16, {
-    color: PAL.textDim, font: '10px ui-monospace, monospace', align: 'right',
-  });
-
-  const pad = 8;
-  const inner = rect(r.x + pad, r.y + 24, r.w - pad * 2, r.h - 32);
-  const mw = map.bounds.right - map.bounds.left;
-  const mh = map.bounds.bottom - map.bounds.top;
-  const scale = Math.min(inner.w / mw, inner.h / mh);
-  const offX = inner.x + (inner.w - mw * scale) / 2;
-  const offY = inner.y + (inner.h - mh * scale) / 2;
-  const px = (wx: number) => offX + (wx - map.bounds.left) * scale;
-  const py = (wy: number) => offY + (wy - map.bounds.top) * scale;
-
-  // Platforms.
-  ctx.strokeStyle = rgba(PAL.textDim, 0.75);
-  ctx.lineWidth = 1.6;
-  ctx.beginPath();
-  for (const fh of map.footholds.floors) {
-    ctx.moveTo(px(fhLeft(fh)), py(fh.x1 <= fh.x2 ? fh.y1 : fh.y2));
-    ctx.lineTo(px(fhRight(fh)), py(fh.x1 <= fh.x2 ? fh.y2 : fh.y1));
-  }
-  ctx.stroke();
-
-  // Ladders.
-  ctx.strokeStyle = rgba(PAL.wood, 0.7);
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  for (const l of map.ladders) {
-    ctx.moveTo(px(l.x), py(l.y1));
-    ctx.lineTo(px(l.x), py(l.y2));
-  }
-  ctx.stroke();
-
-  // Portals.
-  for (const p of map.portals) {
-    if (p.type === 'spawn' || p.type === 'hidden') continue;
-    ctx.fillStyle = p.type === 'scripted' ? PAL.gold : PAL.exp;
-    ctx.beginPath();
-    ctx.arc(px(p.x), py(p.y) - 2, 2.6, 0, Math.PI * 2);
-    ctx.fill();
+  dragonTime(on: boolean): void {
+    this.game.renderer.canvas.classList.toggle('dtime', on);
   }
 
-  // NPCs.
-  ctx.fillStyle = '#7fd8e8';
-  for (const npc of map.npcs) {
-    ctx.beginPath();
-    ctx.arc(px(npc.x), py(npc.y) - 2, 2.2, 0, Math.PI * 2);
-    ctx.fill();
+  flick(text: string, seconds = 5): void {
+    this.flickText.textContent = text;
+    this.flickBox.classList.remove('hidden');
+    this.flickT = seconds;
   }
 
-  // Monsters.
-  ctx.fillStyle = rgba(PAL.hp, 0.8);
-  for (const mob of world.livingMobs()) {
-    if (!mob.alive) continue;
-    ctx.fillRect(px(mob.body.x) - 1, py(mob.body.y) - 3, 2, 2);
+  relic(title: string, text: string): void {
+    this.relicBox?.remove();
+    this.relicBox = el('div', 'relic-card', `<div class="sub">Dragon Relic found</div><h2>${title}</h2><p>${text}</p><div class="hint">Read it again any time in the Journal.</div>`);
+    this.root.appendChild(this.relicBox);
+    this.relicT = 9;
   }
 
-  // Player.
-  ctx.fillStyle = '#ffffff';
-  ctx.beginPath();
-  ctx.arc(px(player.body.x), py(player.body.y) - 3, 3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.strokeStyle = PAL.ink;
-  ctx.lineWidth = 1;
-  ctx.stroke();
-}
-
-/* ---------------------------------------------------------------- log -- */
-
-const LOG_LINES = 6;
-
-function drawLog(ctx: CanvasRenderingContext2D, log: LogLine[]): void {
-  const visible = log.slice(-LOG_LINES);
-  const baseY = VIEW_H - HUD_HEIGHT - 16;
-  ctx.textAlign = 'left';
-  visible.forEach((line, i) => {
-    const y = baseY - (visible.length - 1 - i) * 15;
-    const fade = Math.min(1, line.life / 1.2);
-    if (fade <= 0) return;
-    ctx.save();
-    ctx.globalAlpha = fade;
-    ctx.font = '11px ui-monospace, monospace';
-    outlinedText(ctx, line.text, 14, y, line.color, 'rgba(0,0,0,0.85)', 3);
-    ctx.restore();
-  });
-}
-
-/* -------------------------------------------------------------- death -- */
-
-export function drawDeathOverlay(
-  ctx: CanvasRenderingContext2D, ui: UiInput, player: Player,
-): { revive: boolean; town: boolean } {
-  ctx.fillStyle = 'rgba(20,4,8,0.55)';
-  ctx.fillRect(0, 0, VIEW_W, VIEW_H);
-
-  const w = 340;
-  const h = 176;
-  const x = (VIEW_W - w) / 2;
-  const y = (VIEW_H - h) / 2 - 30;
-
-  ctx.fillStyle = PAL.panel;
-  roundRect(ctx, x, y, w, h, 10);
-  ctx.fill();
-  ctx.strokeStyle = PAL.hp;
-  ctx.lineWidth = 1.5;
-  roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 10);
-  ctx.stroke();
-
-  text(ctx, 'YOU DIED', x + w / 2, y + 44, {
-    color: PAL.hp, font: '700 24px ui-monospace, monospace', align: 'center',
-  });
-  text(ctx, 'Revive here, or return to town.', x + w / 2, y + 70, {
-    color: PAL.textDim, font: '12px ui-monospace, monospace', align: 'center',
-  });
-
-  // A short delay stops a panicked keypress from skipping the moment.
-  const ready = player.deadTime > 0.9;
-  const bw = 130;
-  const revive = buttonLike(ctx, ui, rect(x + 24, y + 100, bw, 34), 'Revive Here', !ready);
-  const town = buttonLike(ctx, ui, rect(x + w - 24 - bw, y + 100, bw, 34), 'Return to Town', !ready);
-
-  return { revive, town };
-}
-
-function buttonLike(
-  ctx: CanvasRenderingContext2D, ui: UiInput, r: ReturnType<typeof rect>,
-  label: string, disabled: boolean,
-): boolean {
-  const hovered = !disabled && hit(r, ui.mx, ui.my);
-  ctx.fillStyle = disabled ? rgba(PAL.panelLight, 0.4) : hovered ? shade(PAL.panelLight, 0.2) : PAL.panelLight;
-  roundRect(ctx, r.x, r.y, r.w, r.h, 6);
-  ctx.fill();
-  ctx.strokeStyle = disabled ? rgba(PAL.border, 0.5) : PAL.borderLit;
-  ctx.lineWidth = 1;
-  roundRect(ctx, r.x + 0.5, r.y + 0.5, r.w - 1, r.h - 1, 6);
-  ctx.stroke();
-  text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 4, {
-    color: disabled ? rgba(PAL.textDim, 0.5) : PAL.text,
-    font: '600 12px ui-monospace, monospace', align: 'center',
-  });
-  if (hovered && ui.clicked) {
-    ui.consume();
-    return true;
+  wardHint(): void {
+    if (this.wardT > 0) return;
+    this.wardT = 12;
+    this.flick('A Gloom Totem is shielding them! Smash the totem first!', 4);
   }
-  return false;
-}
 
-/* ------------------------------------------------------- level up flash -- */
-
-export function drawLevelUp(ctx: CanvasRenderingContext2D, player: Player, t: number): void {
-  if (t <= 0) return;
-  const alpha = Math.min(1, t * 2);
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  const y = VIEW_H * 0.32 - (1 - t) * 30;
-  ctx.font = '700 34px ui-monospace, monospace';
-  ctx.textAlign = 'center';
-  outlinedText(ctx, 'LEVEL UP', VIEW_W / 2, y, PAL.gold, 'rgba(0,0,0,0.9)', 6);
-  ctx.font = '700 16px ui-monospace, monospace';
-  outlinedText(ctx, `Level ${player.level}`, VIEW_W / 2, y + 26, '#ffffff', 'rgba(0,0,0,0.9)', 4);
-  ctx.restore();
-}
-
-/* --------------------------------------------------------- pickup toast -- */
-
-export function drawPickupToast(
-  ctx: CanvasRenderingContext2D, entries: { itemId: string; qty: number; life: number }[],
-): void {
-  let y = VIEW_H - HUD_HEIGHT - 120;
-  for (const e of entries.slice(-4)) {
-    ctx.save();
-    ctx.globalAlpha = Math.min(1, e.life);
-    const def = getItem(e.itemId);
-    drawItemIcon(ctx, def.icon, VIEW_W - 148, y, 20);
-    text(ctx, e.qty > 1 ? `${def.name} x${e.qty}` : def.name, VIEW_W - 132, y + 4, {
-      color: PAL.text, font: '11px ui-monospace, monospace',
-    });
-    ctx.restore();
-    y -= 24;
+  death(on: boolean): void {
+    this.deathBox.classList.toggle('on', on);
   }
 }
-
-/** Walls are not drawn on the minimap; exported for the world map screen. */
-export { isWall, fhTop };

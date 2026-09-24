@@ -3,50 +3,44 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Marble Story</title>
+    <title>Wyrmling: First Flight</title>
     <!--
-      This is the published landing page, not the app.
+      This is the published landing page, not the game.
 
       GitHub Pages can serve this repo two ways, and the game works under both:
 
-        * Source "GitHub Actions" — the workflow publishes dist/ and this file
+        * Source "GitHub Actions": the workflow publishes dist/ and this file
           is never served at all.
-        * Source "deploy from a branch" — GitHub publishes the repo root
+        * Source "deploy from a branch": GitHub publishes the repo root
           through Jekyll, which cannot run a build, so this page forwards to
-          play/: a pre-built copy committed alongside the source.
+          play/, a pre-built copy committed alongside the source.
 
       The development entry point is dev.html, which Vite serves.
     -->
     <link rel="canonical" href="./play/" />
     <style>
-      html, body {
-        margin: 0; height: 100%;
-        background: #0a0c14; color: #dbe4f5;
-        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      }
-      main { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; }
-      h1 { margin: 0 0 12px; font-size: 15px; letter-spacing: .3em; color: #f2c14e; font-weight: 700; }
-      p { margin: 0; font-size: 13px; color: #8f9dc0; }
-      a { color: #8fd14f; }
+      html, body { margin: 0; height: 100%; background: #0b0816; color: #e9e2ff;
+        font-family: Palatino, "Palatino Linotype", Georgia, serif; }
+      main { height: 100%; display: grid; place-items: center; text-align: center; padding: 24px; box-sizing: border-box; }
+      h1 { margin: 0 0 12px; font-size: 20px; letter-spacing: .3em; color: #f5c46b; font-weight: 700; }
+      p { margin: 0; font-size: 14px; color: #a99cc9; }
+      a { color: #c9a2ff; }
     </style>
   </head>
   <body>
     <main>
       <div>
-        <h1>MARBLE&nbsp;STORY</h1>
+        <h1>WYRMLING</h1>
         <p>Loading&hellip; if nothing happens, <a href="./play/">open the game</a>.</p>
         <noscript><p><a href="./play/">Open the game</a></p></noscript>
       </div>
     </main>
     <script>
       // On the Vite dev server this file would otherwise send you to the
-      // committed build — stale source, silently. Send developers to the live
+      // committed build, which is stale source. Send developers to the live
       // entry instead. The port is pinned in vite.config.ts.
       var target = location.port === '5173' ? './dev.html' : './play/';
-      document.write(
-        '<meta http-equiv="refresh" content="0; url=' + target + '">'
-      );
-      location.replace(target);
+      location.replace(target + location.search);
     </script>
   </body>
 </html>

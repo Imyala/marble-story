@@ -56,11 +56,6 @@ jobs:
             exit 1
           fi
 
-      # Also ship the standalone single-file build, so the game can be
-      # downloaded and opened offline from the same site.
-      - name: Build single-file version
-        run: npm run build:artifact
-
       # Pages serves through Jekyll by default, which drops files starting
       # with an underscore. Nothing here does, but the guard is free.
       - name: Disable Jekyll processing

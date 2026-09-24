@@ -1,46 +1,53 @@
-/**
- * Entry point. Boots the application shell and wires the dev shortcuts.
- */
-import { App } from './app';
+import './ui/style.css';
+import { Game } from './game/game';
+import { reseed } from './core/rng';
 
-const canvas = document.getElementById('game') as HTMLCanvasElement | null;
-if (!canvas) throw new Error('#game canvas not found');
-
-const app = new App(canvas);
-app.start();
-
-// `?quickstart` skips the front-end screens and drops straight into a new
-// character — the same affordance the headless tests use.
-const params = new URLSearchParams(location.search);
-if (params.has('quickstart')) {
-  app.quickStart(params.get('quickstart') || undefined, params.get('world') || undefined);
-}
-
-// The game is up, so cancel the "failed to start" message.
-clearTimeout((window as unknown as { __marbleBootTimer?: number }).__marbleBootTimer);
-document.getElementById('boot')?.classList.add('hidden');
-canvas.focus();
-
-// Save on the way out so a closed tab never costs progress.
-window.addEventListener('beforeunload', () => app.saveNow());
-
-window.addEventListener('keydown', (e) => {
-  // Ctrl+S saves, Ctrl+Shift+R wipes every character and starts over.
-  if (e.key.toLowerCase() === 's' && e.ctrlKey && !e.shiftKey) {
-    e.preventDefault();
-    app.saveNow();
-  }
-  if (e.key.toLowerCase() === 'r' && e.ctrlKey && e.shiftKey) {
-    e.preventDefault();
-    if (confirm('Delete every character and start over?')) app.resetAll();
-  }
-});
-
-// Exposed for poking at the game from the browser console during development.
 declare global {
   interface Window {
-    marble?: import('./game/game').Game | null;
-    marbleApp?: App;
+    wyrm?: Game;
+    __bootTimer?: number;
   }
 }
-window.marbleApp = app;
+
+const params = new URLSearchParams(location.search);
+const seed = params.get('seed');
+if (seed) reseed(Number(seed));
+
+const root = document.getElementById('game-root')!;
+const game = new Game(root);
+window.wyrm = game;
+
+// Automated tests run on slow software rendering; let them keep real time.
+const maxdt = Number(params.get('maxdt'));
+if (maxdt > 0) game.maxDt = maxdt;
+
+const q = params.get('quality');
+if (q === 'low' || q === 'medium' || q === 'high') {
+  game.options.quality = q;
+  game.applyOptions();
+}
+
+// ?level=<id> skips the title screen (development and automated tests).
+const level = params.get('level');
+if (level) {
+  game.input.wantPointerLock = true;
+  game.loadLevel(level, { checkpoint: params.get('cp') });
+} else {
+  game.showTitle();
+}
+
+document.getElementById('boot')?.classList.add('hidden');
+if (window.__bootTimer) clearTimeout(window.__bootTimer);
+
+let last = performance.now();
+function frame(now: number): void {
+  const dt = (now - last) / 1000;
+  last = now;
+  try {
+    game.frame(dt);
+  } catch (e) {
+    console.error(e);
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);

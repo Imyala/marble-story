@@ -259,3 +259,47 @@ export async function falls(h) {
   h.check('charging all three conduits together opens the stormglass cage', opened, `charged after each: ${lit}`);
   await h.shot('puzzle-conduits');
 }
+
+/** Stonewild Plains: the storehouse behind the arrival circle (boulder onto a weight plate). */
+export async function plains(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 100; i++) {
+      await h.wait(80);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=plains&seed=3&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  const plate = { x: 7.4, z: -34.5 };
+  let pressed = false;
+  for (let i = 0; i < 16 && !pressed; i++) {
+    const pos = await h.eval(({ px, pz }) => {
+      const g = window.wyrm;
+      g.player.hp = g.player.maxHp;
+      const bo = g.level.boulders[0];
+      const dx = px - bo.x;
+      const dz = pz - bo.z;
+      const n = Math.hypot(dx, dz) || 1;
+      const sx = bo.x - (dx / n) * 1.9;
+      const sz = bo.z - (dz / n) * 1.9;
+      const yaw = Math.atan2(dx, dz);
+      g.player.place(sx, g.col.groundAt(sx, sz, 1e4, 0.1).y + 0.05, sz, yaw);
+      g.cam.snapBehind(yaw);
+      return { bx: +bo.x.toFixed(2), bz: +bo.z.toFixed(2), d: +n.toFixed(2) };
+    }, { px: plate.x, pz: plate.z });
+    await waitGame(0.3);
+    if (pos.d > 0.9) await h.page.keyboard.press('KeyE');
+    await waitGame(1.2);
+    pressed = await h.eval(() => window.wyrm.level.fired.has('plains-cairn'));
+    console.log('boulder', JSON.stringify(pos), 'pressed', pressed);
+  }
+  h.check('the plains boulder rolls onto its weight plate', pressed);
+  await waitGame(1.8);
+  const ray = await h.eval(() => {
+    const g = window.wyrm;
+    return +g.col.raycast(9.2, 1.8, -34.5, 1, 0, 0, 3.5).t.toFixed(2);
+  });
+  h.check('the storehouse door opens', ray >= 3.5, `ray ${ray}`);
+  await h.shot('puzzle-plains');
+}

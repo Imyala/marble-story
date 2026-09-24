@@ -466,6 +466,7 @@ export const plains: LevelDef = {
       ]));
     }
 
+    toppledCairn(b);
     scenery(b);
   },
 
@@ -687,6 +688,32 @@ function acacia(b: Builder, x: number, z: number, s: number): void {
   b.decor.add(GEO.blob(), leaf, x, y + 3.6 * s, z, 3.0 * s, 0.65 * s, 2.7 * s, 0, ry, 0);
   b.decor.add(GEO.blob(), leaf, x + 1.2 * s, y + 3.3 * s, z + 0.6 * s, 1.6 * s, 0.45 * s, 1.5 * s, 0, ry, 0);
   b.col.add(makeCyl(x, z, 0.3 * s, y - 1, y + 3.2 * s));
+}
+
+/**
+ * Behind the arrival circle: a herders' storehouse whose door stays up only
+ * while a weight sits on its plate. The old boulder beside it rolls well
+ * enough under a Tail whip, a Charge or Earth.
+ */
+function toppledCairn(b: Builder): void {
+  const g = b.game;
+  const y = VALE;
+  const cx = 14;
+  const cz = -34.5;
+  stoneWall(b, [[cx - 2.4, cz + 2.4], [cx + 2.4, cz + 2.4]], y - 0.5, y + 3.4, 0.9, STONE_DARK, true);
+  stoneWall(b, [[cx - 2.4, cz - 2.4], [cx + 2.4, cz - 2.4]], y - 0.5, y + 3.4, 0.9, STONE_DARK, true);
+  stoneWall(b, [[cx + 2.4, cz - 2.4], [cx + 2.4, cz + 2.4]], y - 0.5, y + 3.4, 0.9, STONE_DARK, true);
+  b.platform(cx, y + 3.9, cz, 5.8, 5.8, STONE, 0.5);
+  b.holdGate(cx - 2.4, cz, 3.4, 3.2, Math.PI / 2, 'plains-cairn', y);
+  b.weightPlate(cx - 6.6, cz, 'plains-cairn', y);
+  b.boulder(-2, cz, y);
+  b.crystal(cx, cz, 'mixed', 28, true, y);
+  b.crystal(cx + 1, cz + 1.2, 'red', 3, false, y);
+  b.puzzleHint(cx - 7, cz, 8, [
+    'A weight plate. Aster isn\'t heavy enough... but that boulder is!',
+    'Whip the boulder with your Tail (E), Charge it (hold Shift), or blast it with Earth to roll it onto the plate.',
+  ], 'plains-cairn', 15, 25);
+  b.story('cairn', cx - 9, cz, 4, () => g.hud.flick('A door with a plate in front, and a big round boulder right there. Hmm!', 5));
 }
 
 function scenery(b: Builder): void {

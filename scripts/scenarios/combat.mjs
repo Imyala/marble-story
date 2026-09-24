@@ -1,6 +1,6 @@
 export default async function (h) {
   await h.go('?level=fen&seed=7&quality=low&maxdt=0.25', 2500);
-  await h.tap('Escape');
+  await h.skipDialogue();
   await h.wait(500);
   // Put a grunt right in front of the player.
   await h.eval(() => {

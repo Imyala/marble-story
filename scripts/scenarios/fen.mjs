@@ -1,6 +1,6 @@
 export default async function (h) {
   await h.go('?level=fen&seed=7&quality=medium', 2500);
-  await h.tap('Escape');
+  await h.skipDialogue();
   await h.wait(600);
   let s = await h.state();
   h.check('in play after skipping intro', s.state === 'play', JSON.stringify(s));
@@ -20,7 +20,7 @@ export default async function (h) {
   await h.wait(3000);
   s = await h.state();
   h.check('arena spawned enemies', s.enemies >= 2, JSON.stringify(s));
-  await h.tap('Escape');
+  await h.skipDialogue();
   await h.wait(400);
   await h.shot('fen-arena');
   for (let i = 0; i < 20; i++) { await h.tap('KeyJ', 1, 90); }

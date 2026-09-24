@@ -30,6 +30,16 @@ const h = {
   async hold(key, ms) { await page.keyboard.down(key); await page.waitForTimeout(ms); await page.keyboard.up(key); },
   async tap(key, n = 1, gap = 120) { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await page.waitForTimeout(gap); } },
   eval: (fn, arg) => page.evaluate(fn, arg),
+  /** Presses Esc only while a conversation is open. */
+  async skipDialogue(maxWait = 3000) {
+    const t0 = Date.now();
+    while (Date.now() - t0 < maxWait) {
+      const st = await page.evaluate(() => window.wyrm.state);
+      if (st === 'dialogue') { await page.keyboard.press('Escape'); await page.waitForTimeout(250); continue; }
+      if (st === 'transition') { await page.waitForTimeout(200); continue; }
+      break;
+    }
+  },
   async shot(n) { await page.screenshot({ path: `${OUT}/${n}.png` }); console.log('shot', n); },
   state: () => page.evaluate(() => {
     const g = window.wyrm; const p = g.player;

@@ -815,7 +815,18 @@ export class Game {
     this.fadeTo(() => {
       for (const a of this.level?.arenas ?? []) a.reset();
       if (this.activeArena) this.arenaEnded(this.activeArena);
-      this.boss?.resetBoss();
+      if (this.boss && this.boss.alive) {
+        // The fight starts over when the player walks back in.
+        const boss = this.boss;
+        boss.alive = false;
+        boss.releaseToken();
+        boss.dispose();
+        this.enemies = this.enemies.filter((e) => e !== boss);
+        this.boss = null;
+        this.hud.bossBar(null);
+        this.audio.setMusic(THEMES[this.level!.def.music] ?? null);
+        this.level!.emit('boss-reset');
+      }
       const cp = this.save.level === this.level!.def.id && this.save.checkpoint ? this.level!.wardstones.get(this.save.checkpoint) : undefined;
       let x: number;
       let z: number;

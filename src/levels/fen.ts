@@ -1,14 +1,12 @@
 import * as THREE from 'three';
 import type { LevelDef, Builder } from '../world/level';
 import { Npc } from '../world/level';
-import { ambient, paint, jitter } from './common';
+import { ambient, paint, jitter, bossFight } from './common';
 import { Bogmaw } from '../enemies/bosses/bogmaw';
-import { Barrier } from '../entities/props';
 import { EMBERHOLD } from '../game/story';
 import type { Game } from '../game/game';
 import { GEO } from '../render/decor';
 import { mat } from '../render/materials';
-import { THEMES } from '../core/audio';
 
 const stakeGeo = (() => {
   const g = new THREE.CylinderGeometry(0.08, 0.2, 1, 5);
@@ -238,13 +236,22 @@ export const fen: LevelDef = {
     // --- Bogmaw's hollow ------------------------------------------------------------------
     b.scatter(22, 0, 216, 21, (x, z) => b.tree(x, z, 1 + Math.abs(jitter(x * 3)) * 0.6, 'dead'), (x, z) => Math.hypot(x, z - 216) > 17);
     b.scatter(30, 0, 216, 20, (x, z, y) => b.decor.glowCrystal(x, y, z, 1.2, 0xb04cff), (x, z) => Math.hypot(x, z - 216) > 12);
-    const barrier = new Barrier(g, 0, b.y(0, 216), 216, 20.5);
-    b.level.props.push(barrier);
-    b.story('bogmaw', 0, 204, 5, () => startBogmaw(g, barrier));
-    if (g.save.found['story:fen:bogmaw'] && !g.save.levelsDone.fen) {
-      // Died or quit mid-fight: the trigger is spent, so rearm the encounter.
-      b.trigger(0, 204, 5, () => startBogmaw(g, barrier, true));
-    }
+    bossFight(b, {
+      id: 'bogmaw', x: 0, z: 216, r: 20.5, triggerX: 0, triggerZ: 204, triggerR: 5,
+      spawn: (gg) => new Bogmaw(gg, 0, gg.col.groundAt(0, 222, 20, 0.3).y, 222, Math.PI),
+      intro: [
+        { who: 'flick', text: 'Aster... the mud is moving.', action: () => {
+          g.fx.splash(0, 1.2, 222, 0x8a8a5a);
+          g.fx.dust(0, 1.2, 222, 30, 0x5a4a30);
+          g.shake(0.6, 1);
+          g.sfx('bossRoar', 0, 1, 222);
+        } },
+        { who: 'bogmaw', text: 'GRRRAAAHHH! Little violet morsel! The Master promised you to Bogmaw!' },
+        { who: 'aster', text: 'Nobody is eating anybody today!' },
+        { who: 'flick', text: 'Watch his belly flop, jump over the shockwave! Hit him hard enough and he\'ll stagger!' },
+      ],
+      onDefeated: (gg) => fenOutro(gg),
+    });
     if (g.save.levelsDone.fen) {
       b.portal(0, 226, Math.PI, 'sanctum', 'Return to the Sanctum', 0xff9a50);
     }
@@ -276,37 +283,6 @@ function coneGeo() {
 }
 function tentMat() {
   return mat(0x3a2848, { rough: 0.95, flat: true });
-}
-
-function startBogmaw(g: Game, barrier: Barrier, rematch = false): void {
-  if (g.boss) return;
-  const y = g.col.groundAt(0, 222, 20, 0.3).y;
-  const boss = new Bogmaw(g, 0, y, 222, Math.PI);
-  g.addBoss(boss);
-  g.fx.splash(0, y, 222, 0x8a8a5a);
-  g.fx.dust(0, y, 222, 30, 0x5a4a30);
-  g.shake(0.6, 1);
-  g.sfx('bossRoar', 0, y, 222);
-  barrier.set(true);
-  const begin = () => {
-    boss.awake = true;
-    g.audio.setMusic(THEMES.boss!);
-  };
-  boss.onDefeated = () => {
-    barrier.set(false);
-    g.audio.setMusic(null);
-    setTimeout(() => fenOutro(g), 1800);
-  };
-  if (rematch) {
-    begin();
-    return;
-  }
-  g.say([
-    { who: 'flick', text: 'Aster... the mud is moving.' },
-    { who: 'bogmaw', text: 'GRRRAAAHHH! Little violet morsel! The Master promised you to Bogmaw!' },
-    { who: 'aster', text: 'Nobody is eating anybody today!' },
-    { who: 'flick', text: 'Watch his belly flop, jump over the shockwave! And hit him hard enough and he\'ll stagger!' },
-  ], begin);
 }
 
 function fenOutro(g: Game): void {

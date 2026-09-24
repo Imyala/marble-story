@@ -1,7 +1,7 @@
 export default async function (h) {
   await h.go('?level=sanctum&seed=3&quality=low&maxdt=0.25', 3000);
   await h.shot('sanctum-arrive');
-  for (let i = 0; i < 4; i++) { await h.tap('Escape', 1, 400); }
+  await h.skipDialogue();
   await h.wait(800);
   let s = await h.state();
   const el = await h.eval(() => ({ el: window.wyrm.player.element, owned: window.wyrm.save.elements }));
@@ -44,7 +44,7 @@ export default async function (h) {
   const done = await h.eval(() => !!window.wyrm.save.found['story:sanctum:lesson-done']);
   h.check('torch lesson complete', done, JSON.stringify(s));
   await h.shot('sanctum-lesson');
-  for (let i = 0; i < 7; i++) { await h.tap('Escape', 1, 300); }
+  await h.skipDialogue();
   // Fury.
   await h.eval(() => { const g = window.wyrm; g.player.fury = 100; g.player.place(46, 0.5, 4, 0); });
   await h.wait(300);

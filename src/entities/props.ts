@@ -1076,3 +1076,103 @@ export class Talker implements Prop, Interactable {
     /* driven by the NPC model */
   }
 }
+
+// ---------------------------------------------------------------------------
+// Geysers: water jets that throw you upward; Ice freezes them into pillars.
+// ---------------------------------------------------------------------------
+
+export class Geyser implements Prop, Hittable {
+  readonly isEnemy = false;
+  alive = true;
+  readonly radius: number;
+  readonly height: number;
+  frozen = false;
+  private solid: Solid;
+  private column: THREE.Mesh;
+  private ice: THREE.Mesh;
+  private fxT = 0;
+  private chill = 0;
+  private frozenT = 0;
+
+  constructor(private game: Game, readonly x: number, readonly y: number, readonly z: number, r: number, private h: number,
+    private permanent: boolean, readonly signal: string) {
+    this.radius = r;
+    this.height = h;
+    const m = new THREE.MeshStandardMaterial({ color: 0x9ad8ff, transparent: true, opacity: 0.45, roughness: 0.1, emissive: 0x3a8ab8, emissiveIntensity: 0.3, depthWrite: false });
+    this.column = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, h, 12, 1, true), m);
+    this.column.position.set(x, y + h / 2, z);
+    game.level!.root.add(this.column);
+    const im = new THREE.MeshStandardMaterial({ color: 0xcff6ff, roughness: 0.1, metalness: 0.1, emissive: 0x3aa0d0, emissiveIntensity: 0.25, flatShading: true, transparent: true, opacity: 0.92 });
+    this.ice = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.05, r * 1.25, h, 7, 3), im);
+    this.ice.position.copy(this.column.position);
+    this.ice.visible = false;
+    this.ice.castShadow = true;
+    game.level!.root.add(this.ice);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(r * 1.1, 0.25, 6, 16), mat(0x6a6a72, { rough: 0.9, flat: true }));
+    rim.rotation.x = Math.PI / 2;
+    rim.position.set(x, y + 0.1, z);
+    game.level!.root.add(rim);
+    this.solid = makeCyl(x, z, r * 1.05, y - 0.5, y + h);
+    this.solid.enabled = false;
+    this.solid.surface = 'ice';
+    game.col.add(this.solid);
+  }
+
+  takeHit(hit: Hit): HitResult {
+    if (hit.type !== 'ice') {
+      if (!this.frozen && hit.type !== 'physical') this.game.toast('The geyser needs to be frozen.', 'hint');
+      return 'none';
+    }
+    if (this.frozen) {
+      this.frozenT = 0;
+      return 'hit';
+    }
+    this.chill += hit.buildup + hit.damage;
+    if (this.chill >= 60) this.freeze();
+    return 'hit';
+  }
+
+  private freeze(): void {
+    this.frozen = true;
+    this.frozenT = 0;
+    this.solid.enabled = true;
+    this.column.visible = false;
+    this.ice.visible = true;
+    const g = this.game;
+    g.sfx('iceCrack', this.x, this.y, this.z);
+    g.fx.shatter(this.x, this.y + this.h, this.z);
+    if (this.signal) g.level!.emit(this.signal);
+  }
+
+  private thaw(): void {
+    this.frozen = false;
+    this.chill = 0;
+    this.solid.enabled = false;
+    this.column.visible = true;
+    this.ice.visible = false;
+    this.game.fx.splash(this.x, this.y + this.h, this.z);
+  }
+
+  update(dt: number): void {
+    const g = this.game;
+    if (this.frozen) {
+      this.frozenT += dt;
+      if (!this.permanent && this.frozenT > 14) this.thaw();
+      return;
+    }
+    this.chill = Math.max(0, this.chill - dt * 10);
+    this.fxT -= dt;
+    if (this.fxT <= 0) {
+      this.fxT = 0.05;
+      g.fx.emit(this.x, this.y + this.h, this.z, { count: 3, speed: 4, dir: [0, 1, 0], spread: 0.6, life: [0.5, 0.9], size: [0.2, 0.35], sizeEnd: 1.5, color: 0xe0f6ff, alpha: 0.7, additive: false, gravity: 10, jitter: this.radius * 0.5 });
+    }
+    (this.column.material as THREE.MeshStandardMaterial).opacity = 0.38 + Math.sin(g.time * 12) * 0.06;
+    // The jet throws anything in it upward.
+    const p = g.player;
+    const b = p.body;
+    if (Math.hypot(b.x - this.x, b.z - this.z) < this.radius && b.y >= this.y - 0.5 && b.y < this.y + this.h + 1) {
+      b.vy = Math.max(b.vy, 14);
+      b.grounded = false;
+    }
+  }
+}

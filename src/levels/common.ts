@@ -79,3 +79,155 @@ export function jitter(i: number, s = 1): number {
   const v = Math.sin(i * 127.1 + s * 311.7) * 43758.5453;
   return (v - Math.floor(v)) * 2 - 1;
 }
+
+// ---------------------------------------------------------------------------
+// Shared story machinery: boss fights and Warden rescues.
+// ---------------------------------------------------------------------------
+
+import { Barrier } from '../entities/props';
+import { Npc } from '../world/level';
+import type { Boss } from '../enemies/boss';
+import type { Line } from '../ui/dialogue';
+import type { DragonLook } from '../player/dragonRig';
+import type { Element } from '../game/types';
+import { THEMES } from '../core/audio';
+import { mat as matS, glow as glowS } from '../render/materials';
+
+export interface BossFightOpts {
+  /** Unique id within the level; the intro plays once per save. */
+  id: string;
+  /** Arena center and barrier radius. */
+  x: number;
+  z: number;
+  r: number;
+  /** Where the player must step to start the fight, and how close. */
+  triggerX: number;
+  triggerZ: number;
+  triggerR: number;
+  spawn(g: Game): Boss;
+  intro: Line[];
+  /** Runs once the boss is dead and the barrier is down. */
+  onDefeated(g: Game): void;
+}
+
+/**
+ * Wires a boss arena: a trigger that spawns the boss and raises a barrier,
+ * the intro conversation (first time only), boss music, and a rematch when
+ * the player dies or reloads mid-fight. Skipped entirely once the level is done.
+ */
+export function bossFight(b: Builder, o: BossFightOpts): void {
+  const g = b.game;
+  const lvl = b.level.def.id;
+  if (g.save.levelsDone[lvl]) return;
+  const barrier = new Barrier(g, o.x, b.y(o.x, o.z), o.z, o.r);
+  b.level.props.push(barrier);
+  const start = () => {
+    if (g.boss && g.boss.alive) return;
+    const boss = o.spawn(g);
+    g.addBoss(boss);
+    barrier.set(true);
+    const begin = () => {
+      boss.awake = true;
+      g.audio.setMusic(THEMES.boss!);
+    };
+    boss.onDefeated = () => {
+      barrier.set(false);
+      g.audio.setMusic(null);
+      setTimeout(() => {
+        if (g.level?.def.id === lvl) o.onDefeated(g);
+      }, 2000);
+    };
+    const key = `story:${lvl}:${o.id}`;
+    if (g.save.found[key]) begin();
+    else {
+      g.save.found[key] = true;
+      g.say(o.intro, begin);
+    }
+  };
+  // Re-arms after a death: the trigger fires again whenever no boss is alive.
+  b.trigger(o.triggerX, o.triggerZ, o.triggerR, () => {
+    if (!g.boss || !g.boss.alive) start();
+  }, false);
+  // Dying mid-fight despawns the boss; drop the barrier so the player can return.
+  b.level.on('boss-reset', () => barrier.set(false));
+}
+
+/** A shadow-crystal cage around a captured Warden. */
+export class Cage {
+  private root = new THREE.Group();
+  constructor(private b: Builder, readonly x: number, readonly z: number, radius = 2.6, height = 5) {
+    const y = b.y(x, z);
+    const crystal = new THREE.MeshStandardMaterial({ color: 0x3a1a5a, emissive: 0xb04cff, emissiveIntensity: 0.6, roughness: 0.2, flatShading: true, transparent: true, opacity: 0.85 });
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.5, 0), crystal);
+      c.scale.set(0.6, height * 0.9, 0.6);
+      c.position.set(x + Math.sin(a) * radius, y + height * 0.35, z + Math.cos(a) * radius);
+      c.rotation.set(Math.cos(a) * -0.25, a, Math.sin(a) * 0.25);
+      this.root.add(c);
+    }
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(radius + 0.6, radius + 0.9, 0.4, 12), matS(0x2a2432, { rough: 0.9, flat: true }));
+    base.position.set(x, y + 0.2, z);
+    this.root.add(base);
+    const glowRing = new THREE.Mesh(new THREE.TorusGeometry(radius, 0.08, 6, 30), glowS(0xb04cff));
+    glowRing.rotation.x = Math.PI / 2;
+    glowRing.position.set(x, y + height * 0.7, z);
+    this.root.add(glowRing);
+    b.level.root.add(this.root);
+  }
+  shatter(g: Game): void {
+    const y = g.col.groundAt(this.x, this.z, 1e4, 0.2).y;
+    g.fx.shatter(this.x, y + 2, this.z, 0xd090ff);
+    g.fx.shadowPoof(this.x, y + 2, this.z, 2.5);
+    g.sfx('shatter', this.x, y, this.z);
+    this.b.level.root.remove(this.root);
+  }
+}
+
+export interface RescueOpts {
+  warden: string;
+  look: DragonLook;
+  x: number;
+  z: number;
+  yaw: number;
+  element: Element;
+  lines: Line[];
+  /** Level id unlocked by this rescue. */
+  unlocks: string;
+  cage?: Cage;
+}
+
+/**
+ * The end of a realm: the cage breaks, the Warden speaks, Aster learns the
+ * element, the next realm unlocks, and everyone goes home to the Sanctum.
+ */
+export function rescueWarden(g: Game, o: RescueOpts): void {
+  const level = g.level;
+  if (!level) return;
+  o.cage?.shatter(g);
+  const y = g.col.groundAt(o.x, o.z, 1e4, 0.2).y;
+  let npc = level.npcs.find((n) => n.id === o.warden);
+  if (!npc) {
+    npc = new Npc(g, o.warden, o.look, o.x, y, o.z, o.yaw);
+    level.npcs.push(npc);
+  }
+  const lines: Line[] = [
+    ...o.lines,
+    {
+      who: o.warden, text: '', action: () => {
+        g.learnElement(o.element);
+        g.audio.play('unlock');
+        g.fx.motes(g.player.x, g.player.y + 1, g.player.z, 0xffffff, 40);
+        g.toast(`You learned ${o.element.charAt(0).toUpperCase() + o.element.slice(1)}! Press ${({ fire: 1, lightning: 2, ice: 3, earth: 4 } as const)[o.element]} to select it.`, 'good');
+      },
+    },
+  ];
+  // The empty line is only there to run the action; drop its text box.
+  lines[lines.length - 1]!.text = '...';
+  g.say(lines, () => {
+    g.save.levelsDone[level.def.id] = true;
+    if (o.unlocks && !g.save.unlocked.includes(o.unlocks)) g.save.unlocked.push(o.unlocks);
+    g.saveNow();
+    g.travel('sanctum');
+  });
+}

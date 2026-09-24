@@ -10,7 +10,7 @@ import type { Game } from '../game/game';
 import type { Hittable, Element } from '../game/types';
 import {
   Arena, BounceShroom, Collectible, CrumblePlatform, GemCluster, Gate, Hazard, MovingPlatform, Portal, PressurePlate,
-  Switch, Talker, Torch, Trigger, Updraft, Wardstone, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
+  Switch, Talker, Torch, Trigger, Updraft, Wardstone, Geyser, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
 } from '../entities/props';
 import type { GemKind } from '../entities/gems';
 import { DragonRig, defaultPose, type DragonLook, type DragonPose } from '../player/dragonRig';
@@ -524,6 +524,13 @@ export class Builder {
 
   mover(pts: [number, number, number][], w: number, d: number, speed: number, color = 0x9a8f7a, spin = 0, signal = '', pause = 0.6): MovingPlatform {
     return this.addProp(new MovingPlatform(this.game, pts.map(([x, y, z]) => new THREE.Vector3(x, y, z)), w, d, speed, color, spin, signal, pause));
+  }
+
+  /** A water jet that throws the dragon up; Ice turns it into a climbable pillar. */
+  geyser(x: number, z: number, r: number, h: number, permanent = false, signal = '', y?: number): Geyser {
+    const gz = this.addProp(new Geyser(this.game, x, y ?? this.y(x, z), z, r, h, permanent, signal));
+    this.level.hittables.push(gz);
+    return gz;
   }
 
   crumble(x: number, top: number, z: number, w: number, d: number): CrumblePlatform {

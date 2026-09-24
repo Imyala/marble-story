@@ -1625,7 +1625,7 @@ export class Player {
     const g = this.game;
     this.safeT -= dt;
     if (this.safeT > 0 || !b.grounded || this.inWater) return;
-    if (b.ground && b.ground.dynamic) return;
+    if (b.ground && (b.ground.dynamic || b.ground.unsafe)) return;
     this.safeT = 0.3;
     // Only remember spots with solid footing all around.
     const r = 0.9;

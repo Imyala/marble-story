@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { LevelDef, Builder } from '../world/level';
 import { ambient, paint, jitter, Cage } from './common';
-import { EMBERHOLD, STORMCREST, FROSTFANG, STONEHIDE, NYXA } from '../game/story';
+import { EMBERHOLD, STORMCREST, FROSTFANG, STONEHIDE, NYXA_FREED } from '../game/story';
 import type { Game } from '../game/game';
 import { Water } from '../render/water';
 import { DragonRig, defaultPose, type DragonLook } from '../player/dragonRig';
@@ -186,7 +186,7 @@ export const sanctum: LevelDef = {
     if (g.save.levelsDone.falls) b.npc('stormcrest', STORMCREST, 12, 22, -Math.PI * 0.8, 'Talk to Stormcrest', () => talkWarden(g, 'stormcrest'));
     if (g.save.levelsDone.frostworks) b.npc('frostfang', FROSTFANG, -12, 22, Math.PI * 0.8, 'Talk to Frostfang', () => talkWarden(g, 'frostfang'));
     if (g.save.levelsDone.plains) b.npc('stonehide', STONEHIDE, -14, 6, Math.PI * 0.5, 'Talk to Stonehide', () => talkWarden(g, 'stonehide'));
-    if (g.save.levelsDone.keep) b.npc('nyxa', NYXA, 14, 6, -Math.PI * 0.5, 'Talk to Nyxa', () => talkWarden(g, 'nyxa'));
+    if (g.save.levelsDone.keep) b.npc('nyxa', NYXA_FREED, 14, 6, -Math.PI * 0.5, 'Talk to Nyxa', () => talkWarden(g, 'nyxa'));
   },
 
   onEnter(g, fresh) {

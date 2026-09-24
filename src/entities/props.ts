@@ -606,6 +606,7 @@ export class CrumblePlatform implements Prop {
 
   constructor(private game: Game, private x: number, private y: number, private z: number, w: number, d: number) {
     this.solid = makeBox(x, z, w / 2, d / 2, y - 0.6, y);
+    this.solid.unsafe = true;
     game.col.add(this.solid);
     this.mesh = new THREE.Mesh(new THREE.BoxGeometry(w, 0.6, d), matUnique(0x9a8a6a, { rough: 1, flat: true }));
     this.mesh.position.set(x, y - 0.3, z);
@@ -1025,6 +1026,9 @@ export class Arena implements Prop {
     if (this.state !== 'active') return;
     for (const e of this.alive) if (e.alive) {
       e.alive = false;
+      e.releaseToken();
+      e.state = 'dead';
+      e.deadT = 1;
       e.dispose();
     }
     this.alive = [];
@@ -1152,6 +1156,7 @@ export class Geyser implements Prop, Hittable {
     this.solid = makeCyl(x, z, r * 1.05, y - 0.5, y + h);
     this.solid.enabled = false;
     this.solid.surface = 'ice';
+    this.solid.unsafe = !permanent;
     game.col.add(this.solid);
   }
 

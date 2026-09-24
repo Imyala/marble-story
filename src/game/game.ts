@@ -336,7 +336,8 @@ export class Game {
   maxDt = 0.05;
 
   frame(rawDt: number): void {
-    const dt = Math.min(rawDt, this.maxDt);
+    // The first animation frame's stamp can precede the startup clock: never step backwards.
+    const dt = Math.max(0, Math.min(rawDt, this.maxDt));
     this.realTime += dt;
     this.input.update(dt);
 

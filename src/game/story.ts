@@ -53,6 +53,9 @@ export const NYXA: DragonLook = {
   scale: 1.35, hornStyle: 'blade', tailStyle: 'scythe', slender: 0.95, glowEyes: true,
 };
 
+/** Nyxa once the Gloom has let go of her. */
+export const NYXA_FREED: DragonLook = { ...NYXA, eye: 0x8ad8ff, glowEyes: false };
+
 export interface LevelInfo {
   name: string;
   blurb: string;

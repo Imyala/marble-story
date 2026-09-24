@@ -53,6 +53,8 @@ export class Solid {
   wallOnly = false;
   /** Only the camera collides with it (tree canopies it should not sit inside). */
   cameraOnly = false;
+  /** Temporary footing (crumbling stone, melting ice): never a respawn point. */
+  unsafe = false;
   tag = '';
   /** Anything the owner wants to hang off the solid (breakables, platforms). */
   owner: unknown = null;

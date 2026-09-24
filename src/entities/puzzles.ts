@@ -465,6 +465,7 @@ export class IceFloes implements Prop {
       const solid = makeCyl(x, z, 1.5, waterY - 1, waterY + 0.15);
       solid.enabled = false;
       solid.surface = 'ice';
+      solid.unsafe = true;
       game.col.add(solid);
       const f: Floe = { x, z, solid, mesh, mat: m, t: 0 };
       this.floes.push(f);

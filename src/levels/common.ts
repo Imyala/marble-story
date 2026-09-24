@@ -121,8 +121,18 @@ export function bossFight(b: Builder, o: BossFightOpts): void {
   if (g.save.levelsDone[lvl]) return;
   const barrier = new Barrier(g, o.x, b.y(o.x, o.z), o.z, o.r);
   b.level.props.push(barrier);
+  let defeated = false;
+  // The outro waits two seconds of game time (not wall time, which slow frames would outrun).
+  let outroT = -1;
+  b.level.props.push({
+    update: (dt: number) => {
+      if (outroT < 0) return;
+      outroT -= dt;
+      if (outroT < 0 && g.level?.def.id === lvl) o.onDefeated(g);
+    },
+  });
   const start = () => {
-    if (g.boss && g.boss.alive) return;
+    if (defeated || (g.boss && g.boss.alive)) return;
     const boss = o.spawn(g);
     g.addBoss(boss);
     barrier.set(true);
@@ -131,11 +141,10 @@ export function bossFight(b: Builder, o: BossFightOpts): void {
       g.audio.setMusic(THEMES.boss!);
     };
     boss.onDefeated = () => {
+      defeated = true;
       barrier.set(false);
       g.audio.setMusic(null);
-      setTimeout(() => {
-        if (g.level?.def.id === lvl) o.onDefeated(g);
-      }, 2000);
+      outroT = 2;
     };
     const key = `story:${lvl}:${o.id}`;
     if (g.save.found[key]) begin();
@@ -146,7 +155,7 @@ export function bossFight(b: Builder, o: BossFightOpts): void {
   };
   // Re-arms after a death: the trigger fires again whenever no boss is alive.
   b.trigger(o.triggerX, o.triggerZ, o.triggerR, () => {
-    if (!g.boss || !g.boss.alive) start();
+    if (!defeated && (!g.boss || !g.boss.alive)) start();
   }, false);
   // Dying mid-fight despawns the boss; drop the barrier so the player can return.
   b.level.on('boss-reset', () => barrier.set(false));

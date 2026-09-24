@@ -13,8 +13,12 @@ export default async function (h) {
   await h.wait(5000);
   let s = await h.state();
   h.check('player can die', s.state === 'dead' || s.state === 'transition' || s.hp === 100, JSON.stringify(s));
-  await h.wait(5000);
-  s = await h.state();
+  // Check the moment play resumes (the grunt that did it lives right here and will be back).
+  for (let i = 0; i < 200; i++) {
+    s = await h.state();
+    if (s.state === 'play' && s.hp > 1) break;
+    await h.wait(50);
+  }
   h.check('respawns with full health', s.state === 'play' && s.hp === 100, JSON.stringify(s));
   // Wardstone: activates, heals, opens its menu with F.
   await h.eval(() => { const g = window.wyrm; const w = g.level.wardstones.get('ruins'); g.player.place(w.x, w.y + 0.1, w.z - 2.2, 0); g.player.hp = 40; });

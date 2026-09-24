@@ -1,9 +1,11 @@
 import type { Game } from '../game/game';
 import {
-  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, type UpgradeTree, type Difficulty,
+  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, type UpgradeTree, type Difficulty,
 } from '../game/progress';
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
+import { LETTERS, letterKey } from '../game/letters';
+import { HERO_LOOK } from '../player/dragonRig';
 import { ELEMENTS } from '../game/types';
 import { TRIALS, type TrialGround } from '../levels/trials';
 
@@ -250,10 +252,20 @@ export class Menus {
     const m = this.div('menu dim');
     const p = this.div('panel');
     p.style.minWidth = '360px';
-    const lid = g.level?.def.id ?? '';
-    const secrets = Object.keys(g.save.found).filter((k) => k.startsWith(`${lid}:`) && /:(heart|mana|relic)\d+$/.test(k)).length;
-    const total = LEVEL_INFO[lid]?.collectibles ?? 0;
-    p.innerHTML = `<h2>Paused</h2><div class="sub">${g.level?.def.name ?? ''}${total ? ` &middot; secrets found ${secrets}/${total}` : ''}</div>`;
+    // Count this realm's secrets from what it actually placed.
+    const count = (kinds: string[]) => {
+      const list = (g.level?.secrets ?? []).filter((s) => kinds.includes(s.kind));
+      return { have: list.filter((s) => g.save.found[s.id]).length, total: list.length };
+    };
+    const sec = count(['heart', 'mana', 'relic']);
+    const eggs = count(['egg']);
+    const letters = count(['letter']);
+    const bits = [
+      sec.total ? `secrets ${sec.have}/${sec.total}` : '',
+      eggs.total ? `eggs ${eggs.have}/${eggs.total}` : '',
+      letters.total ? `letters ${letters.have}/${letters.total}` : '',
+    ].filter(Boolean);
+    p.innerHTML = `<h2>Paused</h2><div class="sub">${g.level?.def.name ?? ''}${bits.length ? ` &middot; ${bits.join(' &middot; ')}` : ''}</div>`;
     const st = g.save.stats;
     const mins = Math.floor(st.playTime / 60);
     p.append(this.div('stats', `<span>Spirit gems</span><b>${g.save.gems}</b><span>Enemies defeated</span><b>${st.kills}</b>
@@ -264,6 +276,7 @@ export class Menus {
       this.btn('Abilities', () => this.showUpgrades()),
       this.btn('Moves', () => this.showMoves()),
       this.btn('Journal', () => this.showJournal()),
+      this.btn('Scales', () => this.showSkins()),
       this.btn('Options', () => this.showOptions()),
       this.btn('Controls', () => this.showControls()),
     );
@@ -470,19 +483,81 @@ export class Menus {
     this.push(m, () => this.pop());
   }
 
+  private journalTab: 'relics' | 'letters' | 'tips' = 'relics';
+
   private showJournal(): void {
     const g = this.game;
     const m = this.div('menu dim');
     const p = this.div('panel lore');
-    p.innerHTML = '<h2>Journal</h2><div class="sub">Dragon Relics and field notes.</div>';
-    for (const [t, d] of TIPS) p.append(this.div('entry', `<h4>${t}</h4><p>${d}</p>`));
-    for (const [id, r] of Object.entries(RELICS)) {
-      const have = !!g.save.found[`relic:${id}`];
-      p.append(this.div(`entry${have ? '' : ' missing'}`, have ? `<h4>${r.title}</h4><p>${r.text}</p>` : `<h4>Undiscovered relic</h4><p style="font-style:normal;color:#a99cc9">Somewhere in ${LEVEL_INFO[r.level]?.name ?? 'the realms'}.</p>`));
+    p.innerHTML = '<h2>Journal</h2><div class="sub">Dragon Relics, letters and field notes.</div>';
+    const tabs = this.div('tabs');
+    const tab = (id: 'relics' | 'letters' | 'tips', label: string) => {
+      const b = this.btn(label, () => {
+        this.journalTab = id;
+        this.pop();
+        this.showJournal();
+      });
+      if (this.journalTab === id) b.classList.add('on');
+      tabs.append(b);
+    };
+    tab('relics', 'Relics');
+    tab('letters', 'Letters');
+    tab('tips', 'Field notes');
+    p.append(tabs);
+    if (this.journalTab === 'tips') {
+      for (const [t, d] of TIPS) p.append(this.div('entry', `<h4>${t}</h4><p>${d}</p>`));
+    } else if (this.journalTab === 'relics') {
+      for (const [id, r] of Object.entries(RELICS)) {
+        const have = !!g.save.found[`relic:${id}`];
+        p.append(this.div(`entry${have ? '' : ' missing'}`, have ? `<h4>${r.title}</h4><p>${r.text}</p>` : `<h4>Undiscovered relic</h4><p style="font-style:normal;color:#a99cc9">Somewhere in ${LEVEL_INFO[r.level]?.name ?? 'the realms'}.</p>`));
+      }
+    } else {
+      let any = false;
+      for (const [lvl, list] of Object.entries(LETTERS)) {
+        const read = list.filter((l) => g.save.found[letterKey(lvl, l.id)]);
+        if (read.length === 0) continue;
+        any = true;
+        p.append(this.div('entry', `<h4 style="color:var(--gold)">${LEVEL_INFO[lvl]?.name ?? lvl}</h4>`));
+        for (const l of read) p.append(this.div('entry letter', `<h4>${l.title}</h4><p>${l.text}</p><div class="from">&mdash; ${l.from}</div>`));
+      }
+      if (!any) p.append(this.div('entry missing', '<h4>No letters yet</h4><p style="font-style:normal;color:#a99cc9">Letters, diaries and orders lie scattered across the realms. Keep an eye out for a glint of red wax.</p>'));
     }
     const back = this.btn('Back', () => this.pop());
     back.style.marginTop = '16px';
     p.append(back);
+    m.append(p);
+    this.push(m, () => this.pop());
+  }
+
+  private showSkins(): void {
+    const g = this.game;
+    const m = this.div('menu dim');
+    const p = this.div('panel');
+    p.style.minWidth = '420px';
+    const n = eggsFound(g.save);
+    p.innerHTML = `<h2>Scales</h2><div class="sub">Return lost dragon eggs to earn new scales. Eggs returned: ${n}</div>`;
+    const grid = this.div('skin-grid');
+    const cur = g.save.skin ?? 'violet';
+    const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
+    for (const k of SKINS) {
+      const open = n >= k.eggs;
+      const look = { ...HERO_LOOK, ...k.look };
+      const card = this.div(`skin-card${open ? '' : ' locked'}${cur === k.id ? ' on' : ''}`,
+        `<div class="sw"><span style="background:${hex(look.body)}"></span><span style="background:${hex(look.belly)}"></span><span style="background:${hex(look.membrane)}"></span></div><b>${open ? k.name : '???'}</b><small>${open ? (cur === k.id ? 'Wearing' : 'Wear') : `${k.eggs} eggs`}</small>`);
+      if (open) {
+        card.addEventListener('click', () => {
+          g.save.skin = k.id;
+          writeSave(g.save);
+          g.applySkin();
+          g.audio.play('uiConfirm');
+          this.pop();
+          this.showSkins();
+        });
+      }
+      grid.append(card);
+    }
+    p.append(grid);
+    p.append(this.btn('Back', () => this.pop()));
     m.append(p);
     this.push(m, () => this.pop());
   }

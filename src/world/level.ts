@@ -13,6 +13,7 @@ import {
   Switch, Talker, Torch, Trigger, Updraft, Wardstone, Geyser, ClimbWall, GlideCourse, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
 } from '../entities/props';
 import type { GemKind } from '../entities/gems';
+import { Breakable, BreakableSet, Chest, type BreakKind } from '../entities/breakables';
 import {
   BoltTurret, Boulder, Conduit, Drawbridge, ElementLock, IceFloes, PuzzleHint, ReflectSwitch, Rope, SnapGate, SpinBlade, WeightPlate,
 } from '../entities/puzzles';
@@ -59,6 +60,8 @@ export class Level {
   readonly wardstones = new Map<string, Wardstone>();
   readonly npcs: Npc[] = [];
   readonly climbWalls: ClimbWall[] = [];
+  /** Every collectible the level places, found or not: the pause screen counts from this. */
+  readonly secrets: { kind: CollectKind; id: string }[] = [];
   readonly conduits: Conduit[] = [];
   readonly reflectTargets: ReflectSwitch[] = [];
   readonly boulders: Boulder[] = [];
@@ -211,10 +214,13 @@ export class Builder {
   readonly level: Level;
   readonly game: Game;
 
+  readonly breakableSet = new BreakableSet();
+
   constructor(game: Game, level: Level) {
     this.game = game;
     this.level = level;
     this.decor = new DecorBatch(level.def.id.length * 97 + 13);
+    level.props.push(this.breakableSet);
   }
 
   get col(): CollisionWorld {
@@ -521,6 +527,7 @@ export class Builder {
 
   collectible(id: string, kind: CollectKind, x: number, z: number, y?: number, relicId = ''): void {
     const fullId = `${this.level.def.id}:${id}`;
+    this.level.secrets.push({ kind, id: fullId });
     if (this.game.save.found[fullId]) return;
     this.addProp(new Collectible(this.game, fullId, kind, x, y ?? this.y(x, z), z, relicId));
   }
@@ -715,7 +722,57 @@ export class Builder {
     this.level.root.add(m);
   }
 
+  /** A lore letter from src/levels/letters/<realm>.ts, found at (x, z). */
+  letter(id: string, x: number, z: number, y?: number): void {
+    this.collectible(`letter-${id}`, 'letter', x, z, y, id);
+  }
+
+  /** A lost dragon egg. Each realm hides a fixed number (see SKINS in progress.ts). */
+  egg(id: string, x: number, z: number, y?: number): void {
+    this.collectible(`egg-${id}`, 'egg', x, z, y);
+  }
+
+  // --- breakables -------------------------------------------------------------------
+
+  /**
+   * A smashable crate, barrel, urn, basket, powder keg or Gloom pod. They
+   * stack: one placed where another stands sits on top of it.
+   */
+  breakable(x: number, z: number, kind: BreakKind, o: { yaw?: number; scale?: number; y?: number; loot?: Partial<Record<GemKind, number>> } = {}): Breakable {
+    const bk = new Breakable(this.game, kind, x, o.y ?? this.y(x, z), z, o.yaw ?? jit(x * 3.1 + z) * Math.PI, o.scale ?? 0.92 + (jit(x + z * 7) + 1) * 0.08, o.loot ?? null);
+    this.breakableSet.add(bk);
+    this.level.hittables.push(bk);
+    return bk;
+  }
+
+  breakables(kind: BreakKind, pts: [number, number][], o: { scale?: number; y?: number } = {}): void {
+    for (const [x, z] of pts) this.breakable(x, z, kind, o);
+  }
+
+  /** A loose cluster of n breakables around (x, z), kinds picked in turn. */
+  pile(x: number, z: number, r: number, n: number, kinds: BreakKind[]): void {
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.39996 + jit(x + i) * 0.5;
+      const d = r * Math.sqrt((i + 0.5) / n);
+      this.breakable(x + Math.sin(a) * d, z + Math.cos(a) * d, kinds[i % kinds.length]!);
+    }
+  }
+
+  /** A treasure chest that opens once per save. */
+  chest(id: string, x: number, z: number, yaw: number, loot: Partial<Record<GemKind, number>>, y?: number): Chest {
+    const c = this.addProp(new Chest(this.game, `${this.level.def.id}:chest:${id}`, x, y ?? this.y(x, z), z, yaw, loot));
+    this.level.hittables.push(c);
+    return c;
+  }
+
   finish(): void {
     this.decor.build(this.level.root);
+    this.breakableSet.build(this.level.root);
   }
+}
+
+/** Deterministic -1..1 noise for placement variety. */
+function jit(v: number): number {
+  const s = Math.sin(v * 12.9898 + 78.233) * 43758.5453;
+  return (s - Math.floor(s)) * 2 - 1;
 }

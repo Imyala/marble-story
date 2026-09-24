@@ -485,6 +485,13 @@ export class Hud {
     this.flickShown = 0;
   }
 
+  letter(title: string, from: string, text: string): void {
+    this.relicBox?.remove();
+    this.relicBox = el('div', 'relic-card letter', `<div class="sub">Letter found</div><h2>${title}</h2><p>${text}</p><div class="from">&mdash; ${from}</div><div class="hint">Kept in the Journal.</div>`);
+    this.root.appendChild(this.relicBox);
+    this.relicT = 11;
+  }
+
   relic(title: string, text: string): void {
     this.relicBox?.remove();
     this.relicBox = el('div', 'relic-card', `<div class="sub">Dragon Relic found</div><h2>${title}</h2><p>${text}</p><div class="hint">Read it again any time in the Journal.</div>`);

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Body } from '../world/collision';
-import { DragonRig, defaultPose, HERO_LOOK } from './dragonRig';
+import { DragonRig, defaultPose, HERO_LOOK, type DragonLook } from './dragonRig';
 import { MOVES, SLAM_HIT, FINISHERS, DELAY_FOLLOWUPS, type HitWindow, type MoveDef } from './moves';
 import { BreathController, BREATH_COST, BURST_COST } from './breath';
 import type { Game } from '../game/game';
@@ -54,7 +54,7 @@ markerGeo.rotateX(-Math.PI / 2);
 export class Player {
   readonly game: Game;
   readonly body = new Body(0.48, 1.25);
-  readonly rig = new DragonRig(HERO_LOOK);
+  rig = new DragonRig(HERO_LOOK);
   readonly pose = defaultPose();
   readonly breath: BreathController;
   yaw = 0;
@@ -116,6 +116,8 @@ export class Player {
   private skidT = 0;
   private landLag = 0;
   private lastYaw = 0;
+  /** The facing the model shows: eases after the logical facing so nothing visibly snaps. */
+  private visYaw = 0;
   private pushT = 0;
   private marker: THREE.Mesh;
   private markerMat: THREE.MeshBasicMaterial;
@@ -191,6 +193,7 @@ export class Player {
     this.body.vx = this.body.vy = this.body.vz = 0;
     this.body.grounded = false;
     this.yaw = yaw;
+    this.visYaw = yaw;
     this.lastSafe.set(x, y, z);
     this.syncRig(0);
   }
@@ -456,6 +459,45 @@ export class Player {
     return m;
   }
 
+  /**
+   * Ground running follows the dragon's facing: it pivots fast from a
+   * standstill and carves wider arcs the faster it goes, so a change of
+   * direction curves instead of snapping. Sharp reversals skid (see updateMove).
+   */
+  private run(dt: number, speed: number): number {
+    const b = this.body;
+    const m = this.wish(this.w);
+    const hs = Math.hypot(b.vx, b.vz);
+    const k = clamp(hs / RUN, 0, 1);
+    let align = 1;
+    if (m > 0.1) {
+      const want = yawOf(this.w.x, this.w.z);
+      const diff = angleDiff(this.yaw, want);
+      // Eased toward the stick, but never faster than the speed allows.
+      const maxStep = (20 - 12 * k) * dt;
+      const step = Math.min(Math.abs(diff), maxStep, Math.abs(diff) * (1 - Math.exp(-14 * dt)) + 1.2 * dt);
+      this.yaw += Math.sign(diff) * step;
+      align = Math.cos(angleDiff(this.yaw, want));
+    }
+    // Speed carries through a turn and eases off only on tight ones.
+    const target = m > 0.05 ? speed * m * clamp(0.55 + 0.45 * align, 0.25, 1) : 0;
+    const tx = Math.sin(this.yaw) * target;
+    const tz = Math.cos(this.yaw) * target;
+    const dvx = tx - b.vx;
+    const dvz = tz - b.vz;
+    const dl = Math.hypot(dvx, dvz);
+    // Softer take-off from a standstill, firm once running.
+    const a = (m > 0.05 ? ACCEL * (0.55 + 0.45 * k) : DECEL) * dt;
+    if (dl <= a) {
+      b.vx = tx;
+      b.vz = tz;
+    } else {
+      b.vx += (dvx / dl) * a;
+      b.vz += (dvz / dl) * a;
+    }
+    return m;
+  }
+
   private updateMove(dt: number): void {
     const g = this.game;
     const inp = g.input;
@@ -476,7 +518,8 @@ export class Player {
         this.friction(dt, 12);
         if (m > 0.1) this.yaw = approachAngle(this.yaw, yawOf(this.w.x, this.w.z), TURN * 1.4 * dt);
         if (this.stateT % 0.05 < dt) g.fx.dust(b.x, b.y, b.z, 1);
-      } else this.steer(dt, RUN * speedMul * (this.landLag > 0 ? 0.35 : 1) * (this.lock ? 0.85 : 1), ACCEL, TURN);
+      } else if (this.lock) this.steer(dt, RUN * speedMul * (this.landLag > 0 ? 0.35 : 1) * 0.85, ACCEL, TURN);
+      else this.run(dt, RUN * speedMul * (this.landLag > 0 ? 0.35 : 1));
       // Locked on: keep facing the target so side input circles it.
       if (this.lock && this.lock.alive && this.skidT <= 0 && Math.hypot(this.lock.x - b.x, this.lock.z - b.z) < 16) {
         this.yaw = approachAngle(this.yaw, yawOf(this.lock.x - b.x, this.lock.z - b.z), TURN * dt);
@@ -1033,8 +1076,9 @@ export class Player {
     if (def.air) {
       if (this.airBudget > 0) b.vy = Math.max(b.vy * 0.3, 1.2);
     } else {
-      b.vx *= 0.3;
-      b.vz *= 0.3;
+      // Keep a little of the run so a swing flows out of movement.
+      b.vx *= 0.5;
+      b.vz *= 0.5;
     }
     if (def.id === 'counter') {
       g.slowmo(0.4, 0.35);
@@ -1654,7 +1698,10 @@ export class Player {
     const b = this.body;
     const r = this.rig.root;
     r.position.set(b.x, b.y, b.z);
-    r.rotation.y = this.yaw;
+    // Fast enough to read as instant for small corrections, smooth for big ones.
+    const vd = angleDiff(this.visYaw, this.yaw);
+    this.visYaw += Math.abs(vd) > 2.8 ? vd * (1 - Math.exp(-30 * dt)) : vd * (1 - Math.exp(-22 * dt));
+    r.rotation.y = this.visYaw;
     r.visible = !this.hidden;
     const P = this.pose;
     const hs = Math.hypot(b.vx, b.vz);
@@ -1669,8 +1716,8 @@ export class Player {
     P.hurt = this.hurtT / 0.4;
     P.dead = this.state === 'dead';
     P.hover = this.state === 'breath' && !b.grounded;
-    const turn = dt > 0 ? angleDiff(this.lastYaw, this.yaw) / dt : 0;
-    this.lastYaw = this.yaw;
+    const turn = dt > 0 ? angleDiff(this.lastYaw, this.visYaw) / dt : 0;
+    this.lastYaw = this.visYaw;
     P.turn = clamp(turn, -6, 6);
     P.talk = this.state === 'locked' && this.game.dialogueSpeaker === 'aster';
     P.climb = this.state === 'climb' ? this.climbPhase : -1;
@@ -1725,6 +1772,18 @@ export class Player {
       this.blob.visible = false;
       this.marker.visible = false;
     }
+  }
+
+  /** Rebuilds the model with other scales (skins unlocked by eggs). */
+  setLook(overrides: Partial<DragonLook>): void {
+    const old = this.rig;
+    this.game.scene.remove(old.root);
+    this.rig = new DragonRig({ ...HERO_LOOK, ...overrides });
+    this.rig.root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh) o.castShadow = true;
+    });
+    this.game.scene.add(this.rig.root);
+    this.syncRig(0);
   }
 
   dispose(): void {

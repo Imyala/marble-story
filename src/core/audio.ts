@@ -14,7 +14,7 @@ export type Sfx =
   | 'enemyAlert' | 'enemyDie' | 'enemyHurt' | 'enemyAttack' | 'shieldBlock' | 'bossRoar'
   | 'hurt' | 'death' | 'ui' | 'uiConfirm' | 'uiBack' | 'checkpoint' | 'fury' | 'dragonTimeOn'
   | 'dragonTimeOff' | 'unlock' | 'door' | 'torch' | 'switch' | 'splash' | 'charge' | 'pound'
-  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue';
+  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue' | 'woodBreak' | 'potBreak' | 'chest' | 'page' | 'egg';
 
 export type LoopId = 'breath' | 'glide' | 'charge';
 
@@ -225,6 +225,28 @@ export class Audio {
         break;
       case 'relic':
         [0, 3, 7, 10, 14].forEach((s, i) => this.tone(semis(12 + s), 0.9, 'sine', 0.18, { delay: i * 0.1, attack: 0.02 }));
+        break;
+      case 'woodBreak':
+        // A dry crack, then splinters.
+        this.noise(0.09, 0.5 * v, { type: 'bandpass', freq: 1400 * p, q: 0.9 });
+        this.tone(150 * p, 0.12, 'square', 0.14 * v, { slide: 60, filter: 900 });
+        for (let i = 0; i < 3; i++) this.noise(0.05, 0.18 * v, { type: 'bandpass', freq: 2200 + Math.random() * 1600, q: 2, delay: 0.05 + i * 0.04 });
+        break;
+      case 'potBreak':
+        this.noise(0.12, 0.4 * v, { type: 'highpass', freq: 1800 * p });
+        for (let i = 0; i < 3; i++) this.tone(900 + Math.random() * 900, 0.1, 'triangle', 0.08 * v, { delay: i * 0.035 });
+        break;
+      case 'chest':
+        this.tone(220 * p, 0.25, 'triangle', 0.25 * v, { slide: 330 });
+        for (let i = 0; i < 5; i++) this.tone(880 * Math.pow(1.19, i), 0.3, 'sine', 0.12 * v, { delay: 0.15 + i * 0.07 });
+        break;
+      case 'page':
+        this.noise(0.35, 0.18 * v, { type: 'bandpass', freq: 3200, freqEnd: 1800, q: 0.8, attack: 0.05 });
+        this.tone(660, 0.5, 'sine', 0.08 * v, { delay: 0.1, slide: 990 });
+        break;
+      case 'egg':
+        for (let i = 0; i < 4; i++) this.tone(523 * Math.pow(1.26, i), 0.35, 'sine', 0.16 * v, { delay: i * 0.09 });
+        this.tone(1046, 0.8, 'triangle', 0.08 * v, { delay: 0.36 });
         break;
       case 'crystalBreak':
         this.noise(0.3, 0.35 * v, { type: 'highpass', freq: 3000 });

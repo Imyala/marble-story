@@ -200,6 +200,7 @@ export class Enemy implements Hittable {
   takeHit(hit: Hit): HitResult {
     if (!this.alive || this.state === 'spawn') return 'none';
     const g = this.game;
+    if (!this.aggro) this.alertAllies();
     this.aggro = true;
 
     // Frontal guard.
@@ -496,6 +497,19 @@ export class Enemy implements Hittable {
     /* bosses */
   }
 
+  /** Seconds until a nearby ally's shout brings this one into the fight. */
+  alertT = 0;
+
+  /** A fight never stays a private matter: allies nearby join in, a beat apart. */
+  alertAllies(): void {
+    const b = this.body;
+    for (const e of this.game.enemies) {
+      if (e === this || !e.alive || e.aggro || e.alertT > 0 || e.scripted || e.def.speed <= 0) continue;
+      if (Math.hypot(e.x - b.x, e.z - b.z) > 13 || Math.abs(e.y - b.y) > 6) continue;
+      e.alertT = 0.25 + rng.next() * 0.6;
+    }
+  }
+
   private ai(dt: number): void {
     const g = this.game;
     const p = g.player;
@@ -505,8 +519,17 @@ export class Enemy implements Hittable {
     const b = this.body;
 
     if (!this.aggro) {
-      if (d < def.aggroRange && p.alive && Math.abs(p.body.y - b.y) < 8) {
+      // Notice the dragon a little before it is on top of us, or when an ally calls.
+      let alerted = false;
+      if (this.alertT > 0) {
+        this.alertT -= dt;
+        alerted = this.alertT <= 0;
+        this.yaw = approachAngle(this.yaw, dirYaw, def.turnRate * dt);
+      }
+      if ((alerted || d < def.aggroRange * 1.35) && p.alive && !p.hidden && Math.abs(p.body.y - b.y) < 8) {
         this.aggro = true;
+        this.alertT = 0;
+        this.alertAllies();
         g.sfx('enemyAlert', b.x, b.y, b.z);
         g.fx.emit(b.x, b.y + def.height + 0.5, b.z, { count: 6, speed: 2, life: [0.3, 0.5], size: [0.2, 0.3], color: 0xff5050, bright: 2 });
         this.setState('chase');
@@ -586,7 +609,8 @@ export class Enemy implements Hittable {
     } else {
       // Waiting for a turn: spread around the player, favoring the flanks
       // and back, instead of queueing up in front.
-      const ring = 3.6 + (this.def.radius > 1 ? 1.5 : 0);
+      // The waiting ring breathes in and out so a crowd keeps shifting.
+      const ring = 3.6 + (this.def.radius > 1 ? 1.5 : 0) + Math.sin(g.time * 0.9 + this.homeX * 1.7) * 0.9;
       this.slotT -= dt;
       if (this.slotT <= 0) {
         this.slotT = 4 + rng.next() * 4;
@@ -603,7 +627,7 @@ export class Enemy implements Hittable {
         this.moveDir(yawOf(sx - b.x, sz - b.z), def.speed * (d > ring + 3 ? 1 : 0.75), dt, false);
         this.setState(d > ring + 3 ? 'chase' : 'strafe');
       } else {
-        this.strafe(dt, dirYaw, def.speed * 0.25);
+        this.strafe(dt, dirYaw, def.speed * 0.5);
         this.setState('strafe');
       }
       // Guards keep their shields toward the dragon.
@@ -625,15 +649,18 @@ export class Enemy implements Hittable {
     this.wander -= dt;
     const b = this.body;
     if (this.wander <= 0) {
-      this.wander = 2 + rng.next() * 3;
-      this.wanderX = this.homeX + rng.signed() * 4;
-      this.wanderZ = this.homeZ + rng.signed() * 4;
+      this.wander = 2.5 + rng.next() * 3.5;
+      this.wanderX = this.homeX + rng.signed() * 5.5;
+      this.wanderZ = this.homeZ + rng.signed() * 5.5;
     }
     const dx = this.wanderX - b.x;
     const dz = this.wanderZ - b.z;
     if (Math.hypot(dx, dz) > 0.6) {
-      this.moveDir(yawOf(dx, dz), this.def.speed * 0.3, dt);
+      this.moveDir(yawOf(dx, dz), this.def.speed * 0.42, dt);
       this.setState('idle');
+    } else {
+      // Arrived: look around until it is time to move on.
+      this.yaw += Math.sin(this.game.time * 0.9 + this.homeX) * dt * 0.8;
     }
   }
 

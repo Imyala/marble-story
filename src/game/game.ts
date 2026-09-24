@@ -14,8 +14,9 @@ import { REACTION_INFO, type Reaction } from '../combat/status';
 import { makeHit, type DamageType, type Hit, type Hittable, type Element } from './types';
 import {
   DIFFICULTY, loadOptions, loadSave, newSave, writeOptions, writeSave, maxHp, maxMana, SHARDS_PER_UPGRADE, learnElement,
-  type Options, type SaveData, type Difficulty,
+  eggsFound, SKINS, skinUnlocked, type Options, type SaveData, type Difficulty,
 } from './progress';
+import { findLetter, letterKey } from './letters';
 import { Level, Builder, type LevelDef } from '../world/level';
 import type { Wardstone, Collectible, Arena } from '../entities/props';
 import { LEVELS } from '../levels';
@@ -240,6 +241,7 @@ export class Game {
     }
     this.clearLevel();
     this.hud.clearFlick();
+    this.applySkin();
     const level = new Level(def);
     this.level = level;
     this.scene.add(level.root);
@@ -921,6 +923,16 @@ export class Game {
     this.menus.showWardstone(w);
   }
 
+  private wornSkin = 'violet';
+
+  /** Puts Aster in the chosen scales, if they have been earned. */
+  applySkin(): void {
+    const want = this.save.skin && skinUnlocked(this.save, this.save.skin) ? this.save.skin : 'violet';
+    if (want === this.wornSkin) return;
+    this.wornSkin = want;
+    this.player.setLook(SKINS.find((k) => k.id === want)?.look ?? {});
+  }
+
   collect(c: Collectible): void {
     const s = this.save;
     s.found[c.id] = true;
@@ -943,13 +955,31 @@ export class Game {
         this.audio.play('levelUp');
         p.mana = maxMana(s);
       } else this.toast(`Spirit Shard (${k}/${SHARDS_PER_UPGRADE})`, 'good');
+    } else if (c.kind === 'letter') {
+      this.sfx('page');
+      const lvl = this.level!.def.id;
+      s.found[letterKey(lvl, c.relicId)] = true;
+      const l = findLetter(lvl, c.relicId);
+      if (l) this.hud.letter(l.title, l.from, l.text);
+    } else if (c.kind === 'egg') {
+      this.sfx('egg');
+      const n = eggsFound(s);
+      const skin = SKINS.find((k) => k.eggs === n && k.eggs > 0);
+      if (skin) {
+        this.audio.play('levelUp');
+        this.toast(`Lost Dragon Egg! (${n} returned) New scales unlocked: ${skin.name}. Wear them from the pause menu.`, 'good');
+      } else {
+        const next = SKINS.find((k) => k.eggs > n);
+        this.toast(`Lost Dragon Egg! (${n} returned${next ? `, ${next.eggs - n} more for new scales` : ''})`, 'good');
+      }
     } else {
       this.sfx('relic');
       s.found[`relic:${c.relicId}`] = true;
       const r = RELICS[c.relicId];
       if (r) this.hud.relic(r.title, r.text);
     }
-    this.fx.motes(c.x, c.y + 1, c.z, c.kind === 'heart' ? 0xff6a7a : c.kind === 'mana' ? 0x6af09a : 0xfff0b0, 30);
+    const mote = c.kind === 'heart' ? 0xff6a7a : c.kind === 'mana' ? 0x6af09a : c.kind === 'egg' ? 0xd8b0ff : c.kind === 'letter' ? 0xffe0c0 : 0xfff0b0;
+    this.fx.motes(c.x, c.y + 1, c.z, mote, 30);
     writeSave(s);
   }
 

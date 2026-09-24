@@ -108,8 +108,14 @@ export const fen: LevelDef = {
     b.crystal(3, 13, 'green', 3);
     b.gemLine([[0, 8], [0, 16], [3, 24]]);
     b.collectible('relic1', 'relic', -13, -16, undefined, 'fen1');
-    // The raft that carried the egg.
+    // The raft that carried the egg, and the note that came with it.
     b.box(-14, 0.1, -18.5, 2.6, 0.25, 1.6, 0x8a6a44, { yaw: 0.4, surface: 'wood' });
+    b.letter('glimmer', -11.2, -19.8);
+    // The fireflies' stores: crates, barrels and urns to smash, a chest, and a lost egg.
+    b.pile(-7, 3.5, 1.7, 5, ['crate', 'barrel', 'crate', 'urn', 'basket']);
+    b.breakables('urn', [[6.5, -3], [7.6, -1.6], [5.4, -1.2]]);
+    b.chest('hollow', -2.5, -13, 0.3, { blue: 18, red: 2 });
+    b.egg('hollow', 14.5, -8.5);
 
     b.story('intro-move', 0, 6, 5, () => g.hud.flick('WASD to move, mouse to look. Race you to the old willow! Loser eats a beetle.', 6));
     b.story('crystals', 0, -6, 4, () => g.hud.flick('Smash crystals with your horns (Left Mouse) for gems!', 5));

@@ -229,3 +229,22 @@
 .threat { position: absolute; width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent;
   border-bottom: 26px solid #ff4040; filter: drop-shadow(0 0 6px rgba(255,60,60,.8)); animation: threatPulse .3s ease-in-out infinite alternate; }
 @keyframes threatPulse { from { opacity: .6; } to { opacity: 1; } }
+
+/* Lore letters: parchment instead of gold leaf. */
+.relic-card.letter { background: linear-gradient(180deg, rgba(58, 44, 30, .95), rgba(40, 30, 22, .95)); border-color: rgba(230, 200, 150, .55); text-align: left; }
+.relic-card.letter h2 { color: #f5deb0; font-size: 22px; letter-spacing: .04em; text-align: center; }
+.relic-card.letter .sub { text-align: center; color: #c8a878; }
+.relic-card.letter p { font-style: normal; color: #f3e6cf; font-size: 16px; }
+.relic-card.letter .from { font: italic 15px var(--serif); color: #e0c090; text-align: right; margin: -4px 0 10px; }
+.panel.lore .entry.letter p { font-style: normal; }
+.panel.lore .entry .from { font: italic 13px var(--serif); color: #c8a878; text-align: right; }
+.panel .tabs { display: flex; gap: 6px; justify-content: center; margin: 4px 0 10px; }
+.panel .tabs button { padding: 5px 12px; font-size: 13px; }
+.panel .tabs button.on { background: rgba(245, 196, 107, .25); border-color: var(--gold); }
+.skin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; margin: 10px 0; }
+.skin-card { padding: 10px; border: 1px solid rgba(255, 255, 255, .15); border-radius: 8px; text-align: center; cursor: pointer; background: rgba(255, 255, 255, .04); }
+.skin-card.locked { opacity: .45; cursor: default; }
+.skin-card.on { border-color: var(--gold); background: rgba(245, 196, 107, .15); }
+.skin-card .sw { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; }
+.skin-card .sw span { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .4); }
+.skin-card small { display: block; color: var(--muted); margin-top: 2px; }

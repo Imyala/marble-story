@@ -1,3 +1,4 @@
+import type { DragonLook } from '../player/dragonRig';
 import type { Element } from './types';
 
 /**
@@ -100,6 +101,37 @@ export interface SaveData {
   unlocked: string[];
   difficulty: Difficulty;
   stats: { kills: number; bestCombo: number; playTime: number; deaths: number; reactions: number };
+  /** Aster's chosen scales (see SKINS). */
+  skin?: string;
+}
+
+/**
+ * Scales Aster can wear, unlocked by returning lost dragon eggs. Hidden eggs:
+ * Fen 5, Sanctum 3, Falls 5, Frostworks 5, Plains 5, Keep 5 (28 in all).
+ */
+export interface SkinDef {
+  id: string;
+  name: string;
+  eggs: number;
+  look: Partial<DragonLook>;
+}
+
+export const SKINS: SkinDef[] = [
+  { id: 'violet', name: 'Twilight Violet', eggs: 0, look: {} },
+  { id: 'ember', name: 'Emberscale', eggs: 5, look: { body: 0xc8452a, belly: 0xf2c060, horn: 0xf0e0b0, membrane: 0xffa040, spikes: 0xf0e0b0, eye: 0xffd040 } },
+  { id: 'storm', name: 'Stormgold', eggs: 10, look: { body: 0xe0b83a, belly: 0x5a7ad0, horn: 0x2a3a7a, membrane: 0x5a9ae8, spikes: 0x2a3a7a, eye: 0x7ac8ff } },
+  { id: 'rime', name: 'Rimefrost', eggs: 15, look: { body: 0x8ac0e8, belly: 0xf0f8ff, horn: 0xffffff, membrane: 0xbfe8ff, spikes: 0xffffff, eye: 0x40c0ff } },
+  { id: 'moss', name: 'Mossback', eggs: 20, look: { body: 0x4a8a3a, belly: 0xd0b870, horn: 0x8a6a4a, membrane: 0xa0c060, spikes: 0x8a6a4a, eye: 0xffb030 } },
+  { id: 'eclipse', name: 'Eclipse', eggs: 28, look: { body: 0x1a1428, belly: 0xc070ff, horn: 0xe8e0ff, membrane: 0x7a30c0, spikes: 0xe8e0ff, eye: 0xff80e0, glowEyes: true } },
+];
+
+export function eggsFound(s: SaveData): number {
+  return Object.keys(s.found).filter((k) => k.includes(':egg-')).length;
+}
+
+export function skinUnlocked(s: SaveData, id: string): boolean {
+  const d = SKINS.find((k) => k.id === id);
+  return !!d && eggsFound(s) >= d.eggs;
 }
 
 export function newSave(difficulty: Difficulty = 'normal'): SaveData {

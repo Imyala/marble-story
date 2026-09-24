@@ -781,13 +781,50 @@ export class Wardstone implements Prop, Interactable {
 // Collectibles
 // ---------------------------------------------------------------------------
 
-export type CollectKind = 'heart' | 'mana' | 'relic';
+export type CollectKind = 'heart' | 'mana' | 'relic' | 'letter' | 'egg';
 
 export class Collectible implements Prop {
   private root = new THREE.Group();
   taken = false;
   constructor(private game: Game, readonly id: string, readonly kind: CollectKind, readonly x: number, readonly y: number, readonly z: number, readonly relicId = '') {
-    if (kind === 'relic') {
+    if (kind === 'letter') {
+      // A rolled letter with a glowing wax seal.
+      const paper = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.8, 10), mat(0xf0e2c0, { rough: 0.9, emissive: 0x6a5a30, emissiveIntensity: 0.25 }));
+      paper.rotation.z = Math.PI / 2;
+      this.root.add(paper);
+      for (const sx of [-0.42, 0.42]) {
+        const end = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.06, 10), mat(0xc8b088, { rough: 0.8 }));
+        end.rotation.z = Math.PI / 2;
+        end.position.x = sx;
+        this.root.add(end);
+      }
+      const ribbon = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.03, 5, 12), mat(0xb03a3a, { rough: 0.6 }));
+      ribbon.rotation.y = Math.PI / 2;
+      this.root.add(ribbon);
+      const seal = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 10), glow(0xff5a4a));
+      seal.rotation.x = Math.PI / 2;
+      seal.position.z = 0.16;
+      this.root.add(seal);
+    } else if (kind === 'egg') {
+      // A speckled dragon egg in a little nest of light.
+      const shell = matUnique(0xf0e6d0, { rough: 0.35, emissive: 0xffe6b0, emissiveIntensity: 0.35 });
+      const egg = new THREE.Mesh(new THREE.SphereGeometry(0.34, 14, 10), shell);
+      egg.scale.set(1, 1.35, 1);
+      this.root.add(egg);
+      const spots = mat(0x8a4fd8, { rough: 0.4, emissive: 0x5a2aa8, emissiveIntensity: 0.4 });
+      for (let i = 0; i < 7; i++) {
+        const a = i * 2.4;
+        const y = -0.25 + (i / 7) * 0.55;
+        const r = 0.34 * Math.sqrt(Math.max(0.05, 1 - (y / 0.46) ** 2));
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(0.05 + (i % 3) * 0.015, 6, 4), spots);
+        sp.position.set(Math.sin(a) * r, y, Math.cos(a) * r);
+        this.root.add(sp);
+      }
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.03, 6, 22), glow(0xffe6a0, 0.7, true));
+      ring.rotation.x = Math.PI / 2;
+      ring.position.y = -0.4;
+      this.root.add(ring);
+    } else if (kind === 'relic') {
       const tab = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.9, 0.12), mat(0xd8b060, { rough: 0.4, metal: 0.6, emissive: 0x8a6020, emissiveIntensity: 0.4 }));
       this.root.add(tab);
       const rune = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.04, 6, 14), glow(0xfff0b0));
@@ -812,7 +849,7 @@ export class Collectible implements Prop {
     const g = this.game;
     this.root.rotation.y += dt * 1.8;
     this.root.position.y = this.y + 1.2 + Math.sin(g.time * 2.5 + this.x) * 0.15;
-    if (rng.chance(0.15)) g.fx.sparkle(this.x, this.y + 1.2, this.z, this.kind === 'heart' ? 0xff8a9a : this.kind === 'mana' ? 0x8af0aa : 0xfff0b0, 1);
+    if (rng.chance(0.15)) g.fx.sparkle(this.x, this.y + 1.2, this.z, this.kind === 'heart' ? 0xff8a9a : this.kind === 'mana' ? 0x8af0aa : this.kind === 'egg' ? 0xd0a0ff : 0xfff0b0, 1);
     const p = g.player.body;
     if (Math.hypot(p.x - this.x, p.y + 0.6 - (this.y + 1.2), p.z - this.z) < 1.5) {
       this.taken = true;

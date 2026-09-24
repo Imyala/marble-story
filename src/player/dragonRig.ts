@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mat, matUnique, glow } from '../render/materials';
-import { ellipsoid, taperedTube, spike, membrane, limb } from '../render/shapes';
+import { ellipsoid, taperedTube, spike, membrane, limb, mergeStatic } from '../render/shapes';
 import { clamp01, damp, dampAngle, smoothstep, lerp } from '../core/math';
 
 /**
@@ -60,6 +60,12 @@ export interface DragonPose {
   talk: boolean;
   hover: boolean;
   sleep?: boolean;
+  /** Climbing a wall: the value is the step phase; negative when not climbing. */
+  climb?: number;
+  hang?: boolean;
+  pull?: boolean;
+  dive?: boolean;
+  skid?: boolean;
 }
 
 export function defaultPose(): DragonPose {
@@ -111,12 +117,14 @@ export class DragonRig {
   };
   private lastGrounded = true;
   private flapT = 1;
+  private climbLegs = -1;
 
   constructor(look: DragonLook = HERO_LOOK) {
     this.look = look;
     this.build();
     this.root.add(this.model);
     this.model.scale.setScalar(look.scale);
+    mergeStatic(this.model);
   }
 
   private bodyMat(color: number): THREE.MeshStandardMaterial {
@@ -501,6 +509,50 @@ export class DragonRig {
       jaw = Math.max(jaw, (Math.sin(t * 16) * 0.5 + 0.5) * 0.25);
       headPitch += Math.sin(t * 5) * 0.06;
     }
+    if (pose.dive) {
+      bodyPitch = 0.55;
+      neckPitch = -0.05;
+      headPitch = 0.1;
+      wingSpread = 0.55;
+      wingFlap = -0.25;
+      tuck = 1;
+    }
+    if (pose.skid) {
+      bodyPitch = -0.28;
+      neckPitch = -0.95;
+      tailPitch = -0.2;
+      rate = 20;
+    }
+    if (pose.climb !== undefined && pose.climb >= 0) {
+      const c = pose.climb;
+      bodyPitch = -1.25;
+      neckPitch = -0.2;
+      headPitch = 1.1;
+      wingSpread = 0.15;
+      tuck = 0;
+      tailPitch = 0.6;
+      bodyY = Math.sin(c * 2) * 0.04;
+      rate = 16;
+      this.climbLegs = c;
+    } else this.climbLegs = -1;
+    if (pose.hang) {
+      bodyPitch = -1.05;
+      neckPitch = -0.5;
+      headPitch = 0.9;
+      wingSpread = 0.7;
+      wingFlap = Math.sin(t * 9) * 0.25;
+      tuck = 0.2;
+      rate = 25;
+    }
+    if (pose.pull) {
+      bodyPitch = -0.3;
+      neckPitch = -0.25;
+      headPitch = 0.7;
+      wingSpread = 0.9;
+      wingFlap = Math.sin(t * 20) * 0.5;
+      tuck = 0.8;
+      rate = 25;
+    }
     if (pose.dodge >= 0) {
       const d = pose.dodge;
       roll = d * Math.PI * 2;
@@ -749,6 +801,12 @@ export class DragonRig {
         const tk = P.tuck;
         swing = lerp(swing, leg.front ? -0.7 : 0.9, tk);
         knee = lerp(knee, leg.front ? 1.4 : -1.1, tk);
+      }
+      if (this.climbLegs >= 0) {
+        // Alternate reaching claws up the wall.
+        const ph = this.climbLegs + leg.phase;
+        swing = (leg.front ? -1.2 : -0.2) + Math.sin(ph) * 0.45;
+        knee = 0.6 + Math.cos(ph) * 0.3;
       }
       // Keep feet planted when the body pitches.
       leg.hip.rotation.set(swing - P.bodyPitch, 0, leg.side * 0.05);

@@ -556,6 +556,11 @@ export class MovingPlatform implements Prop {
     s.dy = s.y1 - oy;
     s.dz = s.z - oz;
     s.dyaw = s.yaw - oyaw;
+    if (dt > 0) {
+      s.pvx = s.dx / dt;
+      s.pvy = s.dy / dt;
+      s.pvz = s.dz / dt;
+    }
     this.mesh.position.set(s.x, s.y1 - 0.25, s.z);
     this.mesh.rotation.y = s.yaw;
   }
@@ -1174,5 +1179,141 @@ export class Geyser implements Prop, Hittable {
       b.vy = Math.max(b.vy, 14);
       b.grounded = false;
     }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Vine walls the dragon can claw-climb.
+// ---------------------------------------------------------------------------
+
+export class ClimbWall implements Prop {
+  /** Outward normal (the side you climb on). */
+  readonly nx: number;
+  readonly nz: number;
+  readonly tx: number;
+  readonly tz: number;
+
+  constructor(game: Game, readonly x: number, readonly z: number, readonly yaw: number, readonly w: number, readonly y0: number, readonly y1: number, solid: boolean) {
+    this.nx = Math.sin(yaw);
+    this.nz = Math.cos(yaw);
+    this.tx = Math.cos(yaw);
+    this.tz = -Math.sin(yaw);
+    const h = y1 - y0;
+    const root = new THREE.Group();
+    root.position.set(x, y0, z);
+    root.rotation.y = yaw;
+    if (solid) {
+      const rock = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, h, 1.2), mat(0x7a7064, { rough: 0.95, flat: true }));
+      rock.position.set(0, h / 2, -0.6);
+      rock.castShadow = rock.receiveShadow = true;
+      root.add(rock);
+      game.col.add(makeBox(x - this.nx * 0.6, z - this.nz * 0.6, (w + 0.6) / 2, 0.6, y0 - 0.5, y1, yaw));
+    }
+    // A lattice of vines and leaves: the visual rule for "you can climb this".
+    const vine = mat(0x3f7a2a, { rough: 0.9 });
+    const leaf = mat(0x6ab83a, { rough: 0.8, emissive: 0x2a5a14, emissiveIntensity: 0.35, side: THREE.DoubleSide });
+    const cols = Math.max(2, Math.round(w / 0.9));
+    for (let i = 0; i < cols; i++) {
+      const vx = -w / 2 + (i + 0.5) * (w / cols);
+      const pts: THREE.Vector3[] = [];
+      for (let k = 0; k <= 6; k++) pts.push(new THREE.Vector3(vx + Math.sin(k * 1.3 + i) * 0.18, (k / 6) * h, 0.05));
+      const t = new THREE.Mesh(taperedTube(pts, 0.07, 0.05, 12, 5, false), vine);
+      root.add(t);
+    }
+    const leafGeo = new THREE.CircleGeometry(0.22, 5);
+    const n = Math.round(w * h * 1.6);
+    for (let i = 0; i < n; i++) {
+      const l = new THREE.Mesh(leafGeo, leaf);
+      l.position.set((rng.next() - 0.5) * w, rng.next() * h, 0.08);
+      l.rotation.set(rng.signed() * 0.6, rng.signed() * 0.6, rng.next() * 6);
+      l.scale.set(1, 0.6, 1);
+      root.add(l);
+    }
+    game.level!.root.add(root);
+  }
+
+  /** Signed distance from the climbing face, and position along it. */
+  local(px: number, pz: number): { d: number; u: number } {
+    const dx = px - this.x;
+    const dz = pz - this.z;
+    return { d: dx * this.nx + dz * this.nz, u: dx * this.tx + dz * this.tz };
+  }
+
+  update(): void {
+    /* static */
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Glide rings: fly through them in order before the timer runs out.
+// ---------------------------------------------------------------------------
+
+export class GlideCourse implements Prop {
+  private rings: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; x: number; y: number; z: number; nx: number; nz: number }[] = [];
+  private next = 0;
+  private timeLeft = 0;
+  private done: boolean;
+  private prev = new THREE.Vector3();
+
+  constructor(private game: Game, readonly id: string, pts: [number, number, number, number][], private limit: number, private reward: number) {
+    this.done = !!game.save.found[id];
+    for (const [x, y, z, yaw] of pts) {
+      const m = new THREE.MeshBasicMaterial({ color: 0xf5c46b, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false });
+      const ring = new THREE.Mesh(new THREE.TorusGeometry(2.2, 0.16, 8, 32), m);
+      ring.position.set(x, y, z);
+      ring.rotation.y = yaw;
+      game.level!.root.add(ring);
+      this.rings.push({ mesh: ring, mat: m, x, y, z, nx: Math.sin(yaw), nz: Math.cos(yaw) });
+    }
+    this.paint();
+  }
+
+  private paint(): void {
+    this.rings.forEach((r, i) => {
+      const col = this.done ? 0x9af0aa : i === this.next ? 0xffffff : i < this.next ? 0x6a8aff : 0xf5c46b;
+      r.mat.color.setHex(col);
+      r.mat.opacity = i < this.next ? 0.35 : 0.85;
+    });
+  }
+
+  update(dt: number): void {
+    const g = this.game;
+    const p = g.player.body;
+    const cy = p.y + 0.6;
+    if (this.next > 0) {
+      this.timeLeft -= dt;
+      if (this.timeLeft <= 0) {
+        this.next = 0;
+        g.toast('Too slow! The rings reset.', 'warn');
+        g.audio.play('uiBack');
+        this.paint();
+      }
+    }
+    const r = this.rings[this.next];
+    if (r) {
+      r.mesh.rotation.z += dt * 1.5;
+      // Crossed the ring's plane close to its center since last step?
+      const a = (this.prev.x - r.x) * r.nx + (this.prev.z - r.z) * r.nz;
+      const b = (p.x - r.x) * r.nx + (p.z - r.z) * r.nz;
+      const near = Math.hypot(p.x - r.x, cy - r.y, p.z - r.z) < 2.6;
+      if (near && (Math.sign(a) !== Math.sign(b) || Math.abs(b) < 0.6)) {
+        if (this.next === 0) this.timeLeft = this.limit;
+        g.audio.play('gem', 1 + this.next * 0.08, 0.9);
+        g.fx.ring(r.x, r.y - 0.5, r.z, 0.5, 3, 0xffffff, 0.3);
+        g.fx.sparkle(r.x, r.y, r.z, 0xf5c46b, 12);
+        this.next++;
+        if (this.next >= this.rings.length) {
+          this.next = 0;
+          const first = !this.done;
+          this.done = true;
+          g.save.found[this.id] = true;
+          g.spawnGems(p.x, p.y + 1, p.z, { blue: first ? this.reward : Math.round(this.reward / 5) }, true);
+          g.hud.bigText('RINGS CLEARED', 0xf5c46b);
+          g.audio.play('unlock');
+        } else if (this.next === 1) g.toast(`Glide rings: ${this.limit}s to fly through them all!`, 'info');
+        this.paint();
+      }
+    }
+    this.prev.set(p.x, cy, p.z);
   }
 }

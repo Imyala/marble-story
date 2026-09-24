@@ -14,7 +14,7 @@ export type Sfx =
   | 'enemyAlert' | 'enemyDie' | 'enemyHurt' | 'enemyAttack' | 'shieldBlock' | 'bossRoar'
   | 'hurt' | 'death' | 'ui' | 'uiConfirm' | 'uiBack' | 'checkpoint' | 'fury' | 'dragonTimeOn'
   | 'dragonTimeOff' | 'unlock' | 'door' | 'torch' | 'switch' | 'splash' | 'charge' | 'pound'
-  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic';
+  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue';
 
 export type LoopId = 'breath' | 'glide' | 'charge';
 
@@ -338,6 +338,10 @@ export class Audio {
         break;
       case 'splash':
         this.noise(0.5, 0.4, { type: 'lowpass', freq: 1800, freqEnd: 300 });
+        break;
+      case 'cue':
+        this.tone(2093, 0.12, 'sine', 0.16 * v);
+        this.tone(3136, 0.1, 'sine', 0.08 * v, { delay: 0.02 });
         break;
       case 'talk':
         this.tone(500 + Math.random() * 200, 0.04, 'triangle', 0.05 * v);

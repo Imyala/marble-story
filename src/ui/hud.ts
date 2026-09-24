@@ -4,6 +4,7 @@ import type { Element } from '../game/types';
 import { ELEMENT_NAMES } from '../game/types';
 import { RANKS } from '../combat/style';
 import type { Boss } from '../enemies/boss';
+import { Enemy } from '../enemies/enemy';
 import { SHARDS_PER_UPGRADE } from '../game/progress';
 
 const EL_COLORS: Record<Element, string> = { fire: '#ff7a2a', lightning: '#7ac8ff', ice: '#8fe4ff', earth: '#8bd05a' };
@@ -73,6 +74,8 @@ export class Hud {
   private relicT = 0;
   private wardT = 0;
   private proj = new THREE.Vector3();
+  private threats: Enemy[] = [];
+  private arrows: HTMLDivElement[] = [];
 
   constructor(private game: Game, parent: HTMLElement) {
     this.overlay = el('div', 'ui-layer');
@@ -181,6 +184,13 @@ export class Hud {
     this.clickHint = el('div', 'prompt', 'Click to play &middot; the mouse steers the camera');
     this.clickHint.style.cssText = 'top:46%;bottom:auto;opacity:0;';
     r.appendChild(this.clickHint);
+
+    for (let i = 0; i < 6; i++) {
+      const a = el('div', 'threat');
+      a.style.display = 'none';
+      r.appendChild(a);
+      this.arrows.push(a);
+    }
 
     this.deathBox = el('div', 'death', '<h1>The light fades...</h1>');
     o.appendChild(this.deathBox);
@@ -298,6 +308,7 @@ export class Hud {
       }
     }
     this.wardT -= dt;
+    this.updateThreats();
     const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad;
     this.clickHint.style.opacity = needClick ? '1' : '0';
   }
@@ -306,6 +317,42 @@ export class Hud {
     const v = this.proj.set(x, y, z).project(this.game.camera);
     if (v.z > 1 || v.z < -1) return null;
     return [(v.x * 0.5 + 0.5) * window.innerWidth, (-v.y * 0.5 + 0.5) * window.innerHeight];
+  }
+
+  /** An enemy started winding up; point at it if it is off screen. */
+  threat(e: Enemy): void {
+    if (!this.threats.includes(e)) this.threats.push(e);
+  }
+
+  private updateThreats(): void {
+    this.threats = this.threats.filter((e) => e.alive && (e.state === 'windup' || e.state === 'active'));
+    const cam = this.game.camera;
+    let n = 0;
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    for (const e of this.threats) {
+      if (n >= this.arrows.length) break;
+      const v = this.proj.set(e.x, e.y + e.height * 0.5, e.z).project(cam);
+      const behind = v.z > 1;
+      const onScreen = !behind && Math.abs(v.x) < 0.92 && Math.abs(v.y) < 0.9;
+      if (onScreen) continue;
+      let dx = behind ? -v.x : v.x;
+      let dy = behind ? -v.y : v.y;
+      if (behind && Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) dy = -1;
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len;
+      dy /= len;
+      const a = this.arrows[n++]!;
+      const rx = W * 0.44;
+      const ry = H * 0.42;
+      a.style.display = 'block';
+      a.style.left = `${W / 2 + dx * rx}px`;
+      a.style.top = `${H / 2 - dy * ry}px`;
+      a.style.transform = `translate(-50%, -50%) rotate(${Math.atan2(dx, dy)}rad)`;
+      const col = e.attack ? Enemy.telegraphColor(e.attack) : 0xff4040;
+      a.style.borderBottomColor = `#${col.toString(16).padStart(6, '0')}`;
+    }
+    for (let i = n; i < this.arrows.length; i++) this.arrows[i]!.style.display = 'none';
   }
 
   prompt(label: string | null): void {

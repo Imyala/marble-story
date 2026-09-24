@@ -173,6 +173,45 @@ export const MOVES: Record<string, MoveDef> = {
   },
 };
 
+// Moves reached by timing and direction rather than by button count.
+Object.assign(MOVES, {
+  lunge: {
+    id: 'lunge', name: 'Horn Lunge', pose: 'horn3', duration: 0.48, air: false, cancelFrom: 0.3,
+    hits: [{ t0: 0.05, t1: 0.26, range: 2.0, arc: 0.85, low: -0.3, high: 1.9, damage: 15, knockback: 9, launch: 2, stagger: 35, hitstop: 0.07, heavy: true }],
+    lunge: [0, 0.24, 14], next: { horn: 'horn2', tail: 'uppercut' },
+    swooshes: [{ t: 0.05, radius: 1.9, arc: 1.3, plane: 'v', height: 0.3, start: -0.3, color: 0xffe0a0 }],
+    sfx: 'swingHeavy', sfxAt: 0.02, tracking: 1, style: 18,
+  },
+  flurry: {
+    id: 'flurry', name: 'Horn Flurry', pose: 'horn2', duration: 0.9, air: false, cancelFrom: 0.78,
+    hits: [
+      ...[0.06, 0.18, 0.3, 0.42].map((t): HitWindow => ({
+        t0: t, t1: t + 0.08, range: 2.2, arc: 1.2, low: -0.3, high: 1.9, damage: 5, knockback: 1, launch: 0, stagger: 8, hitstop: 0.025,
+      })),
+      { t0: 0.6, t1: 0.72, range: 2.4, arc: 1.3, low: -0.3, high: 2, damage: 16, knockback: 12, launch: 3, stagger: 50, hitstop: 0.1, heavy: true },
+    ],
+    lunge: [0, 0.5, 3], next: { tail: 'uppercut' },
+    swooshes: [0.06, 0.18, 0.3, 0.42, 0.6].map((t, i) => ({ t, radius: 1.9, arc: 1.5, plane: 'h' as const, height: 0.7 + (i % 2) * 0.3, tilt: i % 2 ? -0.4 : 0.4 })),
+    sfx: 'swing', sfxAt: 0.04, tracking: 1, style: 9,
+  },
+  sweep: {
+    id: 'sweep', name: 'Tail Sweep', pose: 'tail1', duration: 0.62, air: false, cancelFrom: 0.45,
+    hits: [{ t0: 0.1, t1: 0.36, range: 3.2, arc: Math.PI, low: -0.4, high: 0.9, damage: 12, knockback: 11, launch: 0, stagger: 60, hitstop: 0.06, heavy: true }],
+    next: { horn: 'horn1', tail: 'tail3' },
+    swooshes: [{ t: 0.1, radius: 3.0, arc: Math.PI * 1.9, plane: 'h', height: 0.2, color: 0xfff0c0 }],
+    sfx: 'swingHeavy', sfxAt: 0.06, tracking: 0, style: 16,
+  },
+} satisfies Record<string, MoveDef>);
+
+/** Finishers that take an element when Breath is held as they land. */
+export const FINISHERS = new Set(['horn3', 'horn4', 'tail3', 'uppercut', 'air3', 'counter', 'lunge', 'flurry', 'sweep']);
+
+/** Moves that open a timing window when they end: pause, then press again. */
+export const DELAY_FOLLOWUPS: Record<string, { button: 'horn' | 'tail'; move: string }> = {
+  horn2: { button: 'horn', move: 'flurry' },
+  tail1: { button: 'tail', move: 'sweep' },
+};
+
 /** The slam's landing blast, applied when a Ground Pound touches down. */
 export const SLAM_HIT: HitWindow = {
   t0: 0, t1: 0.1, range: 3.4, arc: PI, low: -1, high: 2, damage: 20, knockback: 7, launch: 7, stagger: 55, hitstop: 0.1, heavy: true,

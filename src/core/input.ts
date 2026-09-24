@@ -78,6 +78,8 @@ export class Input {
   lookX = 0;
   lookY = 0;
   wheel = 0;
+  /** Raw horizontal look this frame (mouse pixels, or a scaled right stick), for flick gestures. */
+  flickX = 0;
   usingPad = false;
   mouseSensitivity = 1;
   invertY = false;
@@ -215,6 +217,7 @@ export class Input {
     this.moveX = mx;
     this.moveY = my;
 
+    this.flickX = this.mouseDX + (pad ? pad.rx * 30 : 0);
     const sens = 0.0024 * this.mouseSensitivity;
     this.lookX = this.mouseDX * sens;
     this.lookY = this.mouseDY * sens * (this.invertY ? -1 : 1);

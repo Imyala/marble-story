@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 const sphereCache = new Map<number, THREE.SphereGeometry>();
 
@@ -121,4 +122,48 @@ export function setShadows(obj: THREE.Object3D, cast: boolean, receive = false):
       o.receiveShadow = receive;
     }
   });
+}
+
+/**
+ * Merges each group's plain mesh children that share a material into one
+ * mesh, keeping every group (the animated joints) intact. A procedural
+ * dragon goes from ~90 draw calls to ~25. Only use it on models that animate
+ * groups, never individual meshes.
+ */
+export function mergeStatic(root: THREE.Object3D): void {
+  const groups: THREE.Object3D[] = [];
+  root.traverse((o) => {
+    if (!(o as THREE.Mesh).isMesh) groups.push(o);
+  });
+  for (const grp of groups) {
+    const byMat = new Map<THREE.Material, THREE.Mesh[]>();
+    for (const c of grp.children) {
+      const m = c as THREE.Mesh;
+      if (!m.isMesh || m.children.length > 0 || Array.isArray(m.material) || m.userData.keep) continue;
+      const list = byMat.get(m.material as THREE.Material) ?? [];
+      list.push(m);
+      byMat.set(m.material as THREE.Material, list);
+    }
+    for (const [material, meshes] of byMat) {
+      if (meshes.length < 2) continue;
+      const geos: THREE.BufferGeometry[] = [];
+      for (const m of meshes) {
+        m.updateMatrix();
+        let g = m.geometry.clone();
+        for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+        if (!g.getAttribute('normal')) g.computeVertexNormals();
+        if (g.index) g = g.toNonIndexed();
+        g.applyMatrix4(m.matrix);
+        geos.push(g);
+      }
+      const merged = mergeGeometries(geos, false);
+      for (const g of geos) g.dispose();
+      if (!merged) continue;
+      const out = new THREE.Mesh(merged, material);
+      out.castShadow = meshes.some((m) => m.castShadow);
+      out.receiveShadow = meshes.some((m) => m.receiveShadow);
+      for (const m of meshes) grp.remove(m);
+      grp.add(out);
+    }
+  }
 }

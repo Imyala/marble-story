@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mat, matUnique, glow } from '../render/materials';
-import { ellipsoid, limb, spike, taperedTube, box } from '../render/shapes';
+import { ellipsoid, limb, spike, taperedTube, box, mergeStatic } from '../render/shapes';
 import { damp, lerp, smoothstep } from '../core/math';
 import type { EnemyState } from './enemy';
 
@@ -227,6 +227,7 @@ export class ImpModel extends BaseModel {
     this.root.traverse((ob) => {
       if ((ob as THREE.Mesh).isMesh) ob.castShadow = true;
     });
+    mergeStatic(this.root);
   }
 
   private buildWeapon(h: THREE.Group, o: ImpOpts): void {

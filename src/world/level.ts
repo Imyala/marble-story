@@ -10,7 +10,7 @@ import type { Game } from '../game/game';
 import type { Hittable, Element } from '../game/types';
 import {
   Arena, BounceShroom, Collectible, CrumblePlatform, GemCluster, Gate, Hazard, MovingPlatform, Portal, PressurePlate,
-  Switch, Talker, Torch, Trigger, Updraft, Wardstone, Geyser, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
+  Switch, Talker, Torch, Trigger, Updraft, Wardstone, Geyser, ClimbWall, GlideCourse, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
 } from '../entities/props';
 import type { GemKind } from '../entities/gems';
 import { DragonRig, defaultPose, type DragonLook, type DragonPose } from '../player/dragonRig';
@@ -55,6 +55,7 @@ export class Level {
   readonly arenas: Arena[] = [];
   readonly wardstones = new Map<string, Wardstone>();
   readonly npcs: Npc[] = [];
+  readonly climbWalls: ClimbWall[] = [];
   waterLevel = -1e4;
   killY: number;
   water: Water | null = null;
@@ -430,6 +431,8 @@ export class Builder {
       const y = this.col.terrainAt(x, z);
       if (y < -1e3) continue;
       if (y < this.level.waterLevel + 0.15) continue;
+      // Bare ground only: never on (or jammed against) structures already built.
+      if (this.col.groundAt(x, z, 1e4, 0.6).y > y + 0.3) continue;
       if (this.level.shaper && this.level.shaper.pathMask(x, z) > 0.3) continue;
       if (keep && !keep(x, z, y)) continue;
       place(x, z, y);
@@ -536,6 +539,21 @@ export class Builder {
     const gz = this.addProp(new Geyser(this.game, x, y ?? this.y(x, z), z, r, h, permanent, signal));
     this.level.hittables.push(gz);
     return gz;
+  }
+
+  /**
+   * A vine wall you can claw-climb. `yaw` is the direction the climbable face
+   * looks toward; with `solid`, a rock slab is built behind the vines.
+   */
+  climbWall(x: number, z: number, yaw: number, w: number, y0: number, y1: number, solid = true): ClimbWall {
+    const c = this.addProp(new ClimbWall(this.game, x, z, yaw, w, y0, y1, solid));
+    this.level.climbWalls.push(c);
+    return c;
+  }
+
+  /** Rings to glide through in order within `limit` seconds. Points are [x, y, z, yaw]. */
+  glideRings(id: string, pts: [number, number, number, number][], limit: number, reward = 40): GlideCourse {
+    return this.addProp(new GlideCourse(this.game, `${this.level.def.id}:rings:${id}`, pts, limit, reward));
   }
 
   crumble(x: number, top: number, z: number, w: number, d: number): CrumblePlatform {

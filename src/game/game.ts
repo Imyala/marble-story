@@ -248,6 +248,7 @@ export class Game {
     if (def.water) b.water(def.water);
     def.build(b);
     b.finish();
+    this.cam.collectOccluders(level.root);
     for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
     this.pendingSpawns = [];
     // Place the player.
@@ -268,6 +269,7 @@ export class Game {
     this.time = 0;
     this.style.reset();
     this.audio.stopAllLoops();
+    this.prewarm();
     if (!opts.title) {
       this.state = 'play';
       this.audio.setMusic(THEMES[def.music] ?? THEMES.fen!);
@@ -277,6 +279,32 @@ export class Game {
       this.sessionFlags.add(`entered:${id}`);
       def.onEnter?.(this, fresh);
     } else this.hud.show(false);
+  }
+
+  /**
+   * Compiles every shader the level will use now, during the fade, instead
+   * of hitching the first time an effect or enemy appears on screen.
+   */
+  private prewarm(): void {
+    const gl = this.renderer.gl;
+    try {
+      // Spawn one of each enemy the level uses so their materials compile too.
+      const types = new Set(this.enemies.map((e) => e.def.id));
+      for (const l of this.level?.arenas ?? []) for (const w of l.waves) for (const sp of w) types.add(sp.type);
+      const temp: THREE.Object3D[] = [];
+      for (const t of types) {
+        const def = ENEMIES[t];
+        if (!def) continue;
+        const m = def.build();
+        m.root.position.set(this.player.x, this.player.y - 200, this.player.z);
+        this.scene.add(m.root);
+        temp.push(m.root);
+      }
+      gl.compile(this.scene, this.camera);
+      for (const o of temp) this.scene.remove(o);
+    } catch {
+      /* best effort */
+    }
   }
 
   private clearLevel(): void {

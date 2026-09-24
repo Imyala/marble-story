@@ -45,6 +45,10 @@ export class Solid {
   dy = 0;
   dz = 0;
   dyaw = 0;
+  /** Velocity (per second) of a moving solid, handed to actors who leave it. */
+  pvx = 0;
+  pvy = 0;
+  pvz = 0;
   /** Blocks actors but cannot be stood on (invisible level bounds). */
   wallOnly = false;
   /** Only the camera collides with it (tree canopies it should not sit inside). */

@@ -114,6 +114,14 @@ export class Enemy implements Hittable {
   private statusFx = 0;
   private iceBlock: THREE.Mesh | null = null;
   airTime = 0;
+  /** Hits taken since this juggle began; each one keeps it up less. */
+  juggleHits = 0;
+  private cueDone = false;
+  /** Where around the player this enemy likes to wait its turn. */
+  private slotAngle = rng.next() * Math.PI * 2;
+  private slotT = 0;
+  private retreatT = 0;
+  private retreated = false;
   hitstunMax = 0;
   lastDamage = 0;
   spawnDelay = 0;
@@ -293,17 +301,25 @@ export class Enemy implements Hittable {
       b.vz = hit.dirZ * 2;
       return;
     }
+    // Juggles decay: each hit in the same air time lifts a little less, so
+    // air combos stay a skill rather than an infinite loop.
+    const decay = Math.pow(0.84, this.juggleHits);
     if (hit.launch > 0 && m > 0.15) {
-      b.vy = hit.launch * Math.min(1, 0.4 + m * 0.6);
+      const wasAir = this.state === 'air';
+      b.vy = hit.launch * Math.min(1, 0.4 + m * 0.6) * (wasAir ? decay : 1);
       b.vx = hit.dirX * hit.knockback * m;
       b.vz = hit.dirZ * hit.knockback * m;
+      if (!wasAir) {
+        this.juggleHits = 0;
+        this.airTime = 0;
+      }
+      this.juggleHits++;
       this.setState('air');
-      this.airTime = 0;
       return;
     }
     if (this.state === 'air') {
-      // Juggle: every hit holds the target up a little longer.
-      b.vy = Math.max(b.vy, 3.5);
+      this.juggleHits++;
+      if (this.juggleHits < 12) b.vy = Math.max(b.vy, 3.5 * decay);
       b.vx = hit.dirX * hit.knockback * m * 0.6;
       b.vz = hit.dirZ * hit.knockback * m * 0.6;
       return;
@@ -450,6 +466,7 @@ export class Enemy implements Hittable {
     if (this.state === 'air') {
       this.airTime += dt;
       if (b.grounded && b.vy <= 0 && this.airTime > 0.1) {
+        this.juggleHits = 0;
         if (this.airTime > 0.5) {
           g.fx.dust(b.x, b.y, b.z, 6);
           this.setState('down');
@@ -521,9 +538,23 @@ export class Enemy implements Hittable {
       return;
     }
 
-    // Ask the director for a turn to attack; with one, close in and swing.
+    // Badly hurt foot soldiers fall back to regroup once.
     const keep = def.keepAway ?? 0;
     const ranged = keep > 0;
+    if (!this.retreated && !ranged && !this.isBoss && def.speed > 0 && this.hp < this.maxHp * 0.3 && def.poise < 60 && rng.chance(0.6)) {
+      this.retreated = true;
+      this.retreatT = 2.2;
+      this.releaseToken();
+    }
+    if (this.retreatT > 0) {
+      this.retreatT -= dt;
+      this.moveDir(dirYaw + Math.PI + this.strafeDir * 0.4, def.speed * 1.15, dt);
+      this.setState('chase');
+      if (this.retreatT <= 0) this.globalCd = 0.6;
+      return;
+    }
+
+    // Ask the director for a turn to attack; with one, close in and swing.
     if (!this.hasToken && this.globalCd <= 0) {
       this.hasToken = g.director.request(this, ranged);
       this.tokenT = 0;
@@ -553,17 +584,31 @@ export class Enemy implements Hittable {
       this.moveDir(dirYaw, def.speed * 1.1, dt);
       this.setState('chase');
     } else {
-      const ring = 3.4 + (this.def.radius > 1 ? 1.5 : 0);
-      if (d > ring + 0.6) {
-        this.moveDir(dirYaw + this.strafeDir * (d < 6 ? 0.5 : 0.1), def.speed, dt);
-        this.setState('chase');
-      } else if (d < ring - 0.8) {
-        this.moveDir(dirYaw + Math.PI, def.speed * 0.6, dt);
+      // Waiting for a turn: spread around the player, favoring the flanks
+      // and back, instead of queueing up in front.
+      const ring = 3.6 + (this.def.radius > 1 ? 1.5 : 0);
+      this.slotT -= dt;
+      if (this.slotT <= 0) {
+        this.slotT = 4 + rng.next() * 4;
+        const behind = p.yaw + Math.PI;
+        this.slotAngle = rng.chance(0.65) ? behind + rng.signed() * 1.7 : rng.next() * Math.PI * 2;
+      }
+      const sx = p.body.x + Math.sin(this.slotAngle) * ring;
+      const sz = p.body.z + Math.cos(this.slotAngle) * ring;
+      const ds = Math.hypot(sx - b.x, sz - b.z);
+      if (d < ring - 1.2) {
+        this.moveDir(dirYaw + Math.PI, def.speed * 0.7, dt);
         this.setState('strafe');
+      } else if (ds > 1.2) {
+        this.moveDir(yawOf(sx - b.x, sz - b.z), def.speed * (d > ring + 3 ? 1 : 0.75), dt, false);
+        this.setState(d > ring + 3 ? 'chase' : 'strafe');
       } else {
-        this.strafe(dt, dirYaw, def.speed * 0.45);
+        this.strafe(dt, dirYaw, def.speed * 0.25);
         this.setState('strafe');
       }
+      // Guards keep their shields toward the dragon.
+      const turn = def.shield && d < 7 ? def.turnRate * 1.8 : def.turnRate;
+      this.yaw = approachAngle(this.yaw, dirYaw, turn * dt);
     }
   }
 
@@ -634,15 +679,38 @@ export class Enemy implements Hittable {
     return options[options.length - 1]!;
   }
 
+  /** Warning color for an attack: orange quick hits, red heavy blows, violet shots, cyan dives. */
+  static telegraphColor(a: AttackDef): number {
+    if (a.kind === 'projectile') return 0xc050ff;
+    if (a.kind === 'dive') return 0x40d8ff;
+    if (a.kind === 'slam' || a.knockback >= 10 || a.telegraph) return 0xff1a1a;
+    return 0xff8a1a;
+  }
+
   startAttack(a: AttackDef): void {
     this.attack = a;
     this.attackHit = false;
+    this.cueDone = false;
     this.setState('windup');
     const g = this.game;
-    g.sfx('enemyAttack', this.body.x, this.body.y, this.body.z, 1 + rng.signed() * 0.1, 0.8);
+    const col = Enemy.telegraphColor(a);
+    const heavy = col === 0xff1a1a;
+    const pitch = a.kind === 'projectile' ? 1.35 : heavy ? 0.7 : 1;
+    g.sfx('enemyAttack', this.body.x, this.body.y, this.body.z, pitch + rng.signed() * 0.08, heavy ? 1 : 0.8);
     if (a.telegraph) {
       g.fx.ring(this.body.x, this.body.y, this.body.z, 0.2, a.shockwave?.radius ?? (a.hitRange ?? 3), 0xff3030, a.windup);
     }
+    g.hud.threat(this);
+  }
+
+  /** The moment to dodge: a bright glint just before the blow lands. */
+  private cue(): void {
+    const g = this.game;
+    const b = this.body;
+    const hy = b.y + this.def.height * 0.9;
+    g.fx.emit(b.x, hy, b.z, { count: 8, speed: 3, life: [0.12, 0.22], size: [0.18, 0.3], sizeEnd: 0, color: 0xffffff, bright: 3 });
+    g.fx.emit(b.x, hy, b.z, { count: 1, speed: 0, life: [0.14, 0.14], size: [1.4, 1.4], sizeEnd: 0.2, color: 0xfff6d0, bright: 2.5 });
+    g.sfx('cue', b.x, b.y, b.z, 1, 0.8);
   }
 
   protected runAttack(dt: number, _d: number, dirYaw: number): void {
@@ -655,7 +723,12 @@ export class Enemy implements Hittable {
       this.yaw = approachAngle(this.yaw, dirYaw, this.def.turnRate * 1.5 * dt);
       b.vx *= 0.8;
       b.vz *= 0.8;
-      if (this.stateT >= a.windup / aggression) {
+      const windup = a.windup / aggression;
+      if (!this.cueDone && this.stateT >= windup - 0.2 && a.damage > 0) {
+        this.cueDone = true;
+        this.cue();
+      }
+      if (this.stateT >= windup) {
         this.state = 'active';
         this.stateT = 0;
         this.onActiveStart(a);
@@ -856,8 +929,10 @@ export class Enemy implements Hittable {
     };
     if (!frozen) this.model.update(shock ? dt * 0.2 : dt, pose);
     if (shock) r.position.x += Math.sin(this.game.time * 90) * 0.04;
-    const flashCol = this.flash > 0 ? 0xffffff : this.state === 'windup' ? 0xff2020 : 0x000000;
-    const flashAmt = this.flash > 0 ? this.flash * 8 : this.state === 'windup' ? 0.35 + 0.35 * Math.sin(this.stateT * 30) : 0;
+    const windupCol = this.attack ? Enemy.telegraphColor(this.attack) : 0xff2020;
+    const windupK = this.state === 'windup' && this.attack ? Math.min(1, this.stateT / Math.max(0.05, this.attack.windup)) : 0;
+    const flashCol = this.flash > 0 ? 0xffffff : this.state === 'windup' ? windupCol : 0x000000;
+    const flashAmt = this.flash > 0 ? this.flash * 8 : this.state === 'windup' ? 0.1 + 0.42 * windupK + 0.1 * Math.sin(this.stateT * 30) : 0;
     this.model.setFlash(flashAmt, flashCol);
     if (this.state === 'dead') {
       const k = Math.max(0, 1 - Math.max(0, this.deadT - 0.25) * 2.5);

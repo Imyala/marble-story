@@ -225,3 +225,7 @@
   .big-text { font-size: 36px; }
   .level-title h1 { font-size: 34px; }
 }
+
+.threat { position: absolute; width: 0; height: 0; border-left: 14px solid transparent; border-right: 14px solid transparent;
+  border-bottom: 26px solid #ff4040; filter: drop-shadow(0 0 6px rgba(255,60,60,.8)); animation: threatPulse .3s ease-in-out infinite alternate; }
+@keyframes threatPulse { from { opacity: .6; } to { opacity: 1; } }

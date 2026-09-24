@@ -154,6 +154,25 @@ export const sanctum: LevelDef = {
     b.gemLine([[-8, -38], [8, -40], [22, -40]]);
     b.crystal(20, -42, 'blue', 15);
 
+    // --- Flight yard (south): ledge steps, a vine tower and glide rings -------------
+    const steps: [number, number, number][] = [[6, -20, 1.2], [9, -22.5, 2.0], [12.5, -24, 2.9], [15.5, -22, 3.8]];
+    for (const [x, z, top] of steps) b.box(x, b.y(x, z) - 0.5, z, 2.6, top + 0.5, 2.6, STONE, { trim: STONE_DARK });
+    b.gems(15.5, -22, 'blue', 1, 0, b.y(15.5, -22) + 0.3);
+    b.story('ledges', 4, -18, 3, () => g.hud.flick('Jump at a ledge you can\'t quite reach: Aster grabs the edge and pulls up!', 6));
+    const tx = -14;
+    const tz = -19;
+    const ty = b.y(tx, tz);
+    b.box(tx, ty - 1, tz, 5, 10, 5, 0x8a8274, { trim: 0x9a9080 });
+    b.climbWall(tx + 2.5, tz, Math.PI / 2, 3.6, ty, ty + 9, false);
+    b.crystal(tx - 1, tz - 1, 'blue', 12, false, ty + 9);
+    b.story('climb', tx + 5, tz, 3, () => g.hud.flick('Vines mean climbable! Walk into them, then W/S to climb and Space to leap off.', 6));
+    b.glideRings('tower', [
+      [tx + 8, ty + 7.8, tz - 1, Math.PI / 2], [tx + 18, ty + 6.0, tz - 5, Math.PI * 0.6], [tx + 28, ty + 6.0, tz - 3, Math.PI * 0.4],
+      [tx + 36, ty + 4.2, tz + 4, Math.PI * 0.2],
+    ], 12, 40);
+    b.updraft(tx + 23, tz - 4.5, 2.2, ty, ty + 8, 30);
+    b.story('rings', tx, tz + 3, 6, () => g.hud.flick('Glide through the rings from the top of the tower. Hold Shift to dive for speed, let go to swoop up!', 7));
+
     b.scatter(50, 0, 0, 30, (x, z, y) => b.decor.grass(x, y, z, 0.9, 0x6a9a4a), (x, z) => Math.hypot(x, z) > 18);
     b.scatter(18, 0, 0, 30, (x, z) => b.tree(x, z, 1 + Math.abs(jitter(x + z)) * 0.5, 'round', { leaf: 0x5a8a3a }), (x, z) => Math.hypot(x, z) > 21 && Math.abs(x) > 6);
     b.scatter(20, 46, 4, 14, (x, z, y) => b.decor.flower(x, y, z, 0xffd070), (x, z) => Math.abs(x - 46) > 9 || Math.abs(z - 4) > 9);

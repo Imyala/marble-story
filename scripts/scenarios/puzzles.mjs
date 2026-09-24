@@ -213,17 +213,16 @@ export async function sanctum(h) {
   await h.shot('puzzle-lock');
 }
 
-/** Stormspire Falls: the Stormglass cache's three conduits, charged together with lightning. */
-export async function falls(h) {
+/** Charges every conduit of a set in turn with lightning breath, standing between it and the cage. */
+async function conduitSet(h, url, cage, signal, shotName) {
   const waitGame = async (sec) => {
     const start = await h.eval(() => window.wyrm.time);
     for (let i = 0; i < 100; i++) {
       await h.wait(80);
       if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
     }
-    console.log('stuck', JSON.stringify(await h.eval(() => ({ gs: window.wyrm.state, t: window.wyrm.time, ps: window.wyrm.player.state }))));
   };
-  await h.go('?level=falls&cp=terrace&seed=3&quality=low&maxdt=0.1', 2500);
+  await h.go(url, 2500);
   await h.skipDialogue(8000);
   await h.eval(() => {
     const g = window.wyrm;
@@ -232,32 +231,39 @@ export async function falls(h) {
     for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 0.1; }
   });
   const conduits = await h.eval(() => window.wyrm.level.conduits.map((c) => [c.x, c.z]));
-  h.check('three conduits built', conduits.length === 3, JSON.stringify(conduits));
-  const breathe = async ([x, z]) => {
-    await h.eval(({ x, z }) => {
+  h.check(`${signal}: three conduits built`, conduits.length === 3, JSON.stringify(conduits));
+  const lit = [];
+  for (const [x, z] of conduits) {
+    await h.eval(({ x, z, cx, cz }) => {
       const g = window.wyrm;
       g.player.mana = 999;
-      const px = -9 + (x + 9) * 0.35;
-      const pz = 97 + (z - 97) * 0.35;
+      g.player.hp = g.player.maxHp;
+      const px = cx + (x - cx) * 0.35;
+      const pz = cz + (z - cz) * 0.35;
       const yaw = Math.atan2(x - px, z - pz);
       g.player.place(px, g.col.groundAt(px, pz, 1e4, 0.1).y + 0.05, pz, yaw);
-    }, { x, z });
+    }, { x, z, cx: cage[0], cz: cage[1] });
     await waitGame(0.15);
     await h.eval(() => window.wyrm.input.simulate('breath', true));
     await waitGame(0.45);
-    console.log('breath', JSON.stringify(await h.eval(() => ({ st: window.wyrm.player.state, el: window.wyrm.player.element, t: window.wyrm.time }))));
     await h.eval(() => window.wyrm.input.simulate('breath', false));
     await waitGame(0.15);
-  };
-  const lit = [];
-  for (const c of conduits) {
-    await breathe(c);
     lit.push(await h.eval(() => window.wyrm.level.conduits.filter((c) => c.charged).length));
   }
   await waitGame(0.3);
-  const opened = await h.eval(() => window.wyrm.level.fired.has('stormglass'));
-  h.check('charging all three conduits together opens the stormglass cage', opened, `charged after each: ${lit}`);
-  await h.shot('puzzle-conduits');
+  const opened = await h.eval((sig) => window.wyrm.level.fired.has(sig), signal);
+  h.check(`${signal}: charging all three conduits together breaks the cage`, opened, `charged after each: ${lit}`);
+  await h.shot(shotName);
+}
+
+/** Stormspire Falls: the Stormglass cache on the High Terrace. */
+export async function falls(h) {
+  await conduitSet(h, '?level=falls&cp=terrace&seed=3&quality=low&maxdt=0.1', [-9, 97], 'stormglass', 'puzzle-conduits');
+}
+
+/** The Frostworks: the Hollow's conduit cage. */
+export async function frostworks(h) {
+  await conduitSet(h, '?level=frostworks&seed=3&quality=low&maxdt=0.1', [-8, 38.5], 'hollow-conduits', 'puzzle-frost-conduits');
 }
 
 /** Stonewild Plains: the storehouse behind the arrival circle (boulder onto a weight plate). */

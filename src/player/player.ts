@@ -542,7 +542,9 @@ export class Player {
         const dx = m > 0.3 ? this.w.x : b.vx;
         const dz = m > 0.3 ? this.w.z : b.vz;
         const n = Math.hypot(dx, dz) || 1;
-        if (this.tryLedge(dx / n, dz / n, 2.05, true)) return;
+        // Only a lip at about chest height: enough to forgive a near miss,
+        // not enough to turn a flap into a climb over walls meant to stop you.
+        if (this.tryLedge(dx / n, dz / n, 1.1, true)) return;
       }
       if (this.tryClimb()) return;
     }

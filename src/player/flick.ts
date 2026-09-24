@@ -19,10 +19,10 @@ export class Flick {
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), glow(0x3a2a10));
     body.scale.set(1, 1, 1.6);
     this.root.add(body);
-    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.1, 12, 10), glow(0xd8c860));
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), glow(0xb8a850));
     tail.position.z = -0.16;
     this.root.add(tail);
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), glow(0xffe060, 0.14, true));
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), glow(0xffe060, 0.08, true));
     halo.position.z = -0.16;
     this.root.add(halo);
     const wm = new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });

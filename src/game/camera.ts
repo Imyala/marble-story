@@ -115,7 +115,7 @@ export class CameraRig {
     const cp = Math.cos(this.pitch);
     const dir = new THREE.Vector3(-Math.sin(this.yaw) * cp, Math.sin(this.pitch), -Math.cos(this.yaw) * cp);
     // Pull in when geometry is in the way; ease back out.
-    const ray = g.col.raycast(this.focus.x, this.focus.y, this.focus.z, dir.x, dir.y, dir.z, this.dist, true);
+    const ray = g.col.raycast(this.focus.x, this.focus.y, this.focus.z, dir.x, dir.y, dir.z, this.dist, true, true);
     const clear = Math.max(1.3, ray.t - 0.35);
     if (clear < this.curDist) this.curDist = clear;
     else this.curDist = damp(this.curDist, Math.min(clear, this.dist), 3, dt);

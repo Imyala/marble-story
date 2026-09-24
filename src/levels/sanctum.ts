@@ -7,6 +7,7 @@ import { Water } from '../render/water';
 import { DragonRig, defaultPose, type DragonLook } from '../player/dragonRig';
 import { makeCyl } from '../world/collision';
 import type { Line } from '../ui/dialogue';
+import { trialGround } from './trials';
 
 /**
  * The Warden Sanctum: the hub. Emberhold teaches fire here; the Wardgate
@@ -67,6 +68,18 @@ export const sanctum: LevelDef = {
       if (i % 3 === 1) b.decor.pillar(x, 0, z, 0.8, 3.5, STONE, true);
       else b.pillar(x, z, 0.8, -1, 7, STONE);
     }
+    // Inlaid floor: concentric bands, a gold rune ring and four element spokes.
+    floorRing(b, 3.2, 5.5, 0x9a8f7c);
+    floorRing(b, 7.0, 7.4, 0xd8b060, true);
+    floorRing(b, 10.5, 12.2, 0xb0a590);
+    const spokes: [number, number][] = [[0xff7a2a, -Math.PI * 0.75], [0x7ac8ff, -Math.PI * 0.25], [0x8fe4ff, Math.PI * 0.25], [0x8bd05a, Math.PI * 0.75]];
+    for (const [c, a] of spokes) {
+      const sp = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 5), new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.6 }));
+      sp.rotation.x = -Math.PI / 2;
+      sp.rotation.z = -a;
+      sp.position.set(Math.sin(a) * 9.2, 0.27, Math.cos(a) * 9.2);
+      b.level.root.add(sp);
+    }
     // Central brazier.
     b.torch(0, 0, 'hearth', true, 0, 0.25);
     // Warden statues around the brazier, lit as each element returns.
@@ -91,6 +104,21 @@ export const sanctum: LevelDef = {
     b.platform(46, 0.4, 4, 18, 18, STONE_DARK, 0.4, { trim: STONE });
     const dummySpots: [number, number][] = [[42, 0], [50, 0], [46, 9], [40, 8], [52, 8]];
     for (const [x, z] of dummySpots) dummy(g, x, z);
+    // Trials clear the dummies away while they run.
+    b.level.on('trial-start', () => {
+      for (const e of g.enemies) {
+        if (e.alive && e.def.id === 'dummy') {
+          e.onDeath = null;
+          e.alive = false;
+          e.state = 'dead';
+          e.deadT = 0.3;
+        }
+      }
+    });
+    b.level.on('trial-end', () => {
+      if (g.enemies.some((e) => e.alive && e.def.id === 'dummy')) return;
+      for (const [x, z] of dummySpots) dummy(g, x, z);
+    });
     b.torch(38, -4, 'lesson', false, 0, 0.4);
     b.torch(54, -4, 'lesson', false, 0, 0.4);
     b.torch(38, 12, 'lesson', false, 0, 0.4);
@@ -99,6 +127,11 @@ export const sanctum: LevelDef = {
     b.level.on('lesson-torches', () => lessonTorchesDone(g));
     b.crystal(58, 2, 'green', 6);
     b.crystal(58, 7, 'red', 4);
+    // Dragon Trials open once the fire lesson is done.
+    if (g.save.found['story:sanctum:lesson-done']) {
+      trialGround(b, 46, -3.5, 46, 4);
+      b.story('trials', 46, -1, 4, () => g.hud.flick('A Trial Stone! Emberhold says the Sanctum\'s trials pay well. Press F.', 6));
+    }
 
     // --- Hatchery (west) -------------------------------------------------------------------------
     b.bridge(-16, -2, 0.25, -34, -5, 1.0, 3.5);
@@ -179,6 +212,17 @@ function statue(b: Builder, x: number, z: number, look: DragonLook, lit: boolean
   b.level.root.add(rig.root);
   b.col.add(makeCyl(x, z, 1.5, y, y + 3.5));
   if (lit) b.beacon(x, y + 5, z, look.eye, 0.6);
+}
+
+function floorRing(b: Builder, r0: number, r1: number, color: number, glowing = false): void {
+  const m = glowing
+    ? new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.75 })
+    : new THREE.MeshStandardMaterial({ color, roughness: 0.9 });
+  const ring = new THREE.Mesh(new THREE.RingGeometry(r0, r1, 48, 1), m);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.26;
+  ring.receiveShadow = true;
+  b.level.root.add(ring);
 }
 
 function egg(b: Builder, x: number, z: number, y: number): void {

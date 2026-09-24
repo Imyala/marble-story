@@ -5,6 +5,7 @@ import {
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
 import { ELEMENTS } from '../game/types';
+import { TRIALS, type TrialGround } from '../levels/trials';
 
 type Screen = { el: HTMLElement; focus: HTMLElement[]; idx: number; back: (() => void) | null; grid?: number };
 
@@ -62,6 +63,8 @@ export class Menus {
   }
 
   private push(el: HTMLElement, back: (() => void) | null, grid?: number): Screen {
+    // The press that opened this screen must not also act inside it.
+    this.game.input.clearBuffers();
     const top = this.stack[this.stack.length - 1];
     if (top) top.el.style.display = 'none';
     this.layer.appendChild(el);
@@ -72,6 +75,7 @@ export class Menus {
   }
 
   private pop(): void {
+    this.game.input.clearBuffers();
     const s = this.stack.pop();
     s?.el.remove();
     const top = this.stack[this.stack.length - 1];
@@ -212,6 +216,8 @@ export class Menus {
     go.style.opacity = '0';
     go.style.animation = `crawlIn 1s ${PROLOGUE.length * 2.2}s forwards`;
     c.append(go);
+    const skip = this.div('menu-foot', 'Esc to skip');
+    m.append(skip);
     m.append(c);
     this.replaceTop(m, () => this.game.newGame(d));
   }
@@ -301,7 +307,7 @@ export class Menus {
       b.className = `lvl${g.save.levelsDone[id] ? ' done' : ''}`;
       b.dataset.f = '1';
       b.disabled = !unlocked;
-      const found = Object.keys(g.save.found).filter((k) => k.startsWith(`${id}:`)).length;
+      const found = Object.keys(g.save.found).filter((k) => k.startsWith(`${id}:`) && /:(heart|mana|relic)\d+$/.test(k)).length;
       b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>`;
       b.addEventListener('click', () => {
         if (!unlocked) return;
@@ -315,6 +321,41 @@ export class Menus {
     }
     p.append(grid);
     const close = this.btn('Stay', () => g.resume());
+    close.style.marginTop = '16px';
+    p.append(close);
+    m.append(p);
+    this.push(m, () => g.resume(), 2);
+  }
+
+  showTrials(ground: TrialGround): void {
+    const g = this.game;
+    this.hideAll();
+    g.state = 'pause';
+    g.input.wantPointerLock = false;
+    g.input.releaseLock();
+    const m = this.div('menu dim');
+    const p = this.div('panel', '<h2>Dragon Trials</h2><div class="sub">Optional challenges. The first clear pays far more than repeats.</div>');
+    const grid = this.div('levels');
+    for (const t of TRIALS) {
+      const locked = t.needs.some((e) => !g.save.elements.includes(e));
+      const done = !!g.save.found[`trial:${t.id}`];
+      const b = document.createElement('button');
+      b.className = `lvl${done ? ' done' : ''}`;
+      b.dataset.f = '1';
+      b.disabled = locked;
+      b.innerHTML = `<h3>${t.name}</h3><p>${locked ? `Requires ${t.needs.join(', ')}.` : t.desc}</p>
+        <p style="margin-top:6px;color:#cfe6ff">${locked ? '' : `Reward: ${done ? t.repeat : t.reward} gems &middot; ${t.time}s`}</p>`;
+      b.addEventListener('click', () => {
+        if (locked) return;
+        g.audio.play('uiConfirm');
+        this.hideAll();
+        g.resume();
+        ground.start(t);
+      });
+      grid.append(b);
+    }
+    p.append(grid);
+    const close = this.btn('Not now', () => g.resume());
     close.style.marginTop = '16px';
     p.append(close);
     m.append(p);
@@ -422,9 +463,8 @@ export class Menus {
     const p = this.div('panel lore');
     p.innerHTML = '<h2>Journal</h2><div class="sub">Dragon Relics and field notes.</div>';
     for (const [t, d] of TIPS) p.append(this.div('entry', `<h4>${t}</h4><p>${d}</p>`));
-    const found = new Set(Object.keys(g.save.found));
     for (const [id, r] of Object.entries(RELICS)) {
-      const have = [...found].some((k) => k.endsWith(`:${id}`) || k === id || k.endsWith(id));
+      const have = !!g.save.found[`relic:${id}`];
       p.append(this.div(`entry${have ? '' : ' missing'}`, have ? `<h4>${r.title}</h4><p>${r.text}</p>` : `<h4>Undiscovered relic</h4><p style="font-style:normal;color:#a99cc9">Somewhere in ${LEVEL_INFO[r.level]?.name ?? 'the realms'}.</p>`));
     }
     const back = this.btn('Back', () => this.pop());
@@ -535,7 +575,7 @@ export class Menus {
     });
     const st = g.save.stats;
     const stats = this.div('stats', `<span>Enemies defeated</span><b>${st.kills}</b><span>Best combo</span><b>${st.bestCombo}</b>
-      <span>Elemental reactions</span><b>${st.reactions}</b><span>Collectibles</span><b>${Object.keys(g.save.found).filter((k) => !k.startsWith('story') && !k.startsWith('arena')).length}</b>`);
+      <span>Elemental reactions</span><b>${st.reactions}</b><span>Collectibles</span><b>${Object.keys(g.save.found).filter((k) => /^[a-z]+:(heart|mana|relic)\d+$/.test(k)).length}</b>`);
     stats.style.opacity = '0';
     stats.style.animation = `crawlIn 1s ${lines.length * 2.4}s forwards`;
     stats.style.justifyContent = 'center';

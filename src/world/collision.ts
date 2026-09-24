@@ -47,6 +47,8 @@ export class Solid {
   dyaw = 0;
   /** Blocks actors but cannot be stood on (invisible level bounds). */
   wallOnly = false;
+  /** Only the camera collides with it (tree canopies it should not sit inside). */
+  cameraOnly = false;
   tag = '';
   /** Anything the owner wants to hang off the solid (breakables, platforms). */
   owner: unknown = null;
@@ -293,7 +295,7 @@ export class CollisionWorld {
     let best = this.terrainAt(x, z);
     let solid: Solid | null = null;
     for (const s of this.query(x, z, pad)) {
-      if (!s.enabled || s.wallOnly) continue;
+      if (!s.enabled || s.wallOnly || s.cameraOnly) continue;
       if (s.footprintDist(x, z) > pad) continue;
       const top = s.topNear(x, z);
       if (top <= maxY && top > best) {
@@ -359,7 +361,7 @@ export class CollisionWorld {
       const head = b.y + b.height;
       const prevHead = prevY + b.height;
       for (const s of this.query(b.x, b.z, b.radius)) {
-        if (!s.enabled) continue;
+        if (!s.enabled || s.cameraOnly) continue;
         if (s.footprintDist(b.x, b.z) > b.radius * 0.5) continue;
         if (s.y0 >= prevHead - 0.05 && s.y0 < head) {
           b.y = s.y0 - b.height;
@@ -403,7 +405,7 @@ export class CollisionWorld {
     for (let iter = 0; iter < 2; iter++) {
       let moved = false;
       for (const s of this.query(b.x, b.z, r)) {
-        if (!s.enabled) continue;
+        if (!s.enabled || s.cameraOnly) continue;
         if (s.y0 >= head - 0.01) continue;
         const top = s.topNear(b.x, b.z);
         if (!s.wallOnly && top <= feet + b.stepUp) continue;
@@ -480,7 +482,7 @@ export class CollisionWorld {
   /** Is a vertical cylinder at this spot overlapping any solid? */
   blocked(x: number, y: number, z: number, r: number, h: number): boolean {
     for (const s of this.query(x, z, r)) {
-      if (!s.enabled) continue;
+      if (!s.enabled || s.cameraOnly) continue;
       if (s.y0 >= y + h || s.top <= y) continue;
       if (s.footprintDist(x, z) < r) return true;
     }
@@ -492,14 +494,14 @@ export class CollisionWorld {
    * aiming. Ramps are treated as their bounding box, which is conservative in
    * the direction the camera cares about.
    */
-  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number, ignoreDynamic = false): RayHit {
+  raycast(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxT: number, ignoreDynamic = false, camera = false): RayHit {
     let best = maxT;
     let hit: Solid | null = null;
     const mx = ox + dx * maxT * 0.5;
     const mz = oz + dz * maxT * 0.5;
     const reach = maxT * 0.5 * Math.hypot(dx, dz) + 1;
     for (const s of this.query(mx, mz, reach)) {
-      if (!s.enabled || (ignoreDynamic && s.dynamic)) continue;
+      if (!s.enabled || (ignoreDynamic && s.dynamic) || (s.cameraOnly && !camera)) continue;
       const t = s.shape === 'cyl' ? rayCyl(s, ox, oy, oz, dx, dy, dz) : rayBox(s, ox, oy, oz, dx, dy, dz);
       if (t >= 0 && t < best) {
         best = t;

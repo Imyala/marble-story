@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "check": "tsc --noEmit && vitest run",
-    "smoke": "node scripts/smoke-run.mjs"
+    "smoke": "node scripts/smoke-run.mjs",
+    "play": "node scripts/play.mjs"
   },
   "dependencies": {
     "three": "^0.186.1"

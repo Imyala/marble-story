@@ -127,8 +127,9 @@ export const fen: LevelDef = {
     b.gemLine([[0, 60], [0, 64]], 'blue', 1);
 
     // --- Willow clearing ---------------------------------------------------------------
-    b.tree(0, 79, 2.3, 'willow', { leaf: 0x4a7a40 });
-    b.scatter(18, 0, 77, 12, (x, z) => { if (Math.hypot(x, z - 79) > 4) b.tree(x, z, 0.8 + Math.abs(jitter(x)) * 0.5, 'round', { leaf: 0x3f6f32 }); }, (x, z) => Math.hypot(x, z - 77) > 7);
+    b.tree(-7, 76, 2.1, 'willow', { leaf: 0x4a7a40 });
+    b.scatter(18, 0, 77, 12, (x, z) => b.tree(x, z, 0.8 + Math.abs(jitter(x)) * 0.5, 'round', { leaf: 0x4f8a3a }),
+      (x, z) => Math.hypot(x, z - 77) > 7 && Math.abs(x) > 5 && Math.hypot(x + 7, z - 76) > 5);
     b.scatter(50, 0, 77, 12, (x, z, y) => b.decor.grass(x, y, z, 1, 0x5a9a42));
     const willowArena = b.arena('willow', 0, 75, 11, [
       [{ type: 'grunt', x: -5, z: 80 }, { type: 'grunt', x: 5, z: 80, delay: 0.3 }],

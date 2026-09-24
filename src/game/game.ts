@@ -891,6 +891,7 @@ export class Game {
       } else this.toast(`Spirit Shard (${k}/${SHARDS_PER_UPGRADE})`, 'good');
     } else {
       this.sfx('relic');
+      s.found[`relic:${c.relicId}`] = true;
       const r = RELICS[c.relicId];
       if (r) this.hud.relic(r.title, r.text);
     }

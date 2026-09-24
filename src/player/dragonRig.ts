@@ -731,11 +731,13 @@ export class DragonRig {
       // The root is mirrored with scale.x, so its yaw and roll take the side's
       // sign to make both wings mirror images of each other.
       w.root.rotation.order = 'YZX';
-      w.root.rotation.y = w.side * lerp(1.35, 0.12, spread);
-      w.root.rotation.z = w.side * (lerp(0.6, 0.08, spread) + P.wingFlap);
+      // Folded: the arm lies back along the flank and the outer half tucks
+      // back over it, like a closed fan.
+      w.root.rotation.y = w.side * lerp(1.42, 0.12, spread);
+      w.root.rotation.z = w.side * (lerp(0.42, 0.08, spread) + P.wingFlap);
       w.root.rotation.x = 0;
-      w.root.scale.z = lerp(0.3, 1, spread);
-      w.outer.rotation.set(0, lerp(0.35, 0.0, spread), lerp(-0.25, P.wingFlap * 0.6, spread));
+      w.root.scale.z = lerp(0.6, 1, spread);
+      w.outer.rotation.set(0, lerp(-2.55, 0.0, spread), lerp(0.15, P.wingFlap * 0.6, spread));
     }
 
     // Legs.

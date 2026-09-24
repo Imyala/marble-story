@@ -49,6 +49,7 @@ export class Player {
   invuln = false;
   iframes = 0;
   private jumps = 0;
+  private jumpCut = true;
   private coyote = 0;
   airTime = 0;
   private airBudget = 1.6;
@@ -280,7 +281,10 @@ export class Player {
       if (inp.take('elem2', 0.2) && owned.includes('lightning')) pick = 'lightning';
       if (inp.take('elem3', 0.2) && owned.includes('ice')) pick = 'ice';
       if (inp.take('elem4', 0.2) && owned.includes('earth')) pick = 'earth';
-      const cycle = inp.wheel !== 0 ? Math.sign(inp.wheel) : inp.take('elemNext', 0.2) ? 1 : 0;
+      // The wheel is per frame but this runs per physics step: use it once.
+      const wheel = inp.wheel;
+      inp.wheel = 0;
+      const cycle = wheel !== 0 ? Math.sign(wheel) : inp.take('elemNext', 0.2) ? 1 : 0;
       if (cycle !== 0) {
         const order = ELEMENTS.filter((e) => owned.includes(e));
         const i = Math.max(0, order.indexOf(this.element ?? order[0]!));
@@ -393,8 +397,11 @@ export class Player {
     } else {
       this.steer(dt, RUN * 0.95, AIR_ACCEL, TURN * 0.6);
       this.gravity(dt, 1);
-      // Short hop when the button is released early.
-      if (inp.released('jump') && b.vy > 4 && this.jumps === 1) b.vy *= 0.5;
+      // Short hop when the button is released early (once per jump).
+      if (!inp.down('jump') && !this.jumpCut && b.vy > 4 && this.jumps === 1) {
+        b.vy *= 0.5;
+        this.jumpCut = true;
+      }
     }
 
     // Jumping and flapping.
@@ -404,6 +411,7 @@ export class Player {
         inp.consume('jump');
         b.vy = JUMP;
         this.jumps = 1;
+        this.jumpCut = false;
         this.coyote = 0;
         b.grounded = false;
         g.sfx('jump');

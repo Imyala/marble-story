@@ -396,6 +396,16 @@ export class Builder {
     const y = this.y(x, z);
     this.decor.tree(x, y, z, scale, kind, palette);
     if (collide && kind !== 'crystal') this.col.add(makeCyl(x, z, 0.35 * scale, y - 1, y + 3 * scale));
+    // Keep the camera out of leafy canopies.
+    const canopy: Partial<Record<TreeKind, [number, number, number]>> = {
+      round: [1.9, 2.3, 4.6], autumn: [1.9, 2.3, 4.6], willow: [2.3, 2.6, 4.4], pine: [1.5, 1.2, 4.8], snowPine: [1.5, 1.2, 4.8],
+    };
+    const c = canopy[kind];
+    if (c) {
+      const s = makeCyl(x, z, c[0] * scale, y + c[1] * scale, y + c[2] * scale);
+      s.cameraOnly = true;
+      this.col.add(s);
+    }
   }
 
   rock(x: number, z: number, scale: number, color = 0x7d7466, collide = scale > 0.9): void {

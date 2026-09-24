@@ -28,14 +28,26 @@ export default async function (h) {
     g.player.yaw = 0;
   });
   await h.wait(300);
-  // Horn, then Tail (the launcher), then hold Jump to rise with the enemy.
-  await h.tap('KeyJ', 1, 200);
-  await h.page.keyboard.press('KeyL');
-  await h.wait(60);
-  await h.page.keyboard.down('Space');
-  await h.wait(700);
+  // Horn, then Tail (the launcher), then hold Jump to rise with the enemy. Timed in game
+  // seconds through the game's input, since headless frames are too coarse for key taps.
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 200; i++) {
+      await h.wait(30);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  const press = (a, down) => h.eval(([a, down]) => window.wyrm.input.simulate(a, down), [a, down]);
+  await press('horn', true);
+  await waitGame(0.12);
+  await press('horn', false);
+  await press('tail', true);
+  await waitGame(0.08);
+  await press('tail', false);
+  await press('jump', true);
+  await waitGame(0.75);
   const mid = await h.eval(() => ({ py: window.wyrm.player.y, ey: window.__e.y, ps: window.wyrm.player.state, st: window.__e.state }));
-  await h.page.keyboard.up('Space');
+  await press('jump', false);
   h.check('launcher lifts enemy and player', mid.ey > 2 && mid.py > 2, JSON.stringify(mid));
   await h.tap('KeyJ', 3, 250);
   await h.shot('combat-air');

@@ -1290,9 +1290,9 @@ export class Player {
       const d = Math.hypot(dx, dz);
       if (d > w.range + 1.0 || Math.abs(p.y - (b.y + 0.8)) > 2) continue;
       if (Math.abs(angleDiff(this.yaw, yawOf(dx, dz))) > 1.3) continue;
-      // A reflect switch roughly ahead wins over enemies: that is what the bolt is for.
+      // A reflect switch broadly ahead wins over enemies: that is what the bolt is for.
       let aim: { x: number; y: number; z: number } | null = null;
-      let bestA = 0.9;
+      let bestA = 1.5;
       for (const r of this.game.level?.reflectTargets ?? []) {
         if (r.on) continue;
         const rd = Math.hypot(r.x - b.x, r.z - b.z);

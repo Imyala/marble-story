@@ -309,3 +309,64 @@ export async function plains(h) {
   h.check('the storehouse door opens', ray >= 3.5, `ray ${ray}`);
   await h.shot('puzzle-plains');
 }
+
+/** Eclipse Keep: the Umbral Balcony (burn a rope to drop a drawbridge, then reflect a Gloom eye's bolt). */
+export async function keep(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 100; i++) {
+      await h.wait(80);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=keep&cp=door&seed=3&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  const hy = await h.eval(() => {
+    const g = window.wyrm;
+    g.save.elements = ['fire', 'lightning', 'ice', 'earth'];
+    for (const a of g.level.arenas) a.state = 'cleared';
+    for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    g.player.element = 'fire';
+    const y = g.col.groundAt(11.7, -152.9, 1e4, 0.1).y;
+    g.player.place(11.7, y + 0.05, -152.9, Math.PI / 2);
+    g.cam.snapBehind(Math.PI / 2);
+    return y;
+  });
+  await waitGame(0.3);
+  await h.eval(() => { window.wyrm.player.mana = 999; window.wyrm.input.simulate('breath', true); });
+  await waitGame(1.0);
+  await h.eval(() => window.wyrm.input.simulate('breath', false));
+  await waitGame(2.2);
+  const bridge = await h.eval(() => ({ burnt: window.wyrm.level.fired.has('keep-bridge'), y: +window.wyrm.col.groundAt(19, -151, 1e4, 0.1).y.toFixed(2) }));
+  h.check('fire burns the rope and drops the drawbridge', bridge.burnt && Math.abs(bridge.y - hy) < 0.3, JSON.stringify(bridge) + ` hall ${hy.toFixed(2)}`);
+  await h.shot('puzzle-keep-bridge');
+  // Walk the bridge, then bat a bolt back into the switch.
+  await h.eval(() => { const g = window.wyrm; g.player.place(17, g.player.y + 0.2, -151, Math.PI / 2); g.cam.snapBehind(Math.PI / 2); });
+  await h.page.keyboard.down('KeyW');
+  await waitGame(0.9);
+  await h.page.keyboard.up('KeyW');
+  const across = await h.eval(() => ({ x: +window.wyrm.player.x.toFixed(2), y: +window.wyrm.player.y.toFixed(2) }));
+  h.check('walks across the drawbridge', across.x > 21 && across.y > hy - 0.5, JSON.stringify(across));
+  let solved = false;
+  for (let i = 0; i < 300 && !solved; i++) {
+    const st = await h.eval(() => {
+      const g = window.wyrm;
+      const b = g.player.body;
+      g.player.hp = g.player.maxHp;
+      g.player.yaw = Math.PI / 2;
+      const bolt = g.projectiles.find((p) => p.alive && !p.spec.fromPlayer);
+      if (bolt && g.player.state === 'move' && b.grounded) {
+        bolt.x = b.x + 3; bolt.y = b.y + 1; bolt.z = b.z;
+        bolt.vx = -9; bolt.vy = 0; bolt.vz = 0;
+        g.input.simulate('horn', true);
+        return { swung: true };
+      }
+      g.input.simulate('horn', false);
+      return { swung: false, fired: g.level.fired.has('keep-eye') };
+    });
+    if (st.fired) solved = true;
+    else await h.wait(st.swung ? 400 : 60);
+  }
+  h.check('a reflected bolt opens the balcony cage', solved);
+  await h.shot('puzzle-keep-eye');
+}

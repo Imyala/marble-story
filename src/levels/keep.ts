@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { LevelDef, Builder } from '../world/level';
 import { Npc } from '../world/level';
-import { ambient, paint, jitter, bossFight } from './common';
+import { ambient, paint, jitter, bossFight, Cage } from './common';
 import { Nyxa } from '../enemies/bosses/nyxa';
 import { NYXA, ENDING } from '../game/story';
 import type { Game } from '../game/game';
@@ -73,6 +73,8 @@ export const keep: LevelDef = {
       // Through the great door to the Hall of Umbra.
       s.path([[0, -129, 8], [0, -139, 8]], 7.5, 1);
       s.island(0, -153, 15, 8, 2, 0.2);
+      // The Umbral Balcony, off the hall's east side.
+      s.island(28.5, -151, 5, 8, 2, 0.15);
       // The Broken Stair.
       s.island(0, -181, 5, 9, 2, 0.15);
       s.island(0, -209.5, 4.5, 14, 2, 0.15);
@@ -358,6 +360,7 @@ export const keep: LevelDef = {
     crystals(b, -11, hy, -161, 0.9);
     b.crystal(11, -146, 'blue', 12);
     b.crystal(-12, -155, 'green', 4);
+    umbralBalcony(b, hy);
 
     // --- The Broken Stair ---------------------------------------------------------------------------
     causeway(b, 0, -168, hy, 0, -176.2, b.y(0, -181), 3.6);
@@ -570,6 +573,38 @@ function crystals(b: Builder, x: number, y: number, z: number, s = 1): void {
 }
 
 /** A stone pillar in keep colors, with a collider. */
+/**
+ * The Umbral Balcony: a raised drawbridge on the hall's east edge, tied up
+ * with a rope that only fire cuts. Across it a Gloom eye guards a caged hoard;
+ * bat one of its bolts back into the switch beside it.
+ */
+function umbralBalcony(b: Builder, hy: number): void {
+  const g = b.game;
+  const hx = 14.5;
+  const z = -151;
+  obPillar(b, hx - 0.4, z - 1.9, 0.35, hy - 0.3, hy + 3.2);
+  obPillar(b, hx - 0.4, z + 1.9, 0.35, hy - 0.3, hy + 3.2);
+  b.rope(hx - 0.4, z - 1.9, 3.1, 'keep-bridge', hy);
+  b.drawbridge(hx, hy, z, Math.PI / 2, 9.2, 2.8, 'keep-bridge');
+  const ty = b.y(28.5, z);
+  b.boltTurret(27, z + 3.2, 13, 2.6, ty, 'keep-eye', -Math.PI / 2);
+  b.reflectSwitch(27, z - 3.2, 'keep-eye', ty);
+  const cage = new Cage(b, 30.2, z, 1.7, 3.2);
+  const cageSolid = b.col.add(makeCyl(30.2, z, 2.0, ty, ty + 3.2));
+  b.crystal(30.2, z, 'mixed', 40, true, ty);
+  b.level.on('keep-eye', () => {
+    cage.shatter(g);
+    cageSolid.enabled = false;
+  });
+  b.story('balcony', hx - 3, z, 3.5, () => g.hud.flick('A bridge, tied up with rope! Horns won\'t cut it... but rope burns.', 6));
+  b.puzzleHint(hx - 1, z, 6, [
+    'Fire breath (1) on the rope by the post will drop that bridge.',
+  ], 'keep-bridge', 25);
+  b.puzzleHint(25, z, 6, [
+    'Same trick as back home in the Fen: tap Horn just as a bolt reaches you, facing the switch eye.',
+  ], 'keep-eye', 20);
+}
+
 function obPillar(b: Builder, x: number, z: number, r: number, y0: number, top: number): void {
   const m = mat(OBS2, { rough: 0.85, flat: true });
   b.decor.add(GEO.cyl6(), m, x, y0, z, r * 1.2, 0.5, r * 1.2, 0, 0.3, 0);

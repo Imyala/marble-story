@@ -28,9 +28,12 @@ export default async function (h) {
     g.player.yaw = 0;
   });
   await h.wait(300);
+  // Horn, then Tail (the launcher), then hold Jump to rise with the enemy.
   await h.tap('KeyJ', 1, 200);
+  await h.page.keyboard.press('KeyL');
+  await h.wait(60);
   await h.page.keyboard.down('Space');
-  await h.tap('KeyL', 1, 700);
+  await h.wait(700);
   const mid = await h.eval(() => ({ py: window.wyrm.player.y, ey: window.__e.y, ps: window.wyrm.player.state, st: window.__e.state }));
   await h.page.keyboard.up('Space');
   h.check('launcher lifts enemy and player', mid.ey > 2 && mid.py > 2, JSON.stringify(mid));

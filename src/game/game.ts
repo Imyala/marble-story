@@ -892,6 +892,8 @@ export class Game {
       this.player.place(x, y + 0.1, z, yaw);
       this.player.resetForLevel();
       this.player.fury = 0;
+      // A moment's grace so nothing lands a hit the instant Aster is back.
+      this.player.iframes = 2;
       for (const p of this.projectiles) p.kill();
       for (const e of this.enemies) if (e.alive) {
         e.aggro = false;

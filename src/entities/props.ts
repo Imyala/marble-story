@@ -373,6 +373,13 @@ export class Gate implements Prop, Hittable {
   }
 
   open(): void {
+    if (this.shutting >= 0) {
+      // Reopening mid-close: carry on from where the door is.
+      this.opening = (1 - Math.min(1, this.shutting)) * 1.4;
+      this.shutting = -1;
+      this.game.sfx('door', this.x, this.y, this.z);
+      return;
+    }
     if (this.opening >= 0 || !this.alive) return;
     this.opening = 0;
     this.game.sfx('door', this.x, this.y, this.z);
@@ -381,13 +388,38 @@ export class Gate implements Prop, Hittable {
 
   close(): void {
     this.opening = -1;
+    this.shutting = -1;
     this.alive = true;
     this.solid.enabled = true;
     this.root.position.y = this.y;
     this.root.visible = true;
   }
 
+  private shutting = -1;
+
+  /** Slides back up (a held gate whose weight came off). */
+  shut(): void {
+    if (this.opening < 0 && this.alive) return;
+    const k = this.opening < 0 ? 1 : Math.min(1, this.opening / 1.4);
+    this.opening = -1;
+    this.alive = true;
+    this.root.visible = true;
+    this.shutting = 1 - k;
+    this.game.sfx('door', this.x, this.y, this.z, 0.8);
+  }
+
   update(dt: number): void {
+    if (this.shutting >= 0) {
+      this.shutting += dt / 0.9;
+      const k = Math.min(1, this.shutting);
+      this.root.position.y = this.y - (1 - k) * (this.h + 0.2);
+      if (k > 0.5) this.solid.enabled = true;
+      if (k >= 1) {
+        this.shutting = -1;
+        this.game.shake(0.12, 0.3);
+      }
+      return;
+    }
     if (this.opening >= 0 && this.alive) {
       this.opening += dt;
       const k = Math.min(1, this.opening / 1.4);

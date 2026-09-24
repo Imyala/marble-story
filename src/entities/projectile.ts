@@ -128,6 +128,10 @@ export class Projectile {
         tx = p.x;
         ty = p.y + 0.8;
         tz = p.z;
+      } else if (this.homeOn) {
+        tx = this.homeOn.x;
+        ty = this.homeOn.y;
+        tz = this.homeOn.z;
       } else {
         const e = g.nearestEnemy(this.x, this.y, this.z, 12);
         if (e) {
@@ -165,6 +169,15 @@ export class Projectile {
         this.x = px + (dx / len) * hit.t;
         this.y = py + (dy / len) * hit.t;
         this.z = pz + (dz / len) * hit.t;
+        // A target right against the wall still takes the hit.
+        if (s.fromPlayer || this.reflected) {
+          for (const h of g.hittables()) {
+            if (h.alive && !this.hitSet.has(h) && this.overlaps(h)) {
+              this.impact(h);
+              return;
+            }
+          }
+        }
         this.impact(null);
         return;
       }
@@ -320,18 +333,31 @@ export class Projectile {
     this.kill();
   }
 
-  /** Reverses an enemy projectile back at its sender (hit it with the horn). */
-  reflect(dirX: number, dirZ: number): void {
+  /**
+   * Reverses an enemy projectile back at its sender (hit it with the horn).
+   * With a `target`, it homes on that point instead of the nearest enemy.
+   */
+  reflect(dirX: number, dirZ: number, target: { x: number; y: number; z: number } | null = null): void {
     const sp = Math.hypot(this.vx, this.vy, this.vz) * 1.4;
     this.vx = dirX * sp;
     this.vz = dirZ * sp;
     this.vy = 0;
+    if (target) {
+      const d = Math.hypot(target.x - this.x, target.y - this.y, target.z - this.z) || 1;
+      this.vx = ((target.x - this.x) / d) * sp;
+      this.vy = ((target.y - this.y) / d) * sp;
+      this.vz = ((target.z - this.z) / d) * sp;
+    }
+    this.homeOn = target;
     this.reflected = true;
     this.age = 0;
     this.spec.damage *= 2;
     this.spec.homing = 3;
     this.spec.fromPlayer = true;
+    this.spec.move = 'reflected';
   }
+
+  private homeOn: { x: number; y: number; z: number } | null = null;
 
   kill(): void {
     if (!this.alive) return;

@@ -65,7 +65,17 @@ dragoness, beneath the eclipse.
 - **Dragon Trials.** Six optional challenge fights on the Sanctum training
   grounds (clear the waves in time, reach a style rank, chain reactions, take
   no hits), unlocking as you learn elements. First clears pay big.
-- **Dragon Time.** Hold C to slow the world while you keep moving.
+- **Dragon Time.** Hold C to slow the world while you keep moving. Some doors
+  snap open too briefly to pass any other way.
+- **Puzzles that use your whole moveset.** Bat a Gloom eye's bolts back into
+  its switch, roll boulders onto weight plates, charge lightning conduits all at
+  once, freeze water into stepping floes, burn ropes to drop drawbridges, slip
+  through snap gates and spinning blades in Dragon Time, and strike element
+  locks in the order their glyphs count out. Linger unsolved and Flick starts
+  offering hints.
+- **Platforming with some give.** Grab ledges you just miss, climb vine walls,
+  keep a moving platform's momentum when you jump off it, hang at the top of a
+  jump, and dive out of a glide for speed, then swoop back up.
 
 ## Controls
 

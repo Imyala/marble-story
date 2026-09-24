@@ -1288,9 +1288,21 @@ export class Player {
       const dx = p.x - b.x;
       const dz = p.z - b.z;
       const d = Math.hypot(dx, dz);
-      if (d > w.range + 0.4 || Math.abs(p.y - (b.y + 0.8)) > 1.6) continue;
+      if (d > w.range + 1.0 || Math.abs(p.y - (b.y + 0.8)) > 2) continue;
       if (Math.abs(angleDiff(this.yaw, yawOf(dx, dz))) > 1.3) continue;
-      const tgt = this.game.nearestEnemy(b.x, b.y, b.z, 25);
+      // A reflect switch roughly ahead wins over enemies: that is what the bolt is for.
+      let aim: { x: number; y: number; z: number } | null = null;
+      let bestA = 0.9;
+      for (const r of this.game.level?.reflectTargets ?? []) {
+        if (r.on) continue;
+        const rd = Math.hypot(r.x - b.x, r.z - b.z);
+        const a = Math.abs(angleDiff(this.yaw, yawOf(r.x - b.x, r.z - b.z)));
+        if (rd < 30 && a < bestA) {
+          bestA = a;
+          aim = { x: r.x, y: r.y + 1.9, z: r.z };
+        }
+      }
+      const tgt = aim ? null : this.game.nearestEnemy(b.x, b.y, b.z, 25);
       let rx = Math.sin(this.yaw);
       let rz = Math.cos(this.yaw);
       if (tgt) {
@@ -1298,7 +1310,7 @@ export class Player {
         rx = (tgt.x - p.x) / n;
         rz = (tgt.z - p.z) / n;
       }
-      p.reflect(rx, rz);
+      p.reflect(rx, rz, aim);
       this.game.sfx('shieldBlock', p.x, p.y, p.z, 1.4);
       this.game.fx.hit(p.x, p.y, p.z, 0xffffff, 1);
       this.game.style.bonus(40);

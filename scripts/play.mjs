@@ -1,7 +1,7 @@
 /**
  * Dev playtest runner: drives the game in headless Chromium through a
  * scenario in scripts/scenarios/<name>.mjs and screenshots along the way.
- *   node scripts/play.mjs <scenario> [url]
+ *   node scripts/play.mjs <scenario>[:<export>] [url]
  */
 import { chromium } from 'playwright';
 import { mkdirSync } from 'node:fs';
@@ -50,9 +50,11 @@ const h = {
   failed: false,
   page,
 };
-const mod = await import(`./scenarios/${name}.mjs`);
+// `file:part` runs a named export of the scenario file instead of its default.
+const [file, part = 'default'] = name.split(':');
+const mod = await import(`./scenarios/${file}.mjs`);
 try {
-  await mod.default(h);
+  await mod[part](h);
 } catch (e) {
   console.log('scenario threw:', e);
   h.failed = true;

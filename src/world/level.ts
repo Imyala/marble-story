@@ -13,6 +13,9 @@ import {
   Switch, Talker, Torch, Trigger, Updraft, Wardstone, Geyser, ClimbWall, GlideCourse, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
 } from '../entities/props';
 import type { GemKind } from '../entities/gems';
+import {
+  BoltTurret, Boulder, Conduit, Drawbridge, ElementLock, IceFloes, PuzzleHint, ReflectSwitch, Rope, SnapGate, SpinBlade, WeightPlate,
+} from '../entities/puzzles';
 import { DragonRig, defaultPose, type DragonLook, type DragonPose } from '../player/dragonRig';
 import { rng } from '../core/rng';
 
@@ -56,6 +59,10 @@ export class Level {
   readonly wardstones = new Map<string, Wardstone>();
   readonly npcs: Npc[] = [];
   readonly climbWalls: ClimbWall[] = [];
+  readonly conduits: Conduit[] = [];
+  readonly reflectTargets: ReflectSwitch[] = [];
+  readonly boulders: Boulder[] = [];
+  private conduitGroups = new Map<string, { signal: string; done: boolean }>();
   waterLevel = -1e4;
   killY: number;
   water: Water | null = null;
@@ -117,6 +124,21 @@ export class Level {
   torchOut(group: string): void {
     const g = this.torchGroups.get(group);
     if (g && !g.done) g.lit = Math.max(0, g.lit - 1);
+  }
+
+  conduitGroup(group: string, signal: string): void {
+    this.conduitGroups.set(group, { signal, done: false });
+  }
+
+  /** A conduit lit or went dark: the group's signal fires once all of it is lit at the same time. */
+  conduitChanged(group: string): void {
+    const cg = this.conduitGroups.get(group);
+    if (!cg || cg.done) return;
+    const set = this.conduits.filter((c) => c.group === group);
+    if (set.length > 0 && set.every((c) => c.charged)) {
+      cg.done = true;
+      this.emit(cg.signal);
+    }
   }
 
   groupDone(group: string): boolean {
@@ -554,6 +576,87 @@ export class Builder {
   /** Rings to glide through in order within `limit` seconds. Points are [x, y, z, yaw]. */
   glideRings(id: string, pts: [number, number, number, number][], limit: number, reward = 40): GlideCourse {
     return this.addProp(new GlideCourse(this.game, `${this.level.def.id}:rings:${id}`, pts, limit, reward));
+  }
+
+  // --- puzzles ------------------------------------------------------------------------
+
+  /** A lightning conduit; it stays charged for `hold` seconds. */
+  conduit(x: number, z: number, group: string, hold = 6, y?: number): Conduit {
+    const c = this.addProp(new Conduit(this.game, x, y ?? this.y(x, z), z, group, hold));
+    this.level.conduits.push(c);
+    this.level.hittables.push(c);
+    return c;
+  }
+
+  /** Fires `signal` once every conduit in `group` is charged at the same moment. */
+  conduitGroup(group: string, signal: string): void {
+    this.level.conduitGroup(group, signal);
+  }
+
+  /** Answers only to a bolt batted back into it. */
+  reflectSwitch(x: number, z: number, signal: string, y?: number): ReflectSwitch {
+    const r = this.addProp(new ReflectSwitch(this.game, x, y ?? this.y(x, z), z, signal));
+    this.level.hittables.push(r);
+    return r;
+  }
+
+  /** A Gloom eye that shoots bolts at the dragon; `until` puts it out, `facing` limits what it watches. */
+  boltTurret(x: number, z: number, range = 18, interval = 2.6, y?: number, until = '', facing: number | null = null): BoltTurret {
+    return this.addProp(new BoltTurret(this.game, x, y ?? this.y(x, z), z, range, interval, until, facing));
+  }
+
+  boulder(x: number, z: number, y?: number): Boulder {
+    const b = this.addProp(new Boulder(this.game, x, (y ?? this.y(x, z)) + 0.1, z));
+    this.level.hittables.push(b);
+    return b;
+  }
+
+  /** Pressed only by something heavy: a boulder, a frozen enemy or a brute. Emits `signal` and `signal:off`. */
+  weightPlate(x: number, z: number, signal: string, y?: number): WeightPlate {
+    return this.addProp(new WeightPlate(this.game, x, y ?? this.y(x, z), z, signal));
+  }
+
+  /** A gate held open only while `signal` is on (it closes again on `signal:off`). */
+  holdGate(x: number, z: number, w: number, h: number, yaw: number, signal: string, y?: number): Gate {
+    const g = this.gate(x, z, w, h, yaw, 'stone', '', y);
+    this.level.on(signal, () => g.open());
+    this.level.on(`${signal}:off`, () => g.shut());
+    return g;
+  }
+
+  /** Spots on the water that Ice freezes into floes for `life` seconds. */
+  iceFloes(pts: [number, number][], life = 14): IceFloes {
+    return this.addProp(new IceFloes(this.game, pts, this.level.waterLevel, life));
+  }
+
+  rope(x: number, z: number, len: number, signal: string, y?: number): Rope {
+    const r = this.addProp(new Rope(this.game, x, y ?? this.y(x, z), z, len, signal));
+    this.level.hittables.push(r);
+    return r;
+  }
+
+  /** A bridge hinged at (x, y, z) that falls along `yaw` when `signal` fires. */
+  drawbridge(x: number, y: number, z: number, yaw: number, len: number, w: number, signal: string): Drawbridge {
+    return this.addProp(new Drawbridge(this.game, x, y, z, yaw, len, w, signal));
+  }
+
+  /** A door open only for the last `open` seconds of every `cycle`. */
+  snapGate(x: number, z: number, w: number, h: number, yaw: number, open: number, cycle: number, phase = 0, y?: number): SnapGate {
+    return this.addProp(new SnapGate(this.game, x, y ?? this.y(x, z), z, w, h, yaw, open, cycle, phase));
+  }
+
+  spinBlade(x: number, z: number, r: number, speed: number, arms = 2, y?: number): SpinBlade {
+    return this.addProp(new SpinBlade(this.game, x, y ?? this.y(x, z), z, r, speed, arms));
+  }
+
+  /** Sockets struck with elements in `order`; `slots` places them along the slab out of order. */
+  elementLock(x: number, z: number, yaw: number, order: Element[], signal: string, slots?: number[], y?: number): ElementLock {
+    return this.addProp(new ElementLock(this.game, x, y ?? this.y(x, z), z, yaw, order, signal, slots));
+  }
+
+  /** Flick hints, stronger the longer the player lingers near an unsolved puzzle. */
+  puzzleHint(x: number, z: number, r: number, hints: string[], solvedSignal: string, first = 30, step = 35): PuzzleHint {
+    return this.addProp(new PuzzleHint(this.game, x, z, r, hints, solvedSignal, first, step));
   }
 
   crumble(x: number, top: number, z: number, w: number, d: number): CrumblePlatform {

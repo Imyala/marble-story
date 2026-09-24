@@ -48,6 +48,8 @@ const TIPS = [
   ['Guards and Shells', 'Shields block your horns and breath from the front. Circle behind, or use heavy Tail moves, Earth, or a Battering Ram charge. Shellbacks must be flipped with a heavy hit.'],
   ['Totems', 'Gloom Totems shield every enemy near them. Break the totem first.'],
   ['Gems', 'Blue gems are spirit: spend them at Wardstones. Red heals, green restores mana, purple feeds your fury.'],
+  ['Reading Puzzles', 'Every puzzle piece answers to one ability. Gloom eyes: bat their bolts back with a well-timed Horn. Boulders: Tail, Charge or Earth rolls them onto weight plates. Conduits: charge every one with Lightning before the first fades. Glowing rings on water: Ice freezes a floe. Ropes burn. Snap gates and blades: Dragon Time. Element locks: strike each socket with its element in the order the dots count.'],
+  ['Stuck?', 'Linger near a puzzle and Flick will start offering hints, a little plainer each time.'],
 ];
 
 export class Menus {

@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { LevelDef, Builder } from '../world/level';
 import { Npc } from '../world/level';
-import { ambient, paint, jitter, bossFight } from './common';
+import { ambient, paint, jitter, bossFight, Cage } from './common';
 import { Bogmaw } from '../enemies/bosses/bogmaw';
 import { EMBERHOLD } from '../game/story';
 import type { Game } from '../game/game';
 import { GEO } from '../render/decor';
 import { mat } from '../render/materials';
+import { makeCyl } from '../world/collision';
 
 const stakeGeo = (() => {
   const g = new THREE.CylinderGeometry(0.08, 0.2, 1, 5);
@@ -56,6 +57,7 @@ export const fen: LevelDef = {
       s.island(-32, 83, 4.5, 2.0, 2, 0.1);
       // Ruin island.
       s.island(0, 122, 15, 1.2, 4, 0.3);
+      s.island(9, 136.5, 3, 1.1, 1.5, 0);
       s.path([[-14, 121, 1.2], [-26, 119, 1.3]], 4, 2);
       s.island(-40, 118, 7, 1.4, 3, 0.2);
       // East bog: shallow wading water with dry islands.
@@ -129,8 +131,22 @@ export const fen: LevelDef = {
     // --- Willow clearing ---------------------------------------------------------------
     b.tree(-7, 76, 2.1, 'willow', { leaf: 0x4a7a40 });
     b.scatter(18, 0, 77, 12, (x, z) => b.tree(x, z, 0.8 + Math.abs(jitter(x)) * 0.5, 'round', { leaf: 0x4f8a3a }),
-      (x, z) => Math.hypot(x, z - 77) > 7 && Math.abs(x) > 5 && Math.hypot(x + 7, z - 76) > 5);
+      (x, z) => Math.hypot(x, z - 77) > 7 && Math.abs(x) > 5 && Math.hypot(x + 7, z - 76) > 5 && !(x > 0 && x < 14 && Math.abs(z - 71) < 6));
     b.scatter(50, 0, 77, 12, (x, z, y) => b.decor.grass(x, y, z, 1, 0x5a9a42));
+    // The old storehouse: a door held open by a weight plate. Horns can't move the boulder; Tail and Charge can.
+    const vy = b.y(8.5, 71);
+    b.wall(6.8, 72.9, 11.2, 72.9, vy, 3.4, 0.8, 0x8a8272);
+    b.wall(6.8, 69.1, 11.2, 69.1, vy, 3.4, 0.8, 0x8a8272);
+    b.wall(11.2, 69.1, 11.2, 72.9, vy, 3.4, 0.8, 0x8a8272);
+    b.platform(9, vy + 3.8, 71, 5.4, 4.6, 0x8a8272, 0.4);
+    b.holdGate(6.8, 71, 3, 3, Math.PI / 2, 'fen-store', vy);
+    b.weightPlate(2.6, 71, 'fen-store');
+    b.boulder(-4, 67);
+    b.crystal(9, 71, 'mixed', 24, true, vy);
+    b.puzzleHint(3, 71, 8, [
+      'That door has a plate in front of it. Something heavy has to sit on it.',
+      'Horns just bounce off that boulder. Hit it with your Tail (E) or Charge into it (hold Shift) to roll it!',
+    ], 'fen-store', 20, 25);
     const willowArena = b.arena('willow', 0, 75, 11, [
       [{ type: 'grunt', x: -5, z: 80 }, { type: 'grunt', x: 5, z: 80, delay: 0.3 }],
       [{ type: 'grunt', x: -6, z: 70 }, { type: 'grunt', x: 6, z: 70, delay: 0.2 }, { type: 'grunt', x: 0, z: 82, delay: 0.5 }],
@@ -188,6 +204,28 @@ export const fen: LevelDef = {
     // East: a barricade to charge through.
     b.gate(14, 124.5, 4.5, 3, Math.PI / 2 - 0.4, 'wood');
     b.story('charge', 10, 124, 4, () => g.hud.flick('A barricade! Hold Shift to charge straight through it!', 6));
+
+    // The Gloom eye: a statue on a drum of rock that shoots bolts. Bat one back into the switch beside it
+    // and the drawbridge drops to its hoard. It only watches the ruins, not the camp beyond.
+    const ex = 9;
+    const ez = 150;
+    const et = 1.4;
+    b.pillar(ex, ez, 4.4, -3, et, 0x8a8272);
+    b.boltTurret(ex + 2.2, ez - 0.6, 17, 2.8, et, 'fen-eye', Math.PI);
+    b.reflectSwitch(ex - 2.2, ez - 0.6, 'fen-eye', et);
+    b.drawbridge(ex, et, ez - 4.2, Math.PI, 8.6, 2.6, 'fen-eye');
+    // The hoard sits in a Gloom cage that breaks with the eye's spell.
+    const cage = new Cage(b, ex, ez + 2.2, 1.7, 3.2);
+    const cageSolid = b.col.add(makeCyl(ex, ez + 2.2, 2.0, et, et + 3.2));
+    b.crystal(ex, ez + 2.2, 'mixed', 30, true, et);
+    b.level.on('fen-eye', () => {
+      cage.shatter(g);
+      cageSolid.enabled = false;
+    });
+    b.story('eye', ex, 134, 4, () => g.hud.flick('That eye statue shoots bolts! Swing your horns just as one reaches you to bat it back at the other eye!', 8));
+    b.puzzleHint(ex, 137, 10, [
+      'Face the statue and tap Horn (Left Mouse) right as a bolt reaches you. It flies back to the other eye!',
+    ], 'fen-eye', 20);
 
     // --- East bog ------------------------------------------------------------------------
     b.scatter(50, 38, 142, 16, (x, z, y) => b.decor.reeds(x, y, z, 1.1), () => true);

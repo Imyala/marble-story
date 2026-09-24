@@ -61,7 +61,7 @@ export interface LevelInfo {
 
 export const LEVEL_INFO: Record<string, LevelInfo> = {
   fen: { name: 'Marshlight Fen', blurb: 'The firefly marsh where Aster grew up.', collectibles: 7 },
-  sanctum: { name: 'Warden Sanctum', blurb: 'The ruined temple of the Wardens.', collectibles: 4 },
+  sanctum: { name: 'Warden Sanctum', blurb: 'The ruined temple of the Wardens.', collectibles: 5 },
   falls: { name: 'Stormspire Falls', blurb: 'Cliffs, waterfalls and a spire struck by endless lightning.', collectibles: 7 },
   frostworks: { name: 'The Frostworks', blurb: 'An ice forge hammering out chains for the Hollow King.', collectibles: 7 },
   plains: { name: 'Stonewild Plains', blurb: 'Tall grass over stone older than dragons.', collectibles: 7 },

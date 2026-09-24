@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { LevelDef, Builder } from '../world/level';
-import { ambient, paint, jitter } from './common';
+import { ambient, paint, jitter, Cage } from './common';
 import { EMBERHOLD, STORMCREST, FROSTFANG, STONEHIDE, NYXA } from '../game/story';
 import type { Game } from '../game/game';
 import { Water } from '../render/water';
@@ -47,6 +47,8 @@ export const sanctum: LevelDef = {
       s.island(-24, -34, 6, 3, 1.5, 0.1);
       s.island(-38, -42, 5, 6, 1.5, 0.1);
       s.island(22, -40, 5, 1.5, 1.5, 0.1);
+      // The Hall of Moments.
+      s.island(36, 42, 12, 0.6, 1.5, 0.1);
     },
   },
 
@@ -173,6 +175,8 @@ export const sanctum: LevelDef = {
     b.updraft(tx + 23, tz - 4.5, 2.2, ty, ty + 8, 30);
     b.story('rings', tx, tz + 3, 6, () => g.hud.flick('Glide through the rings from the top of the tower. Hold Shift to dive for speed, let go to swoop up!', 7));
 
+    hallOfMoments(b);
+
     b.scatter(50, 0, 0, 30, (x, z, y) => b.decor.grass(x, y, z, 0.9, 0x6a9a4a), (x, z) => Math.hypot(x, z) > 18);
     b.scatter(18, 0, 0, 30, (x, z) => b.tree(x, z, 1 + Math.abs(jitter(x + z)) * 0.5, 'round', { leaf: 0x5a8a3a }), (x, z) => Math.hypot(x, z) > 21 && Math.abs(x) > 6);
     b.scatter(20, 46, 4, 14, (x, z, y) => b.decor.flower(x, y, z, 0xffd070), (x, z) => Math.abs(x - 46) > 9 || Math.abs(z - 4) > 9);
@@ -211,6 +215,63 @@ export const sanctum: LevelDef = {
     if (fresh) g.hud.flick('The Wardgate is up the north stairs. Wardstones let you spend gems on new abilities.', 5);
   },
 };
+
+// --- the Hall of Moments ----------------------------------------------------------------------------
+
+/**
+ * An island vault north-east of the courtyard. Two doors snap open too briefly
+ * to pass in normal time and a blade sweeps the hall between them: Dragon Time
+ * is the key. At the far end an element lock wants every breath in the order
+ * its glyphs count out.
+ */
+function hallOfMoments(b: Builder): void {
+  const g = b.game;
+  const cx = 36;
+  const y = b.y(cx, 42);
+  b.bridge(23.5, 21.5, b.y(23.5, 21.5), 34.5, 31.5, b.y(34.5, 31.5), 3.5);
+  // Cross walls run past the island's edge so there is no easy way round.
+  const H = 7;
+  const cross = (z: number) => {
+    b.wall(22, z, cx - 2, z, y - 1, H + 1, 1, STONE_DARK);
+    b.wall(cx + 2, z, 50, z, y - 1, H + 1, 1, STONE_DARK);
+    b.box(cx, y + 5, z, 4, H - 5, 1, STONE_DARK);
+  };
+  cross(34);
+  cross(44);
+  b.wall(cx - 3, 34, cx - 3, 44, y - 1, H + 1, 1, STONE);
+  b.wall(cx + 3, 34, cx + 3, 44, y - 1, H + 1, 1, STONE);
+  b.snapGate(cx, 34, 4, 5, 0, 0.2, 2.2, 0, y);
+  b.spinBlade(cx, 39, 2.4, 3.4, 2, y);
+  b.snapGate(cx, 44, 4, 5, 0, 0.2, 2.2, 1.1, y);
+  b.story('moments', cx - 1, 32, 3, () => g.hud.flick('That door only opens for a blink! Wait till its edge glows, then hold C for Dragon Time and dash through.', 8));
+  b.puzzleHint(cx, 32, 5, ['The glowing edge means it\'s about to open. Start Dragon Time (hold C) just before, then run!'], 'moments-in', 25);
+  b.trigger(cx, 42.4, 1, () => b.level.emit('moments-in'));
+  // The vault. A lock of four sockets, struck in the order the dots count.
+  const order: ('fire' | 'lightning' | 'ice' | 'earth')[] = ['ice', 'fire', 'earth', 'lightning'];
+  b.elementLock(cx, 47.5, Math.PI, order, 'moments-vault', [1, 3, 0, 2]);
+  const cage = new Cage(b, cx, 50.5, 1.8, 3.4);
+  const cageSolid = b.col.add(makeCyl(cx, 50.5, 2.1, y, y + 3.4));
+  b.crystal(cx - 0.6, 50.5, 'mixed', 60, true, y);
+  b.collectible('heart2', 'heart', cx + 0.7, 50.5, y);
+  b.level.on('moments-vault', () => {
+    cage.shatter(g);
+    cageSolid.enabled = false;
+    g.hud.flick('It opened! The Wardens hid all sorts in here.', 5);
+  });
+  if (b.level.fired.has('moments-vault')) cageSolid.enabled = false;
+  b.story('lock', cx, 46, 3, () => {
+    const all = (['fire', 'lightning', 'ice', 'earth'] as const).every((e) => g.save.elements.includes(e));
+    g.hud.flick(all
+      ? 'Four sockets, four elements. The little dots under each glyph must be the order to hit them in!'
+      : 'Four sockets, four elements... We\'ll have to come back once you know every breath.', 7);
+  });
+  b.puzzleHint(cx, 47, 5, [
+    'Count the dots under each glyph: one dot first, then two, three, four. Hit each socket with its own element.',
+  ], 'moments-vault', 30);
+  for (const [lx, lz] of [[cx - 5, 49], [cx + 5, 49], [cx - 5, 32], [cx + 5, 32]] as [number, number][]) {
+    b.decor.lantern(lx, b.y(lx, lz), lz, 0xffe0a0);
+  }
+}
 
 // --- scenery helpers ------------------------------------------------------------------------------
 

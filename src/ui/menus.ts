@@ -240,7 +240,10 @@ export class Menus {
     const m = this.div('menu dim');
     const p = this.div('panel');
     p.style.minWidth = '360px';
-    p.innerHTML = `<h2>Paused</h2><div class="sub">${g.level?.def.name ?? ''}</div>`;
+    const lid = g.level?.def.id ?? '';
+    const secrets = Object.keys(g.save.found).filter((k) => k.startsWith(`${lid}:`) && /:(heart|mana|relic)\d+$/.test(k)).length;
+    const total = LEVEL_INFO[lid]?.collectibles ?? 0;
+    p.innerHTML = `<h2>Paused</h2><div class="sub">${g.level?.def.name ?? ''}${total ? ` &middot; secrets found ${secrets}/${total}` : ''}</div>`;
     const st = g.save.stats;
     const mins = Math.floor(st.playTime / 60);
     p.append(this.div('stats', `<span>Spirit gems</span><b>${g.save.gems}</b><span>Enemies defeated</span><b>${st.kills}</b>

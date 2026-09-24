@@ -63,6 +63,7 @@ export class Hud {
   private flickBox!: HTMLElement;
   private flickText!: HTMLElement;
   private deathBox!: HTMLElement;
+  private clickHint!: HTMLElement;
   private nums: DmgNum[] = [];
   private boss: Boss | null = null;
   private hurtT = 0;
@@ -176,6 +177,10 @@ export class Hud {
     fb.append(el('b', '', 'FLICK'), this.flickText);
     this.flickBox.append(el('div', 'flick-face'), fb);
     r.appendChild(this.flickBox);
+
+    this.clickHint = el('div', 'prompt', 'Click to play &middot; the mouse steers the camera');
+    this.clickHint.style.cssText = 'top:46%;bottom:auto;opacity:0;';
+    r.appendChild(this.clickHint);
 
     this.deathBox = el('div', 'death', '<h1>The light fades...</h1>');
     o.appendChild(this.deathBox);
@@ -293,6 +298,8 @@ export class Hud {
       }
     }
     this.wardT -= dt;
+    const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad;
+    this.clickHint.style.opacity = needClick ? '1' : '0';
   }
 
   private toScreen(x: number, y: number, z: number): [number, number] | null {

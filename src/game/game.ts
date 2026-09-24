@@ -136,6 +136,11 @@ export class Game {
     this.applyOptions();
     window.addEventListener('resize', () => this.fx.setViewport(this.renderer.height, this.camera.fov));
     this.fx.setViewport(this.renderer.height, this.camera.fov);
+    // Losing the mouse (Esc in the browser) pauses instead of leaving the
+    // dragon running around unattended.
+    document.addEventListener('pointerlockchange', () => {
+      if (!this.input.locked && this.state === 'play' && this.input.wantPointerLock && !this.input.usingPad) this.pause();
+    });
     // Audio can only start after a user gesture.
     const unlock = () => this.audio.unlock();
     window.addEventListener('pointerdown', unlock);
@@ -226,8 +231,13 @@ export class Game {
   }
 
   loadLevel(id: string, opts: { checkpoint?: string | null; title?: boolean } = {}): void {
-    const def: LevelDef | undefined = LEVELS[id];
-    if (!def) throw new Error(`no level ${id}`);
+    let def: LevelDef | undefined = LEVELS[id];
+    if (!def) {
+      // A save from a newer build, or a typo in ?level=: land somewhere safe.
+      console.warn(`unknown level "${id}", loading a safe fallback`);
+      def = this.save.unlocked.includes('sanctum') ? LEVELS.sanctum! : LEVELS.fen!;
+      opts = { ...opts, checkpoint: null };
+    }
     this.clearLevel();
     const level = new Level(def);
     this.level = level;
@@ -521,6 +531,18 @@ export class Game {
 
   shake(amount: number, dur = 0.2): void {
     this.cam.shake(amount, dur);
+    if (this.input.usingPad && amount >= 0.2 && this.options.shake > 0) this.rumble(Math.min(1, amount), dur);
+  }
+
+  private rumble(strength: number, dur: number): void {
+    try {
+      for (const pad of navigator.getGamepads?.() ?? []) {
+        const act = (pad as (Gamepad & { vibrationActuator?: { playEffect?: (t: string, o: object) => Promise<unknown> } }) | null)?.vibrationActuator;
+        act?.playEffect?.('dual-rumble', { duration: Math.round(dur * 1000), strongMagnitude: strength, weakMagnitude: strength * 0.6 })?.catch?.(() => {});
+      }
+    } catch {
+      /* rumble is best-effort */
+    }
   }
 
   toast(text: string, kind: 'info' | 'good' | 'warn' | 'hint' = 'info'): void {

@@ -3,7 +3,7 @@ import { CollisionWorld, Heightfield, makeBox, makeCyl, makeRamp, type Solid, ty
 import { Shaper } from './shaper';
 import { buildTerrainMesh, buildTerrainSkirt } from '../render/terrain';
 import { Water } from '../render/water';
-import { DecorBatch, type TreeKind } from '../render/decor';
+import { DecorBatch, GEO, type TreeKind } from '../render/decor';
 import { mat, glow } from '../render/materials';
 import type { SkyDef } from '../render/sky';
 import type { Game } from '../game/game';
@@ -326,23 +326,18 @@ export class Builder {
     const wood = mat(0x8a6a44, { rough: 0.95 });
     const dark = mat(0x5a4028, { rough: 0.95 });
     const n = Math.max(2, Math.round(len / 0.6));
+    // Short planks follow the slope by position alone, like steps.
     for (let i = 0; i < n; i++) {
       const t = (i + 0.5) / n;
-      const p = new THREE.Mesh(new THREE.BoxGeometry(width, 0.15, 0.5), i % 3 === 0 ? dark : wood);
-      p.position.set(ax + (bx - ax) * t, ay + (by - ay) * t - 0.08, az + (bz - az) * t);
-      p.rotation.y = yaw;
-      p.rotation.z = (rng.next() - 0.5) * 0.04;
-      p.castShadow = p.receiveShadow = true;
-      this.level.root.add(p);
+      this.decor.add(GEO.box(), i % 3 === 0 ? dark : wood, ax + (bx - ax) * t, ay + (by - ay) * t - 0.08, az + (bz - az) * t,
+        width, 0.15, 0.5, 0, yaw, (rng.next() - 0.5) * 0.04);
     }
     for (const side of [-1, 1]) {
       const ox = Math.cos(yaw) * side * (width / 2);
       const oz = -Math.sin(yaw) * side * (width / 2);
       for (let i = 0; i <= Math.ceil(len / 3); i++) {
         const t = i / Math.ceil(len / 3);
-        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 1.1, 5), dark);
-        post.position.set(ax + (bx - ax) * t + ox, ay + (by - ay) * t + 0.45, az + (bz - az) * t + oz);
-        this.level.root.add(post);
+        this.decor.add(GEO.cyl6(), dark, ax + (bx - ax) * t + ox, ay + (by - ay) * t - 0.1, az + (bz - az) * t + oz, 0.075, 1.1, 0.075);
       }
       const rope = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, Math.hypot(len, by - ay), 4), mat(0xc8b080));
       rope.position.set(cx + ox, (ay + by) / 2 + 0.95, cz + oz);

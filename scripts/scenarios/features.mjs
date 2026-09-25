@@ -620,3 +620,57 @@ export async function dodgecancel(h) {
   }));
   h.check('dodge cancels an attack in its wind-up', r === 'dodge', r);
 }
+
+/** Critters graze in every realm, flee the dragon, and free butterflies that mend Aster. */
+export async function critters(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 300; i++) {
+      await h.wait(60);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const counts = await h.eval(() => {
+    const g = window.wyrm;
+    const out = {};
+    for (const id of ['sanctum', 'falls', 'frostworks', 'plains', 'keep', 'fen']) {
+      g.loadLevel(id, {});
+      const cs = g.level.props.filter((p) => p.constructor.name === 'Critter');
+      out[id] = cs.map((c) => c.kind).join(',');
+    }
+    return out;
+  });
+  h.check('every realm has its own critters', Object.values(counts).every((v) => v.split(',').filter(Boolean).length >= 2), JSON.stringify(counts));
+  await h.skipDialogue(3000);
+  const c0 = await h.eval(() => {
+    const g = window.wyrm;
+    for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    const c = g.level.props.find((p) => p.constructor.name === 'Critter');
+    window.__c = c;
+    g.player.place(c.x + 2.5, c.y + 0.05, c.z, -Math.PI / 2);
+    return [c.x, c.z];
+  });
+  await waitGame(1.2);
+  const c1 = await h.eval(() => [window.__c.x, window.__c.z, window.__c.alive]);
+  h.check('a critter scatters when the dragon comes close', Math.hypot(c1[0] - c0[0], c1[1] - c0[1]) > 0.8, JSON.stringify({ c0, c1 }));
+  const before = await h.eval(() => {
+    const g = window.wyrm; const p = g.player;
+    p.hp = Math.round(p.maxHp * 0.2);
+    return { hp: p.hp };
+  });
+  await waitGame(1);
+  const low = await h.eval(() => window.wyrm.flick.glowCol.getHexString());
+  const r = await h.eval(() => {
+    const g = window.wyrm; const c = window.__c;
+    const res = c.takeHit({});
+    return { res, alive: c.alive, butterfly: g.level.props.some((p) => p.constructor.name === 'Butterfly') };
+  });
+  await waitGame(3);
+  const after = await h.eval(() => { const g = window.wyrm; return { hp: g.player.hp, bf: g.save.stats.butterflies, cr: g.save.stats.critters }; });
+  h.check('Flick glows green when Aster is low', /^[0-9a-f]{2}[c-f][0-9a-f]/.test(low) && parseInt(low.slice(0, 2), 16) < 0xa0, low);
+  h.check('a struck critter frees a butterfly that Flick eats to mend Aster', !r.alive && r.butterfly && after.hp > before.hp && after.bf === 1 && after.cr === 1, JSON.stringify({ r, before, after }));
+  await h.shot('critters');
+}

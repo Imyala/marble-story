@@ -16,6 +16,7 @@ import {
 import type { GemKind } from '../entities/gems';
 import { Breakable, BreakableSet, Chest, type BreakKind } from '../entities/breakables';
 import { WaterIce } from '../entities/waterice';
+import { Critter, REALM_CRITTERS } from '../entities/critters';
 import {
   BoltTurret, Boulder, Conduit, Drawbridge, ElementLock, IceFloes, PuzzleHint, ReflectSwitch, Rope, SnapGate, SpinBlade, WeightPlate,
 } from '../entities/puzzles';
@@ -840,7 +841,47 @@ export class Builder {
     }
   }
 
+  /**
+   * Wildlife: a few of the realm's critters graze near the spawn and each
+   * Wardstone, on open, dry, level ground away from any fight.
+   */
+  private placeCritters(): void {
+    const kinds = REALM_CRITTERS[this.level.def.id];
+    if (!kinds?.length) return;
+    const lv = this.level;
+    const spots: [number, number][] = [[lv.def.spawn[0], lv.def.spawn[1]], ...[...lv.wardstones.values()].map((w) => [w.x, w.z] as [number, number])];
+    let n = 0;
+    const put = (kind: (typeof kinds)[number], x: number, z: number) => {
+      const c = new Critter(this.game, kind, x, z, 4);
+      lv.props.push(c);
+      lv.hittables.push(c);
+    };
+    spots.forEach(([cx, cz], si) => {
+      const cy = this.y(cx, cz);
+      const placed: [number, number][] = [];
+      for (let k = 0; k < 32 && placed.length < 2; k++) {
+        const a = (k / 8) * Math.PI * 2 + jit(si * 7.1 + 1) * 3 + (k >> 3) * 0.4;
+        const r = 6 + (k >> 3) * 3 + jit(si * 3.3 + k);
+        const x = cx + Math.sin(a) * r;
+        const z = cz + Math.cos(a) * r;
+        const y = this.col.groundAt(x, z, 1e4, 0.6).y;
+        if (y < -1e3 || Math.abs(y - cy) > 3 || y < lv.waterLevel + 0.3) continue;
+        if (placed.some(([px, pz]) => Math.hypot(px - x, pz - z) < 6)) continue;
+        if (this.game.inHazard(x, y + 0.1, z)) continue;
+        if (lv.arenas.some((ar) => Math.hypot(ar.x - x, ar.z - z) < ar.r + 5)) continue;
+        // Level ground only, so they do not wander off ledges.
+        if ([[1.5, 0], [-1.5, 0], [0, 1.5], [0, -1.5]].some(([dx, dz]) => Math.abs(this.col.groundAt(x + dx!, z + dz!, y + 1, 0.2).y - y) > 0.5)) continue;
+        placed.push([x, z]);
+        const kind = kinds[n++ % kinds.length]!;
+        put(kind, x, z);
+        // Flock animals come in pairs.
+        if (kind === 'sheep' || kind === 'frog' || kind === 'goat') put(kind, x + 1.2, z + 0.8);
+      }
+    });
+  }
+
   finish(): void {
+    this.placeCritters();
     this.decor.build(this.level.root);
     this.breakableSet.build(this.level.root);
     this.mergeStatics();

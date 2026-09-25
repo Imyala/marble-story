@@ -5,6 +5,8 @@ import { damp } from '../core/math';
 import { Collectible } from '../entities/props';
 import { Chest } from '../entities/breakables';
 
+const HEALTH = [new THREE.Color(0xffe060), new THREE.Color(0x5ab4ff), new THREE.Color(0x6aff7a)];
+
 /**
  * Flick, the firefly who grew up alongside Aster. Hovers over the dragon's
  * shoulder, glows, and chimes in with hints through the HUD.
@@ -20,15 +22,20 @@ export class Flick {
   private seekTarget: THREE.Vector3 | null = null;
   private seekT = 0;
   private seekCd = 0;
+  private tailMat: THREE.MeshBasicMaterial;
+  private haloMat: THREE.MeshBasicMaterial;
+  private glowCol = new THREE.Color(0xffe060);
 
   constructor(private game: Game) {
     const body = new THREE.Mesh(new THREE.SphereGeometry(0.09, 10, 8), glow(0x3a2a10));
     body.scale.set(1, 1, 1.6);
     this.root.add(body);
-    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), glow(0xb8a850));
+    this.tailMat = glow(0xb8a850);
+    const tail = new THREE.Mesh(new THREE.SphereGeometry(0.085, 12, 10), this.tailMat);
     tail.position.z = -0.16;
     this.root.add(tail);
-    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), glow(0xffe060, 0.08, true));
+    this.haloMat = glow(0xffe060, 0.08, true);
+    const halo = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), this.haloMat);
     halo.position.z = -0.16;
     this.root.add(halo);
     const wm = new THREE.MeshBasicMaterial({ color: 0xe8f4ff, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false });
@@ -122,9 +129,25 @@ export class Flick {
       : `The path goes on this way, about ${Math.round(bestD)} paces. Stay sharp!`;
   }
 
+  /**
+   * Flick's light shows how Aster is holding up: gold when healthy, blue once
+   * hurt, green and flickering when close to falling.
+   */
+  private health(dt: number): void {
+    const p = this.game.player;
+    const f = p.maxHp > 0 ? p.hp / p.maxHp : 1;
+    const want = HEALTH[f > 0.6 ? 0 : f > 0.3 ? 1 : 2]!;
+    this.glowCol.lerp(want, Math.min(1, dt * 5));
+    const flicker = f <= 0.3 ? 0.55 + 0.45 * Math.abs(Math.sin(this.t * 9)) : 1;
+    this.tailMat.color.copy(this.glowCol).multiplyScalar(0.72 * flicker);
+    this.haloMat.color.copy(this.glowCol);
+    this.haloMat.opacity = 0.08 + (f <= 0.3 ? 0.1 * flicker : 0);
+  }
+
   update(dt: number): void {
     const p = this.game.player;
     this.t += dt;
+    this.health(dt);
     this.seekCd = Math.max(0, this.seekCd - dt);
     if (this.seekTarget && this.seekT > 0) {
       // Dart out, hover over the find, trailing light so the path is easy to follow.
@@ -170,7 +193,7 @@ export class Flick {
     if (this.sparkT <= 0) {
       this.sparkT = 0.12;
       this.game.fx.emit(this.position.x, this.position.y, this.position.z, {
-        count: 1, speed: 0.3, life: [0.5, 0.9], size: [0.08, 0.14], sizeEnd: 0, color: 0xfff080, bright: 2, gravity: 0.3,
+        count: 1, speed: 0.3, life: [0.5, 0.9], size: [0.08, 0.14], sizeEnd: 0, color: this.glowCol.getHex(), bright: 2, gravity: 0.3,
       });
     }
   }

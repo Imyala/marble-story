@@ -11,7 +11,7 @@ export type Action =
   | 'jump' | 'horn' | 'tail' | 'breath' | 'burst' | 'fury' | 'dodge'
   | 'dragonTime' | 'interact' | 'lock' | 'pause' | 'elemNext' | 'elemPrev'
   | 'elem1' | 'elem2' | 'elem3' | 'elem4' | 'confirm' | 'back'
-  | 'up' | 'down' | 'left' | 'right';
+  | 'up' | 'down' | 'left' | 'right' | 'hint';
 
 const KEY_BINDINGS: Record<string, Action[]> = {
   Space: ['jump', 'confirm'],
@@ -22,6 +22,7 @@ const KEY_BINDINGS: Record<string, Action[]> = {
   ShiftRight: ['dodge'],
   KeyC: ['dragonTime'],
   KeyF: ['interact'],
+  KeyH: ['hint'],
   Tab: ['lock'],
   Escape: ['pause', 'back'],
   KeyP: ['pause'],
@@ -63,7 +64,7 @@ const PAD_BINDINGS: Record<number, Action[]> = {
   8: ['fury'],
   9: ['pause'],
   10: ['interact'],
-  11: ['lock'],
+  11: ['hint'],
   12: ['elem1', 'up'],
   13: ['elem3', 'down'],
   14: ['elem4', 'left'],

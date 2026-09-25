@@ -243,6 +243,22 @@ export class Enemy implements Hittable {
       }
     }
 
+    // Standing in water conducts: lightning bites harder and arcs to other wet foes.
+    const b0 = this.body;
+    if (hit.type === 'lightning' && g.waterLevel > -1e3 && b0.y < g.waterLevel + 0.25 && b0.y > g.waterLevel - 2.5) {
+      hit = { ...hit, damage: hit.damage * 1.4, buildup: hit.buildup * 2 };
+      if (!hit.move.endsWith(':wet')) {
+        const from = new THREE.Vector3(b0.x, g.waterLevel + 0.2, b0.z);
+        for (const e of g.enemies) {
+          if (e === this || !e.alive || e.body.y > g.waterLevel + 0.25 || e.body.y < g.waterLevel - 2.5) continue;
+          if (Math.hypot(e.x - b0.x, e.z - b0.z) > 7) continue;
+          g.fx.arc(from, new THREE.Vector3(e.x, g.waterLevel + 0.2, e.z), 0xcff0ff, 0.1, 0.12, 0.5);
+          e.takeHit({ ...hit, damage: hit.damage * 0.45, move: `${hit.move}:wet`, knockback: 0.5 });
+        }
+        g.fx.ring(b0.x, g.waterLevel + 0.05, b0.z, 0.3, 3.5, 0xbfe8ff, 0.3);
+      }
+    }
+
     const reaction = reactionFor(this.status, hit);
     const resist = this.def.resist;
     if ((resist[hit.type] ?? 1) <= 0 && !reaction) {

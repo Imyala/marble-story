@@ -1057,6 +1057,9 @@ export class Arena implements Prop {
     g.save.found[`arena:${g.level!.def.id}:${this.id}`] = true;
     g.sfx('unlock', this.x, this.y, this.z);
     g.toast('Area cleared!', 'good');
+    // The last blow lands in slow motion.
+    g.slowmo(0.28, 0.75);
+    g.shake(0.25, 0.25);
     g.spawnGems(this.x, this.y + 1, this.z, { blue: this.reward, red: 3, green: 2 }, true);
     g.arenaEnded(this);
     this.onClear?.();

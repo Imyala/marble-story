@@ -15,6 +15,7 @@ import {
 } from '../entities/props';
 import type { GemKind } from '../entities/gems';
 import { Breakable, BreakableSet, Chest, type BreakKind } from '../entities/breakables';
+import { WaterIce } from '../entities/waterice';
 import {
   BoltTurret, Boulder, Conduit, Drawbridge, ElementLock, IceFloes, PuzzleHint, ReflectSwitch, Rope, SnapGate, SpinBlade, WeightPlate,
 } from '../entities/puzzles';
@@ -68,6 +69,8 @@ export class Level {
   readonly boulders: Boulder[] = [];
   private conduitGroups = new Map<string, { signal: string; done: boolean }>();
   waterLevel = -1e4;
+  /** Floes frozen by ice breath (only in realms with water). */
+  waterIce: WaterIce | null = null;
   killY: number;
   water: Water | null = null;
   private listeners = new Map<string, (() => void)[]>();
@@ -255,6 +258,9 @@ export class Builder {
     const water = new Water(w.level, 420, w.deep, w.shallow, w.glint, w.opacity ?? 0.82);
     this.level.water = water;
     this.level.root.add(water.mesh);
+    // Ice breath can freeze any of it.
+    this.level.waterIce = new WaterIce(this.game);
+    this.level.props.push(this.level.waterIce);
   }
 
   // --- solids -------------------------------------------------------------------------

@@ -79,6 +79,12 @@ dragoness, beneath the eclipse.
   through snap gates and spinning blades in Dragon Time, and strike element
   locks in the order their glyphs count out. Linger unsolved and Flick starts
   offering hints.
+- **Flick earns his keep.** Press H and he darts off toward the nearest
+  undiscovered egg, letter, shard, relic or chest, trailing light, then tells
+  you how far it is.
+- **Elements that touch the world.** Ice breath freezes open water into floes
+  you can walk across; lightning conducts through water and arcs between wet
+  foes; fire lights up its surroundings; powder kegs go up in chains.
 - **Movement that flows.** Running follows Aster's facing, so turns carve
   arcs instead of snapping; attacks keep some momentum, and once a swing's last
   blow lands you can jump or steer straight out of it. Enemies notice you from
@@ -103,6 +109,7 @@ dragoness, beneath the eclipse.
 | Lock on | Tab or middle mouse | RB |
 | Change element | 1 to 4, mouse wheel, R | D-pad |
 | Interact | F | L3 |
+| Flick, find a secret | H | R3 |
 | Pause | Esc | Start |
 
 Click the game to capture the mouse; Esc releases it. Options cover volume,

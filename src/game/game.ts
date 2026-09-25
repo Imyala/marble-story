@@ -386,6 +386,7 @@ export class Game {
         break;
     }
 
+    if (this.state === 'play' && this.input.take('hint', 0.1)) this.hud.flick(this.flick.seek(), 4, true);
     if (this.state !== 'title' && this.state !== 'menu' && this.level) this.cam.update(dt, this);
     this.hud.update(dt);
     if (this.level) this.blobs.update(this);

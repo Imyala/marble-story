@@ -457,7 +457,12 @@ export class Hud {
    * Flick says something. A line that arrives while another is showing waits
    * its turn; the current line then gets at least three seconds on screen.
    */
-  flick(text: string, seconds = 5): void {
+  flick(text: string, seconds = 5, now = false): void {
+    // Something the player just asked for jumps the queue.
+    if (now) {
+      this.showFlick(text, seconds);
+      return;
+    }
     if (this.flickT > 0) {
       if (this.flickText.textContent === text) {
         this.flickT = Math.max(this.flickT, seconds);

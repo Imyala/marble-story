@@ -31,6 +31,7 @@ export class BreathController {
   private active: Element | null = null;
   private tick = 0;
   private spawn = 0;
+  private freezeT = 0;
   private arcT = 0;
   private sfxT = 0;
   aimPitch = 0;
@@ -160,6 +161,13 @@ export class BreathController {
       case 'ice': {
         const range = 9 + (lvl - 1) * 1.5;
         this.computeAim(range);
+        // Open water in the stream's path freezes over into floes.
+        this.freezeT -= dt;
+        const wi = g.level?.waterIce;
+        if (wi && this.freezeT <= 0 && Math.abs(mouth.y - g.waterLevel) < 5) {
+          this.freezeT = 0.14;
+          wi.freezeAlong(mouth.x, mouth.z, aim.x, aim.z, range * 0.75);
+        }
         if (this.spawn <= 0) {
           this.spawn = 0.065;
           const sx = aim.x + rng.signed() * 0.07;
@@ -297,6 +305,14 @@ export class BreathController {
         const bx = p.x;
         const by = p.y;
         const bz = p.z;
+        // A frost nova freezes the water all around.
+        const wi = g.level?.waterIce;
+        if (wi && Math.abs(by - g.waterLevel) < 4) {
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            wi.freeze(bx + Math.sin(a) * r * 0.55, bz + Math.cos(a) * r * 0.55);
+          }
+        }
         for (const h of g.hittables()) {
           if (!h.alive) continue;
           const dx = h.x - bx;

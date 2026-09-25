@@ -340,6 +340,7 @@ export class Player {
     }
     this.pushOffEnemies();
     this.water(dt);
+    this.motionFx(dt);
     this.trackSafeGround(dt);
     if (b.y < g.killY) g.playerFell();
     this.regen(dt);
@@ -600,6 +601,43 @@ export class Player {
     this.diving = false;
     const base = GLIDE * (this.hasUpgrade('swiftWings') ? 1.2 : 1);
     this.glideSpeed = Math.max(base, Math.hypot(this.body.vx, this.body.vz));
+  }
+
+  private stepFxT = 0;
+  private trailT = 0;
+
+  /** Footfall puffs when running, and wingtip streaks when gliding fast. */
+  private motionFx(dt: number): void {
+    const g = this.game;
+    const b = this.body;
+    const hs = Math.hypot(b.vx, b.vz);
+    const fx = Math.sin(this.yaw);
+    const fz = Math.cos(this.yaw);
+    if (b.grounded && !this.inWater && (this.state === 'move' || this.state === 'charge') && hs > 4.5) {
+      this.stepFxT -= dt * (hs / RUN);
+      if (this.stepFxT <= 0) {
+        this.stepFxT = this.state === 'charge' ? 0.12 : 0.27;
+        const surf = b.ground?.surface;
+        const snowy = surf === 'ice' || g.level?.def.id === 'frostworks';
+        g.fx.emit(b.x - fx * 0.35, b.y + 0.06, b.z - fz * 0.35, {
+          count: this.state === 'charge' ? 4 : 2, speed: 1.3, dir: [-fx, 0.6, -fz], spread: 0.9, life: [0.35, 0.6], size: [0.18, 0.3], sizeEnd: 0.9,
+          color: snowy ? 0xf4f8ff : 0xc8b898, alpha: snowy ? 0.55 : 0.32, additive: false, drag: 3, gravity: -0.4,
+        });
+      }
+    }
+    if (this.gliding && (this.glideSpeed > 10 || this.diving)) {
+      this.trailT -= dt;
+      if (this.trailT <= 0) {
+        this.trailT = this.diving ? 0.02 : 0.04;
+        const rx = Math.cos(this.yaw);
+        const rz = -Math.sin(this.yaw);
+        for (const side of [-1, 1]) {
+          g.fx.emit(b.x + rx * side * 1.25 - fx * 0.2, b.y + 0.95, b.z + rz * side * 1.25 - fz * 0.2, {
+            count: 1, speed: 0.2, life: [0.3, 0.45], size: [0.1, 0.14], sizeEnd: 0, color: this.diving ? 0xe8f4ff : 0xfff4e0, bright: 1.6, alpha: 0.55,
+          });
+        }
+      }
+    }
   }
 
   private updateGlide(dt: number): void {

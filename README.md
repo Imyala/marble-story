@@ -130,9 +130,25 @@ dragoness, beneath the eclipse.
   foes in one supercharged charge, light every rune in the Sanctum's rune ring
   in one charge, beat each boss without a scratch (a beaten boss waits by a
   standing stone for a rematch), and more. The Journal keeps the list.
+- **Legend Runs (New Game+).** Finish the story and start again with every
+  upgrade, shard, collectible, feat and Skill Point kept, against a Gloom with
+  more health, harder hits, more aggression and far more elites, paying more
+  gems. Each run is another tier; finishing earns Ascendant and then Voidfire
+  scales.
+- **The Gloom Rift.** An endless mode at the Sanctum's Trial Stone: generated
+  waves that grow and bring in tougher foes, an elite champion every fifth
+  wave, gems and extra time for every wave cleared, and a best depth to beat.
+- **Par times and save slots.** Each realm is timed against a par on the
+  results card, with best times on the Wardgate; three save slots keep
+  separate journeys.
 - **Accessibility.** A Reduced flashing option softens lightning, lens effects
   and hit flashes; touch and gamepad players see their own buttons named in
   tutorials; screen shake, camera and damage numbers are all adjustable.
+
+## Roadmap
+
+[ROADMAP.md](ROADMAP.md) covers where the game stands, an honest play-time
+estimate, and the plan to grow it into a complete 50-hour adventure.
 
 ## Controls
 

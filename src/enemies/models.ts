@@ -4,6 +4,7 @@ import { ellipsoid, limb, spike, taperedTube, box, mergeStatic } from '../render
 import { damp, lerp, smoothstep } from '../core/math';
 import type { EnemyState } from './enemy';
 import { DragonRig, defaultPose, type DragonLook } from '../player/dragonRig';
+import { skinify } from '../render/skinify';
 
 export interface EnemyPose {
   state: EnemyState;
@@ -123,6 +124,7 @@ export class ImpModel extends BaseModel {
       keg.rotation.x = 0.35;
       this.torso.add(keg);
       this.packGroup = keg;
+      keg.userData.keep = true;
     }
     if (o.pack === 'egg') {
       // A stolen dragon egg in a rope sling, glowing so it can be spotted from afar.
@@ -146,6 +148,7 @@ export class ImpModel extends BaseModel {
       sling.rotation.x = 0.3;
       this.torso.add(sling);
       this.packGroup = sling;
+      sling.userData.keep = true;
     }
 
     const tw = 0.34 + bulk * 0.2;
@@ -283,6 +286,8 @@ export class ImpModel extends BaseModel {
       if ((ob as THREE.Mesh).isMesh) ob.castShadow = true;
     });
     mergeStatic(this.root);
+    // One skinned mesh per material instead of a mesh per limb part.
+    skinify(this.root);
   }
 
   private buildWeapon(h: THREE.Group, o: ImpOpts): void {

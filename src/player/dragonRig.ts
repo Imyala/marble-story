@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { skinify } from '../render/skinify';
 import { mat, matUnique, glow } from '../render/materials';
 import { ellipsoid, taperedTube, spike, membrane, limb, mergeStatic } from '../render/shapes';
 import { addRim } from '../render/materials';
@@ -123,12 +124,14 @@ export class DragonRig {
   private flapT = 1;
   private climbLegs = -1;
 
-  constructor(look: DragonLook = HERO_LOOK) {
+  /** `skinned` draws the rig as a few GPU-skinned meshes; off for rigs posed once and baked into statues. */
+  constructor(look: DragonLook = HERO_LOOK, skinned = true) {
     this.look = look;
     this.build();
     this.root.add(this.model);
     this.model.scale.setScalar(look.scale);
     mergeStatic(this.model);
+    if (skinned) skinify(this.model);
     for (const m of this.flashMats) addRim(m, 0xfff0e0, 0.3);
   }
 

@@ -109,11 +109,20 @@ export class GemCluster implements Prop, Hittable {
     if (this.solid) this.game.col.remove(this.solid);
   }
 
+  private cullT = Math.random() * 0.3;
+
   update(dt: number): void {
     if (!this.alive) return;
     if (this.wobble > 0) {
       this.wobble -= dt;
       this.mesh.rotation.z = Math.sin(this.wobble * 60) * this.wobble * 0.4;
+    }
+    // Past 90 m a crystal is a speck: skip drawing it (checked a few times a second).
+    this.cullT -= dt;
+    if (this.cullT <= 0) {
+      this.cullT = 0.3;
+      const c = this.game.camera.position;
+      this.mesh.visible = (this.x - c.x) ** 2 + (this.z - c.z) ** 2 < 90 * 90;
     }
   }
 }

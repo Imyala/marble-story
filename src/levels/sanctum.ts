@@ -293,7 +293,7 @@ function statue(b: Builder, x: number, z: number, look: DragonLook, lit: boolean
   const y = 0.25;
   b.box(x, y, z, 3, 1.2, 3, STONE_DARK, { trim: STONE });
   const stoneLook: DragonLook = { ...look, body: 0xa89e8a, belly: 0xb8ae9a, horn: lit ? look.body : 0x8a8272, membrane: 0x9a9080, spikes: 0x8a8272, eye: lit ? look.eye : 0x6a6458, scale: 1.3 };
-  const rig = new DragonRig(stoneLook);
+  const rig = new DragonRig(stoneLook, false);
   const p = defaultPose();
   p.attack = 'roar';
   p.attackT = 0.5;
@@ -556,7 +556,7 @@ function bakeRig(b: Builder, root: THREE.Object3D): void {
 
 /** A stone dragon on a plinth, baked to static geometry. */
 function stoneDragon(b: Builder, x: number, y: number, z: number, yaw: number, look: DragonLook, attack: 'roar' | null = null): void {
-  const rig = new DragonRig(look);
+  const rig = new DragonRig(look, false);
   const p = defaultPose();
   if (attack) {
     p.attack = attack;

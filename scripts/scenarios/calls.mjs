@@ -2,6 +2,7 @@
 export default async function (h) {
   const lvls = (process.env.CALLS_LVLS ?? 'fen,sanctum,falls,frostworks,plains,keep').split(',');
   const out = {};
+  if (process.env.SCELL) await h.page.addInitScript((c) => { globalThis.STATIC_CELL = c; }, Number(process.env.SCELL));
   for (const lvl of lvls) {
     await h.go(`?level=${lvl}&seed=1&quality=low&maxdt=0.1`, 2500);
     await h.skipDialogue(8000);

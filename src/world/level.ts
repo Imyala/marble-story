@@ -803,7 +803,8 @@ export class Builder {
     for (const c of root.children) {
       const m = c as THREE.Mesh;
       if (!m.isMesh || !m.userData.static || Array.isArray(m.material) || (m as unknown as THREE.InstancedMesh).isInstancedMesh) continue;
-      const key = `${(m.material as THREE.Material).uuid}|${Math.floor(m.position.x / 24)},${Math.floor(m.position.z / 24)}|${m.castShadow ? 1 : 0}`;
+      const cell = (globalThis as { STATIC_CELL?: number }).STATIC_CELL ?? 48;
+      const key = `${(m.material as THREE.Material).uuid}|${Math.floor(m.position.x / cell)},${Math.floor(m.position.z / cell)}|${m.castShadow ? 1 : 0}`;
       const list = groups.get(key) ?? [];
       list.push(m);
       groups.set(key, list);

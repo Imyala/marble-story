@@ -27,6 +27,8 @@ export class CameraRig {
   private initialized = false;
   /** Extra distance the level asks for (boss arenas). */
   extraDist = 0;
+  /** A brief lens push-in for dramatic beats (the last foe falling). */
+  punchT = 0;
   private lead = new THREE.Vector3();
   private pitchBias = 0;
   private occluders: { mesh: THREE.Mesh; center: THREE.Vector3; r: number; orig: THREE.Material; faded: boolean }[] = [];
@@ -254,6 +256,10 @@ export class CameraRig {
     if (p.gliding || p.state === 'charge') fov = 69;
     if (p.dragonTimeActive) fov = 56;
     if (this.furyT > 0) fov = 70;
+    if (this.punchT > 0) {
+      this.punchT -= dt;
+      fov -= 7;
+    }
     this.fov = damp(this.fov, fov, 4, dt);
     if (Math.abs(cam.fov - this.fov) > 0.01) {
       cam.fov = this.fov;

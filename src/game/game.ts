@@ -744,7 +744,18 @@ export class Game {
     this.player.gainFury(5);
     if (this.player.lock === e) this.player.lock = null;
     this.checkFeats();
+    // The last foe of a fight falls in slow motion.
+    const others = this.enemies.some((o) => o !== e && o.alive && o.aggro && Math.hypot(o.x - e.x, o.z - e.z) < 32);
+    if (!others && !this.activeArena && !this.boss && e.def.id !== 'dummy' && this.combatHold > 0 && this.encounterKills >= 1) {
+      this.slowmo(0.3, 0.55);
+      this.cam.punchT = 0.5;
+      this.shake(0.25, 0.2);
+      this.audio.play('perfect', 0.7, 0.6);
+    }
+    this.encounterKills = others ? this.encounterKills + 1 : 0;
   }
+  /** Kills in the current fight, so a lone straggler does not get the finale. */
+  private encounterKills = 0;
 
   triggerReaction(e: Enemy, r: Reaction): void {
     const info = REACTION_INFO[r];

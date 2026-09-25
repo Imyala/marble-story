@@ -38,6 +38,8 @@ uniform float uStars;
 uniform float uMoons;
 uniform float uTime;
 uniform float uClouds;
+uniform float uFlash;
+uniform vec3 uFlashDir;
 varying vec3 vDir;
 
 float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -91,6 +93,11 @@ void main() {
     col = mix(col, vec3(0.75, 0.55, 1.0), b);
     col += vec3(0.4, 0.3, 0.6) * pow(max(dot(d, m1), 0.0), 60.0) * 0.5 * uMoons;
   }
+  if (uFlash > 0.0) {
+    // Lightning lights the whole sky, brightest (and the clouds most) around the bolt.
+    float near = pow(max(dot(normalize(vec3(d.x, 0.0, d.z)), uFlashDir), 0.0), 3.0);
+    col += vec3(0.75, 0.8, 1.0) * uFlash * (0.18 + near * 0.9) * smoothstep(-0.1, 0.3, h);
+  }
   gl_FragColor = vec4(col, 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -111,6 +118,8 @@ export class Sky {
       uMoons: { value: 0 },
       uTime: { value: 0 },
       uClouds: { value: 0.45 },
+      uFlash: { value: 0 },
+      uFlashDir: { value: new THREE.Vector3(0, 0, 1) },
     };
     const m = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -134,6 +143,16 @@ export class Sky {
     this.uniforms.uStars!.value = def.stars ?? 0;
     this.uniforms.uMoons!.value = def.moons ? 1 : 0;
     this.uniforms.uClouds!.value = def.clouds ?? 0.45;
+  }
+
+  setClouds(v: number): void {
+    this.uniforms.uClouds!.value = v;
+  }
+
+  /** Lightning: how bright, and (when a new bolt strikes) its bearing. */
+  flash(v: number, azimuth?: number): void {
+    this.uniforms.uFlash!.value = v;
+    if (azimuth !== undefined) (this.uniforms.uFlashDir!.value as THREE.Vector3).set(Math.sin(azimuth), 0, Math.cos(azimuth));
   }
 
   update(camPos: THREE.Vector3, time: number): void {

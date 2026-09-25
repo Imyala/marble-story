@@ -14,9 +14,9 @@ export type Sfx =
   | 'enemyAlert' | 'enemyDie' | 'enemyHurt' | 'enemyAttack' | 'shieldBlock' | 'bossRoar'
   | 'hurt' | 'death' | 'ui' | 'uiConfirm' | 'uiBack' | 'checkpoint' | 'fury' | 'dragonTimeOn'
   | 'dragonTimeOff' | 'unlock' | 'door' | 'torch' | 'switch' | 'splash' | 'charge' | 'pound'
-  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue' | 'woodBreak' | 'potBreak' | 'chest' | 'page' | 'egg';
+  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue' | 'woodBreak' | 'potBreak' | 'chest' | 'page' | 'egg' | 'thunder';
 
-export type LoopId = 'breath' | 'glide' | 'charge';
+export type LoopId = 'breath' | 'glide' | 'charge' | 'rain';
 
 export interface MusicTheme {
   bpm: number;
@@ -269,6 +269,13 @@ export class Audio {
         for (let i = 0; i < 6; i++) this.tone(2000 + Math.random() * 3000, 0.3, 'sine', 0.07, { delay: i * 0.025 });
         this.tone(160, 0.3, 'sine', 0.4, { slide: 50 });
         break;
+      case 'thunder':
+        // A sharp crack, then a long roll that darkens as it fades.
+        this.noise(0.25, 0.25 * v, { type: 'highpass', freq: 1800, freqEnd: 500 });
+        this.noise(3.2, 0.55 * v, { type: 'lowpass', freq: 700 * p, freqEnd: 45, attack: 0.08 });
+        this.noise(2.2, 0.35 * v, { type: 'lowpass', freq: 260, freqEnd: 40, attack: 0.4, delay: 0.5 });
+        this.tone(42, 2.4, 'sine', 0.35 * v, { slide: 28, attack: 0.1 });
+        break;
       case 'rumble':
         this.noise(0.6, 0.5 * v, { type: 'lowpass', freq: 300, freqEnd: 80, attack: 0.02 });
         this.tone(55, 0.5, 'sine', 0.5 * v, { slide: 35 });
@@ -373,7 +380,7 @@ export class Audio {
 
   // ---- loops (breath, glide wind) ---------------------------------------------
 
-  startLoop(id: LoopId, kind: 'fire' | 'lightning' | 'ice' | 'earth' | 'wind' | 'charge'): void {
+  startLoop(id: LoopId, kind: 'fire' | 'lightning' | 'ice' | 'earth' | 'wind' | 'charge' | 'rain'): void {
     const c = this.ctx;
     if (!c) return;
     this.stopLoop(id);
@@ -421,6 +428,12 @@ export class Audio {
         f.Q.value = 1.5;
         g.gain.setTargetAtTime(0.22, c.currentTime, 0.1);
         break;
+      case 'rain':
+        f.type = 'highpass';
+        f.frequency.value = 1400;
+        f.Q.value = 0.4;
+        g.gain.setTargetAtTime(0.07, c.currentTime, 1.2);
+        break;
     }
     src.connect(f).connect(g).connect(this.sfxBus);
     if (extra) {
@@ -433,7 +446,7 @@ export class Audio {
     this.loops.set(id, { src, gain: g, filter: f, ...(extra ? { extra } : {}) });
   }
 
-  startLoopOnce(id: LoopId, kind: 'fire' | 'lightning' | 'ice' | 'earth' | 'wind' | 'charge'): void {
+  startLoopOnce(id: LoopId, kind: 'fire' | 'lightning' | 'ice' | 'earth' | 'wind' | 'charge' | 'rain'): void {
     if (!this.loops.has(id)) this.startLoop(id, kind);
   }
 

@@ -218,3 +218,18 @@ export async function grade(h) {
   await h.shot('grade-dtime');
   await h.eval(() => window.wyrm.input.simulate('dragonTime', false));
 }
+
+/** Storm weather in the Falls: rain and a lightning strike that lights the sky. */
+export async function storm(h) {
+  await h.go('?level=falls&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => { const g = window.wyrm; g.hud.show(false); g.weather.nextStrike = 0.05; });
+  let r = null;
+  for (let i = 0; i < 40; i++) {
+    await h.wait(30);
+    r = await h.eval(() => ({ bolt: !!window.wyrm.weather.bolt, rain: window.wyrm.weather.rain.visible, flash: window.wyrm.weather.flash }));
+    if (r.bolt) break;
+  }
+  await h.shot('storm-strike');
+  h.check('the Falls have rain and a lightning strike', r.bolt && r.rain, JSON.stringify(r));
+}

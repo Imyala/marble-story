@@ -26,6 +26,7 @@ import { LEVELS } from '../levels';
 import { Hud } from '../ui/hud';
 import { Menus } from '../ui/menus';
 import { BACKDROPS } from '../render/backdrop';
+import { Weather, WEATHER } from '../fx/weather';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
 import { RELICS } from './story';
@@ -84,6 +85,7 @@ export class Game {
   readonly cam = new CameraRig();
   readonly hud: Hud;
   readonly menus: Menus;
+  readonly weather: Weather;
   readonly dialogue: Dialogue;
   save: SaveData;
   options: Options;
@@ -131,6 +133,7 @@ export class Game {
     this.input = new Input(this.renderer.canvas);
     this.fx = new FX(this.camera);
     this.blobs = new BlobShadows(this.scene);
+    this.weather = new Weather(this);
     this.scene.add(this.fx.root);
     this.options = loadOptions();
     this.save = loadSave() ?? newSave();
@@ -258,6 +261,7 @@ export class Game {
     def.build(b);
     b.finish();
     this.renderer.backdrop.apply(BACKDROPS[def.id], def.sky, level.waterLevel > -1e3 ? level.waterLevel - 0.5 : -2);
+    this.weather.apply(WEATHER[def.id]);
     this.cam.collectOccluders(level.root);
     for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
     this.pendingSpawns = [];
@@ -396,6 +400,7 @@ export class Game {
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;
+    if (this.level && this.state !== 'menu' && this.state !== 'pause') this.weather.update(dt);
     this.renderer.render(this.realTime, dt);
   }
 

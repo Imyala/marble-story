@@ -114,6 +114,8 @@ export class Dialogue {
     const npc = g.level?.npcs.find((n) => n.id === who);
     if (npc) return new THREE.Vector3(npc.x, npc.y + 1.4 * npc.rig.look.scale, npc.z);
     if (g.boss && g.boss.speakerId === who) return new THREE.Vector3(g.boss.x, g.boss.y + g.boss.height * 0.7, g.boss.z);
+    // Nyxa travelling as Aster's partner (not standing as an NPC).
+    if (who === 'nyxa' && g.partner.present && !g.partner.hidden) return new THREE.Vector3(g.partner.x, g.partner.y + 1.9, g.partner.z);
     return null;
   }
 

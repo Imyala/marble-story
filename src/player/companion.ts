@@ -317,6 +317,8 @@ export class Companion {
     const lv = g.level;
     if (!lv || g.player.hidden || (!loading && (g.state === 'title' || g.state === 'menu'))) return false;
     if (!g.save.levelsDone.keep || g.options.partner === false) return false;
+    // Off on her own for a story beat (the Hollow Gate's arrival: she scouts ahead, then finds Aster).
+    if (g.sessionFlags.has('nyxa-away')) return false;
     // Where Nyxa already stands as herself (at home in the Sanctum, freed in the Keep), she does not also follow.
     return !lv.npcs.some((n) => n.id === 'nyxa');
   }

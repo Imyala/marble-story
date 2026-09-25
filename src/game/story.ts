@@ -74,7 +74,7 @@ export const LEVEL_INFO: Record<string, LevelInfo> = {
   plains: { name: 'Stonewild Plains', blurb: 'Tall grass over stone older than dragons.', collectibles: 7 },
   keep: { name: 'Eclipse Keep', blurb: 'Nyxa\'s fortress beneath the darkened moons.', collectibles: 5 },
   // Act II: the Hollow Below.
-  hollow: { name: 'The Hollow Gate', blurb: 'A glowing cavern under the Sanctum, where the Hollow King\'s roots reach up from the deep.', collectibles: 2 },
+  hollow: { name: 'The Hollow Gate', blurb: 'A glowing cavern under the Sanctum, where the Hollow King\'s roots reach up from the deep.', collectibles: 3 },
 };
 
 export const RELICS: Record<string, { title: string; text: string; level: string }> = {

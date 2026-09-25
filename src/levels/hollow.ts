@@ -6,6 +6,7 @@ import { NYXA_FREED } from '../game/story';
 import type { Game } from '../game/game';
 import type { Line } from '../ui/dialogue';
 import { Talker, type Prop } from '../entities/props';
+import { twinPlates } from '../entities/twinplate';
 import { makeCyl } from '../world/collision';
 import { GEO } from '../render/decor';
 import { mat, glowShared } from '../render/materials';
@@ -762,6 +763,32 @@ function aerie(b: Builder): void {
     crystalCluster(b, x, z, sc, 0xffb860);
   }
   for (const [x, z] of [[-83.5, 24.5], [-74.5, 24.5]] as [number, number][]) lanternPost(b, x, z, 0xffc070, Math.PI / 2);
+  pairsDoor(b);
+}
+
+/**
+ * The Pair's Door: the old dragons nested two by two, and sealed their small
+ * treasures behind doors only a pair could open. Two plates, one for Aster and
+ * one for Nyxa (Hold the partner key to ask her to stay on one).
+ */
+function pairsDoor(b: Builder): void {
+  const g = b.game;
+  const vx = -67;
+  const vz = 3.6;
+  const top = b.y(vx, vz);
+  const V = 0x6e6878;
+  b.box(vx - 2.4, top, vz, 0.8, 3.2, 3.8, V, { trim: 0x8a8298 });
+  b.box(vx + 2.4, top, vz, 0.8, 3.2, 3.8, V, { trim: 0x8a8298 });
+  b.box(vx, top, vz - 1.6, 4, 3.2, 0.8, V);
+  b.box(vx, top + 3.2, vz, 5.6, 0.5, 4.6, V, { trim: 0x8a8298 });
+  // Two dragons carved over the lintel, nose to nose.
+  for (const s of [-1, 1]) b.decor.add(GEO.cone(), mat(0x8a8298, { rough: 0.8, flat: true }), vx + s * 0.9, top + 3.9, vz + 1.9, 0.35, 0.9, 0.35, 0, 0, s * 1.2);
+  b.gate(vx, vz + 1.9, 4, 3.2, 0, 'stone', 'pairs-door', top);
+  b.collectible('heart1', 'heart', vx, vz - 0.2, top);
+  b.gems(vx, vz - 0.2, 'blue', 6, 1.1, top);
+  twinPlates(b, [vx - 3.2, vz + 5.2], [vx + 3.2, vz + 5.2], 'pairs-door');
+  b.story('pairs', vx, vz + 7, 4, () => g.hud.flick('Two plates, one door. Two dragons, Aster! Stand on one and Hold G so Nyxa stays on the other.', 7));
+  b.level.on('pairs-door', () => g.partner.say('A door for two. They built this place for pairs, you know. I think I would have liked them.', 5.5, true));
 }
 
 /** Runs `make`, then merges the meshes of any groups it added to the level (a vine wall is a mesh per leaf). */
@@ -904,8 +931,40 @@ function arrive(g: Game): void {
   ];
   g.say(lines, () => {
     leave();
+    // She scouts the deep ways, and catches up once Aster has met the Burrowfolk (or after a while).
+    scouting(g, 150);
     g.saveNow();
     g.hud.flick('Follow the Rootway down to that glowing lake. And look at the water: I bet you can swim in it!', 7);
+  });
+}
+
+/** Nyxa away scouting for up to `secs` of play in this realm; `nyxaReturns` ends it early. */
+function scouting(g: Game, secs: number): void {
+  const level = g.level;
+  if (!level) return;
+  g.sessionFlags.add('nyxa-away');
+  let t = secs;
+  level.props.push({
+    update: (dt: number) => {
+      if (!g.sessionFlags.has('nyxa-away')) return;
+      if (g.state === 'play') t -= dt;
+      if (t <= 0) nyxaReturns(g);
+    },
+    // Leaving the realm ends it: she is waiting wherever Aster goes next.
+    dispose: () => g.sessionFlags.delete('nyxa-away'),
+  });
+}
+
+function nyxaReturns(g: Game): void {
+  if (!g.sessionFlags.delete('nyxa-away')) return;
+  // She rejoins on the partner's next update; speak once she is standing there.
+  let wait = 1.2;
+  g.level?.props.push({
+    update: (dt: number) => {
+      if (wait < 0) return;
+      wait -= dt;
+      if (wait < 0) g.partner.say('Told you I\'d find you. The deep ways are full of his roots... and something under them, breathing. Later.', 6, true);
+    },
   });
 }
 
@@ -921,7 +980,10 @@ function talkMossa(g: Game): void {
       { who: 'mossa', text: 'The Mycelium Deep. The Drowned City. The Crystal Mine. And the First Hatchery, where the old dragons kept their eggs.' },
       // QUEST HOOK: Elder Mossa's quest starts here ("The Withering Roots": find what feeds the roots over the four gates, and cut it off).
       { who: 'mossa', text: 'Something down there is feeding those roots. Find it, and the gates may open again. Until then, our fire is yours.' },
-    ], () => g.saveNow());
+    ], () => {
+      g.saveNow();
+      nyxaReturns(g);
+    });
     return;
   }
   g.say([{ who: 'mossa', text: 'The roots are still thick on the gates, dear. Whatever feeds them is deeper than any of us dare go.' }]);

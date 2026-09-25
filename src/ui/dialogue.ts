@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Game } from '../game/game';
 import { SPEAKERS } from '../game/story';
+import { forInput } from './keys';
 
 export interface Line {
   who: string;
@@ -68,8 +69,10 @@ export class Dialogue {
     const sp = SPEAKERS[l.who] ?? { name: l.who, color: '#ffffff' };
     this.nameEl.textContent = sp.name;
     this.nameEl.style.color = sp.color;
-    this.full = l.text;
+    this.full = forInput(l.text, this.game.input);
     this.shown = 0;
+    const hint = this.box.querySelector('.dlg-next');
+    if (hint) hint.innerHTML = forInput('Space / Click &#9656; &nbsp; Esc to skip', this.game.input);
     this.textEl.textContent = '';
     this.game.dialogueSpeaker = l.who;
     l.action?.();

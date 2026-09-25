@@ -6,6 +6,7 @@ import { RANKS } from '../combat/style';
 import type { Boss } from '../enemies/boss';
 import { Enemy } from '../enemies/enemy';
 import { SHARDS_PER_UPGRADE, eggsFound } from '../game/progress';
+import { forInput } from './keys';
 
 const EL_COLORS: Record<Element, string> = { fire: '#ff7a2a', lightning: '#7ac8ff', ice: '#8fe4ff', earth: '#8bd05a' };
 const EL_KEYS: Record<Element, string> = { fire: '1', lightning: '2', ice: '3', earth: '4' };
@@ -64,6 +65,7 @@ export class Hud {
   private fadeBox!: HTMLElement;
   private perfectBox!: HTMLElement;
   private reticle!: HTMLElement;
+  private elKeys!: HTMLElement;
   private ebars: { el: HTMLElement; fill: HTMLElement; chip: HTMLElement; chipV: number; who: unknown }[] = [];
   private flickBox!: HTMLElement;
   private flickText!: HTMLElement;
@@ -146,7 +148,8 @@ export class Hud {
       this.elBoxes.set(e, b);
     }
     this.elName = el('div', 'el-name', '');
-    br.append(els, this.elName, el('div', 'el-keys', 'Hold RMB: Breath &middot; Q: Burst'));
+    this.elKeys = el('div', 'el-keys', 'Hold RMB: Breath &middot; Q: Burst');
+    br.append(els, this.elName, this.elKeys);
     r.appendChild(br);
 
     this.styleBox = el('div', 'style-meter');
@@ -290,6 +293,10 @@ export class Hud {
       } else this.reticle.style.display = 'none';
     } else this.reticle.style.display = 'none';
 
+    // The element hint names the buttons in hand.
+    const keys = forInput('Hold RMB: Breath \u00b7 Q: Burst', g.input);
+    if (this.elKeys.textContent !== keys) this.elKeys.textContent = keys;
+
     // Health bars over foes hit in the last few seconds (and the lock target).
     {
       const px = p.x;
@@ -423,7 +430,7 @@ export class Hud {
     const now = performance.now();
     if ((this.lastToast.get(text) ?? 0) > now - 1500) return;
     this.lastToast.set(text, now);
-    const t = el('div', `toast ${kind}`, text);
+    const t = el('div', `toast ${kind}`, forInput(text, this.game.input));
     this.toasts.appendChild(t);
     while (this.toasts.children.length > 4) this.toasts.firstChild!.remove();
     setTimeout(() => t.classList.add('out'), 2200);
@@ -545,7 +552,7 @@ export class Hud {
   }
 
   private showFlick(text: string, seconds: number): void {
-    this.flickText.textContent = text;
+    this.flickText.textContent = forInput(text, this.game.input);
     this.flickBox.classList.remove('hidden');
     this.flickT = seconds;
     this.flickDur = seconds;

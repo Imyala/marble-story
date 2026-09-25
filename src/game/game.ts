@@ -20,6 +20,7 @@ import {
 } from './progress';
 import { findLetter, letterKey } from './letters';
 import { BESTIARY, bump, extra, featKey, newlyDone } from './feats';
+import { SKILLS, SKILL_REWARD, skillKey } from './skills';
 import { Level, Builder, type LevelDef } from '../world/level';
 import type { Wardstone, Collectible, Arena } from '../entities/props';
 import { LEVELS } from '../levels';
@@ -136,7 +137,11 @@ export class Game {
   private titleBeat = -1;
   private titleDragon: { rig: DragonRig; pose: DragonPose; lastYaw: number } | null = null;
   /** Tallies for the current visit to a realm, for the results card at the end. */
-  readonly visit = { id: '', t0: 0, kills0: 0, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: 0, doneAtStart: true, shown: false };
+  readonly visit = {
+    id: '', t0: 0, kills0: 0, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: 0, doneAtStart: true, shown: false,
+    // Skill Point counters for this visit.
+    butterflies: 0, sfKills: 0, shatters: 0, starKills: 0,
+  };
 
   /** Level flags set by story scripts during this visit. */
   readonly sessionFlags = new Set<string>();
@@ -328,7 +333,7 @@ export class Game {
       (this.save.realmIds ??= {})[id] = [...new Set([...level.secrets.map((q) => q.id), ...chestIds])];
       const v = this.visit;
       if (v.id !== id) {
-        Object.assign(v, { id, t0: this.save.stats.playTime, kills0: this.save.stats.kills, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: this.save.stats.deaths, shown: false });
+        Object.assign(v, { id, t0: this.save.stats.playTime, kills0: this.save.stats.kills, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: this.save.stats.deaths, shown: false, butterflies: 0, sfKills: 0, shatters: 0, starKills: 0 });
         v.doneAtStart = !!this.save.levelsDone[id];
       }
       this.state = 'play';
@@ -420,6 +425,7 @@ export class Game {
         }
         this.updateInteract();
         this.simulate(dt);
+        if (this.style.combo >= 20 && this.level?.def.id === 'sanctum') this.skill('sanctum:combo');
         break;
       case 'dialogue':
         this.dialogue.update(dt);
@@ -799,6 +805,22 @@ export class Game {
     }
   }
 
+  /** Earns a Skill Point (once per save) and pays for it. */
+  skill(id: string): void {
+    const k = skillKey(id);
+    if (this.save.found[k]) return;
+    const def = SKILLS.find((s) => s.id === id);
+    if (!def) return;
+    this.save.found[k] = true;
+    this.save.gems += SKILL_REWARD;
+    this.hud.gemBump();
+    this.audio.play('levelUp', 1.2);
+    this.hud.bigText('SKILL POINT!', 0xffe070);
+    this.toast(`Skill Point: ${def.name}! +${SKILL_REWARD} spirit gems`, 'good');
+    this.checkFeats();
+    this.saveNow();
+  }
+
   /** Pays out any feat the save has just earned. */
   checkFeats(): void {
     for (const f of newlyDone(this.save)) {
@@ -873,6 +895,7 @@ export class Game {
     this.player.gainFury(5);
     if (this.player.lock === e) this.player.lock = null;
     this.checkFeats();
+    if (this.player.power === 'superflame' && e.def.id !== 'dummy' && ++this.visit.sfKills >= 5 && this.level?.def.id === 'falls') this.skill('falls:superflame');
     // The last foe of a fight falls in slow motion.
     const others = this.enemies.some((o) => o !== e && o.alive && o.aggro && Math.hypot(o.x - e.x, o.z - e.z) < 32);
     if (!others && !this.activeArena && !this.boss && e.def.id !== 'dummy' && this.combatHold > 0 && this.encounterKills >= 1) {
@@ -895,6 +918,7 @@ export class Game {
     const z = e.z;
     this.save.stats.reactions++;
     this.checkFeats();
+    if (r === 'shatter' && ++this.visit.shatters >= 4 && this.level?.def.id === 'frostworks') this.skill('frostworks:shatter');
     this.style.bonus(90);
     this.hud.bigText(info.name, info.color);
     this.player.gainFury(10);

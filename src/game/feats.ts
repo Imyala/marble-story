@@ -1,5 +1,6 @@
 import type { SaveData } from './progress';
 import { eggsFound } from './progress';
+import { skillsEarned } from './skills';
 
 /**
  * Feats: long-term goals across the whole adventure, each paying spirit gems
@@ -56,6 +57,7 @@ export const FEATS: FeatDef[] = [
   { id: 'butterflies', name: 'Butterfly Catcher', desc: 'Free 40 butterflies from the realms\' critters for Flick.', goal: 40, reward: 100, progress: (s) => extra(s).butterflies ?? 0 },
   { id: 'eggs', name: 'Egg Warden', desc: 'Return 14 lost dragon eggs.', goal: 14, reward: 150, progress: (s) => eggsFound(s) },
   { id: 'gold', name: 'Golden Wings', desc: 'Earn a Gold Dragon Medal in three realms.', goal: 3, reward: 250, progress: (s) => Object.keys(s.found).filter((k) => /^medal:.*:3$/.test(k)).length },
+  { id: 'skills', name: 'Show-Off', desc: 'Earn 6 Skill Points.', goal: 6, reward: 150, progress: (s) => skillsEarned(s.found) },
   { id: 'letters', name: 'Archivist', desc: 'Read 16 lore letters.', goal: 16, reward: 150, progress: (s) => letters(s) },
 ];
 

@@ -819,6 +819,18 @@ export class Builder {
     return this.addProp(new SpeedLane(this.game, pts, yaw));
   }
 
+  /** A ring of `n` speed runes: lighting them all in one charge earns `skill`. */
+  runeRing(cx: number, cz: number, r: number, n: number, skill: string | null = null): SpeedLane {
+    const pts = Array.from({ length: n }, (_, i) => {
+      const a = (i / n) * Math.PI * 2;
+      const x = cx + Math.sin(a) * r;
+      const z = cz + Math.cos(a) * r;
+      // Chevrons point along the ring, anticlockwise seen from above.
+      return { x, y: this.y(x, z), z, yaw: a + Math.PI / 2 };
+    });
+    return this.addProp(new SpeedLane(this.game, pts, 0, skill));
+  }
+
   /**
    * Adds a mesh that never moves again. At the end of the build these are
    * merged by material in 24 m chunks: a walled courtyard becomes a few draws

@@ -93,6 +93,8 @@ import type { DragonLook } from '../player/dragonRig';
 import type { Element } from '../game/types';
 import { THEMES } from '../core/audio';
 import { mat as matS, glow as glowS } from '../render/materials';
+import type { Interactable } from '../entities/props';
+import { skillKey } from '../game/skills';
 
 export interface BossFightOpts {
   /** Unique id within the level; the intro plays once per save. */
@@ -106,24 +108,62 @@ export interface BossFightOpts {
   triggerZ: number;
   triggerR: number;
   spawn(g: Game): Boss;
+  /** What the rematch stone calls the boss. */
+  name?: string;
   intro: Line[];
   /** Runs once the boss is dead and the barrier is down. */
   onDefeated(g: Game): void;
 }
 
+/** A standing stone by a beaten boss's arena that offers a rematch. */
+class RematchStone implements Prop, Interactable {
+  readonly range = 2.6;
+  label: string;
+  enabled = true;
+  private rune: THREE.MeshBasicMaterial;
+  private t = 0;
+  constructor(game: Game, readonly x: number, readonly y: number, readonly z: number, name: string, private fn: () => void) {
+    this.label = `Challenge ${name} again (Skill Point: take no hits)`;
+    const root = new THREE.Group();
+    const stone = new THREE.Mesh(new THREE.CylinderGeometry(0.35, 0.55, 2.2, 5), matS(0x4a4458, { rough: 0.9, flat: true }));
+    stone.position.y = 1.1;
+    stone.castShadow = true;
+    root.add(stone);
+    this.rune = new THREE.MeshBasicMaterial({ color: 0xffe070 });
+    const r = new THREE.Mesh(new THREE.OctahedronGeometry(0.16), this.rune);
+    r.position.set(0, 1.5, 0.42);
+    root.add(r);
+    root.position.set(x, y, z);
+    game.level!.root.add(root);
+  }
+  interact(): void {
+    if (!this.enabled) return;
+    this.enabled = false;
+    this.fn();
+  }
+  update(dt: number): void {
+    this.t += dt;
+    this.rune.color.setHex(this.enabled ? 0xffe070 : 0x5a5060).multiplyScalar(this.enabled ? 0.7 + 0.3 * Math.sin(this.t * 3) : 1);
+  }
+}
+
 /**
  * Wires a boss arena: a trigger that spawns the boss and raises a barrier,
  * the intro conversation (first time only), boss music, and a rematch when
- * the player dies or reloads mid-fight. Skipped entirely once the level is done.
+ * the player dies or reloads mid-fight. Once the realm is done, a standing
+ * stone offers a rematch instead, until the boss's no-hit Skill Point is won.
  */
 export function bossFight(b: Builder, o: BossFightOpts): void {
   const g = b.game;
   const lvl = b.level.def.id;
-  if (g.save.levelsDone[lvl]) return;
+  const done = !!g.save.levelsDone[lvl];
+  const skill = `${lvl}:boss`;
+  if (done && g.save.found[skillKey(skill)]) return;
   const barrier = new Barrier(g, o.x, b.y(o.x, o.z), o.z, o.r);
   b.level.props.push(barrier);
   let defeated = false;
-  b.level.goals.push({ x: o.triggerX, y: b.y(o.triggerX, o.triggerZ), z: o.triggerZ, label: 'boss', done: () => defeated || !!g.save.levelsDone[lvl] });
+  let stone: RematchStone | null = null;
+  if (!done) b.level.goals.push({ x: o.triggerX, y: b.y(o.triggerX, o.triggerZ), z: o.triggerZ, label: 'boss', done: () => defeated || !!g.save.levelsDone[lvl] });
   // The outro waits two seconds of game time (not wall time, which slow frames would outrun).
   let outroT = -1;
   b.level.props.push({
@@ -134,10 +174,11 @@ export function bossFight(b: Builder, o: BossFightOpts): void {
     },
   });
   const start = () => {
-    if (defeated || (g.boss && g.boss.alive)) return;
+    if ((defeated && !done) || (g.boss && g.boss.alive)) return;
     const boss = o.spawn(g);
     g.addBoss(boss);
     barrier.set(true);
+    const hits0 = g.visit.hits;
     const begin = () => {
       boss.awake = true;
       g.audio.setMusic(THEMES.boss!);
@@ -145,22 +186,44 @@ export function bossFight(b: Builder, o: BossFightOpts): void {
     boss.onDefeated = () => {
       defeated = true;
       barrier.set(false);
+      if (g.visit.hits === hits0) g.skill(skill);
+      if (done) {
+        // A rematch: no story, just the music back and (maybe) another go.
+        g.audio.setMusic(THEMES[b.level.def.music] ?? null);
+        if (stone) stone.enabled = !g.save.found[skillKey(skill)];
+        return;
+      }
       g.audio.setMusic(null);
       outroT = 2;
     };
     const key = `story:${lvl}:${o.id}`;
-    if (g.save.found[key]) begin();
+    if (done) {
+      g.hud.flick('Round two! Not a scratch this time, Aster, and it\'s a Skill Point!', 4);
+      begin();
+    } else if (g.save.found[key]) begin();
     else {
       g.save.found[key] = true;
       g.say(o.intro, begin);
     }
   };
-  // Re-arms after a death: the trigger fires again whenever no boss is alive.
-  b.trigger(o.triggerX, o.triggerZ, o.triggerR, () => {
-    if (!defeated && (!g.boss || !g.boss.alive)) start();
-  }, false);
+  if (done) {
+    const sx = o.triggerX + 3;
+    const sz = o.triggerZ;
+    const name = o.name ?? 'the boss';
+    stone = new RematchStone(g, sx, b.y(sx, sz), sz, name, start);
+    b.level.props.push(stone);
+    b.level.interactables.push(stone);
+  } else {
+    // Re-arms after a death: the trigger fires again whenever no boss is alive.
+    b.trigger(o.triggerX, o.triggerZ, o.triggerR, () => {
+      if (!defeated && (!g.boss || !g.boss.alive)) start();
+    }, false);
+  }
   // Dying mid-fight despawns the boss; drop the barrier so the player can return.
-  b.level.on('boss-reset', () => barrier.set(false));
+  b.level.on('boss-reset', () => {
+    barrier.set(false);
+    if (stone) stone.enabled = true;
+  });
 }
 
 /** A shadow-crystal cage around a captured Warden. */

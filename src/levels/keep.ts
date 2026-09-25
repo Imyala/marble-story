@@ -464,7 +464,7 @@ export const keep: LevelDef = {
     let bossTrigger: Prop | null = null;
     const before = b.level.props.length;
     bossFight(b, {
-      id: 'nyxa', x: AX, z: AZ, r: AR, triggerX: 0, triggerZ: -249, triggerR: 3,
+      id: 'nyxa', name: 'Nyxa', x: AX, z: AZ, r: AR, triggerX: 0, triggerZ: -249, triggerR: 3,
       spawn: (gg) => new Nyxa(gg, 0, gg.col.groundAt(0, -271, ay + 5, 0.3).y, -271, 0, { x: AX, y: ay, z: AZ, r: AR }),
       intro: [
         { who: 'nyxa', text: 'So the violet egg hatched after all. I told him the river would take you.', action: () => {

@@ -163,13 +163,16 @@ export class SpeedLane implements Prop {
   private hinted = false;
   readonly cx: number;
   readonly cz: number;
+  /** Runes lit during the current charge, for a lane with a Skill Point. */
+  private run = -1;
+  private lit = new Set<number>();
 
-  constructor(private game: Game, pts: { x: number; y: number; z: number }[], yaw: number) {
+  constructor(private game: Game, pts: { x: number; y: number; z: number; yaw?: number }[], yaw: number, private skill: string | null = null) {
     for (const p of pts) {
       const mt = new THREE.MeshBasicMaterial({ color: 0xff9a40, transparent: true, opacity: 0.85, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
       const m = new THREE.Mesh(runeGeo, mt);
       m.position.set(p.x, p.y + 0.06, p.z);
-      m.rotation.y = yaw;
+      m.rotation.y = p.yaw ?? yaw;
       m.renderOrder = 2;
       game.level!.root.add(m);
       const base = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.08, 8), mat(0x5a5060, { rough: 0.8, flat: true }));
@@ -204,6 +207,14 @@ export class SpeedLane implements Prop {
         }
         r.flash = 1;
         p.boostCharge();
+        if (this.skill) {
+          if (this.run !== p.chargeId) {
+            this.run = p.chargeId;
+            this.lit.clear();
+          }
+          this.lit.add(i);
+          if (this.lit.size === this.runes.length) g.skill(this.skill);
+        }
       } else if (!this.hinted && p.body.grounded) {
         this.hinted = true;
         g.hud.flick('Speed runes! Charge over them without stopping and you\'ll go faster and faster!', 5);

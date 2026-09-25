@@ -594,7 +594,7 @@ function buildCrucible(b: Builder): void {
     (x, z) => Math.hypot(x - BOSS_X, (z - BOSS_Z) / 1.05) > 23.5 && Math.abs(x) > 3);
 
   bossFight(b, {
-    id: 'grolm', x: BOSS_X, z: BOSS_Z, r: BOSS_R, triggerX: 0, triggerZ: 235, triggerR: 5,
+    id: 'grolm', name: 'Grolm', x: BOSS_X, z: BOSS_Z, r: BOSS_R, triggerX: 0, triggerZ: 235, triggerR: 5,
     spawn: (gg) => new Grolm(gg, BOSS_X, gg.col.groundAt(BOSS_X, BOSS_Z + 5, 30, 0.3).y, BOSS_Z + 5, Math.PI, { x: BOSS_X, z: BOSS_Z, r: BOSS_R }),
     intro: [
       { who: 'flick', text: 'Aster... that pile of ice just stood up.', action: () => {

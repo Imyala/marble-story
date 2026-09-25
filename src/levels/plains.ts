@@ -459,7 +459,7 @@ export const plains: LevelDef = {
       if (boss instanceof Graveljaw) boss.onGroundPound(x, y, z);
     });
     bossFight(b, {
-      id: 'graveljaw', x: BASIN.x, z: BASIN.z, r: BASIN.r, triggerX: 0, triggerZ: 244, triggerR: 4.5,
+      id: 'graveljaw', name: 'Graveljaw', x: BASIN.x, z: BASIN.z, r: BASIN.r, triggerX: 0, triggerZ: 244, triggerR: 4.5,
       spawn: (gg) => new Graveljaw(gg, BASIN.x, gg.col.groundAt(BASIN.x, BASIN.z, 5, 0.3).y, BASIN.z, Math.PI),
       intro: [
         { who: 'flick', text: 'Aster... the sand is moving. The SAND is MOVING.', shot: 'none', action: () => {

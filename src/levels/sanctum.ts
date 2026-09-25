@@ -108,6 +108,8 @@ export const sanctum: LevelDef = {
     if (g.save.found['story:sanctum:lesson-done']) b.level.emit('wardgate-open');
     void gate;
     b.checkpoint('courtyard', -5, 20, Math.PI);
+    // A ring of speed runes round the plaza: light them all in one charge for a Skill Point.
+    b.runeRing(0, 0, 15, 12, 'sanctum:ring');
 
     // --- Training grounds (east) --------------------------------------------------------------
     b.bridge(16, 2, 0.25, 32, 3, 0.2, 4);

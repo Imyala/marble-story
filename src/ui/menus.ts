@@ -6,6 +6,7 @@ import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
 import { LETTERS, letterKey } from '../game/letters';
 import { FEATS, BESTIARY, featKey } from '../game/feats';
+import { SKILLS, SKILL_REWARD, skillKey } from '../game/skills';
 import { ENEMIES } from '../enemies/defs';
 import { HERO_LOOK } from '../player/dragonRig';
 import { ELEMENTS } from '../game/types';
@@ -521,7 +522,7 @@ export class Menus {
     this.push(m, () => this.pop());
   }
 
-  private journalTab: 'relics' | 'letters' | 'bestiary' | 'feats' | 'tips' = 'relics';
+  private journalTab: 'relics' | 'letters' | 'bestiary' | 'feats' | 'skills' | 'tips' = 'relics';
 
   private showJournal(): void {
     const g = this.game;
@@ -542,6 +543,7 @@ export class Menus {
     tab('letters', 'Letters');
     tab('bestiary', 'Bestiary');
     tab('feats', 'Feats');
+    tab('skills', 'Skill Points');
     tab('tips', 'Field notes');
     p.append(tabs);
     if (this.journalTab === 'tips') {
@@ -571,6 +573,18 @@ export class Menus {
           strong.length ? `<span class="tag strong">Resists: ${strong.join(', ')}</span>` : '',
         ].join('');
         p.append(this.div('entry beast', `<h4>${def.name}</h4><p>${b.blurb}</p><div class="tags">${tags}</div><div class="tip">${b.tip}</div>`));
+      }
+    } else if (this.journalTab === 'skills') {
+      const done = SKILLS.filter((s) => g.save.found[skillKey(s.id)]).length;
+      p.append(this.div('entry', `<p style="font-style:normal;color:#a99cc9">Skill Points: ${done} / ${SKILLS.length} &middot; ${SKILL_REWARD} spirit gems each. A beaten boss waits by a standing stone for a rematch.</p>`));
+      let lvl = '';
+      for (const s of SKILLS) {
+        if (s.level !== lvl) {
+          lvl = s.level;
+          p.append(this.div('entry', `<h4 style="color:var(--gold)">${LEVEL_INFO[lvl]?.name ?? lvl}</h4>`));
+        }
+        const have = !!g.save.found[skillKey(s.id)];
+        p.append(this.div(`entry feat${have ? ' done' : ''}`, `<h4>${have ? '&#10022; ' : ''}${s.name}</h4><p>${s.desc}</p>`));
       }
     } else if (this.journalTab === 'feats') {
       const done = FEATS.filter((f) => g.save.found[featKey(f.id)]).length;

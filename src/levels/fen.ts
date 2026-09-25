@@ -308,7 +308,7 @@ export const fen: LevelDef = {
     b.scatter(22, 0, 216, 21, (x, z) => b.tree(x, z, 1 + Math.abs(jitter(x * 3)) * 0.6, 'dead'), (x, z) => Math.hypot(x, z - 216) > 17);
     b.scatter(30, 0, 216, 20, (x, z, y) => glowCrystal(b, x, y, z, 1.2, 0xb04cff), (x, z) => Math.hypot(x, z - 216) > 12);
     bossFight(b, {
-      id: 'bogmaw', x: 0, z: 216, r: 20.5, triggerX: 0, triggerZ: 204, triggerR: 5,
+      id: 'bogmaw', name: 'the Bogmaw', x: 0, z: 216, r: 20.5, triggerX: 0, triggerZ: 204, triggerR: 5,
       spawn: (gg) => new Bogmaw(gg, 0, gg.col.groundAt(0, 222, 20, 0.3).y, 222, Math.PI),
       intro: [
         { who: 'flick', text: 'Aster... the mud is moving.', action: () => {

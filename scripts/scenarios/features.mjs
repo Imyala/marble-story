@@ -755,3 +755,76 @@ export async function powerups(h) {
   });
   h.check('Superflame breath melts iron; plain blows still do not', !sf.before && sf.after && !sf.melee, JSON.stringify(sf));
 }
+
+/** Skill Points: the Sanctum rune ring, the Fen butterflies, and a boss rematch without a scratch. */
+export async function skills(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 400; i++) {
+      await h.wait(50);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=sanctum&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  const ring = await h.eval(() => {
+    const g = window.wyrm; const p = g.player;
+    const lane = g.level.props.find((q) => q.constructor.name === 'SpeedLane' && q.skill);
+    if (!lane) return { lane: false };
+    p.setState('charge');
+    const half = lane.runes.slice(0, 6);
+    for (const r of half) { p.place(r.x, r.y + 0.05, r.z, 0); p.state = 'charge'; lane.update(0.02); }
+    const partial = !!g.save.found['skill:sanctum:ring'];
+    // A new charge starts the count over.
+    p.setState('move'); p.setState('charge');
+    for (const r of lane.runes) { p.place(r.x, r.y + 0.05, r.z, 0); p.state = 'charge'; lane.update(0.02); }
+    p.setState('move');
+    return { lane: true, n: lane.runes.length, partial, full: !!g.save.found['skill:sanctum:ring'], gems: g.save.gems };
+  });
+  h.check('charging round the whole rune ring earns a Skill Point', ring.lane && ring.n >= 10 && !ring.partial && ring.full, JSON.stringify(ring));
+
+  // The Fen: free five butterflies.
+  await h.eval(() => window.wyrm.loadLevel('fen', {}));
+  await h.skipDialogue(4000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    for (const c of g.level.props.filter((p) => p.constructor.name === 'Critter').slice(0, 5)) c.takeHit({});
+  });
+  await waitGame(4);
+  const bf = await h.eval(() => ({ n: window.wyrm.visit.butterflies, got: !!window.wyrm.save.found['skill:fen:butterflies'] }));
+  h.check('five butterflies in one Fen visit earn a Skill Point', bf.n >= 5 && bf.got, JSON.stringify(bf));
+
+  // A beaten realm offers a boss rematch; winning it untouched earns the Skill Point.
+  await h.eval(() => { const g = window.wyrm; g.save.levelsDone.fen = true; g.loadLevel('fen', {}); });
+  await h.skipDialogue(4000);
+  const st = await h.eval(() => {
+    const g = window.wyrm;
+    const s = g.level.interactables.find((i) => /Challenge the Bogmaw/.test(i.label));
+    if (!s) return { stone: false };
+    g.player.place(s.x, s.y + 0.1, s.z - 1.5, 0);
+    g.player.invuln = true;
+    s.interact();
+    return { stone: true, boss: !!g.boss, awake: g.boss?.awake, enabled: s.enabled };
+  });
+  h.check('a standing stone offers the rematch, no story this time', st.stone && st.boss && st.awake && !st.enabled, JSON.stringify(st));
+  await h.eval(() => { const g = window.wyrm; const b = g.boss; b.hp = 3; g.player.place(b.x, b.y, b.z - 3.4, 0); g.player.yaw = 0; });
+  await h.tap('KeyJ', 3, 300);
+  await waitGame(1);
+  const won = await h.eval(() => ({ alive: window.wyrm.boss?.alive, got: !!window.wyrm.save.found['skill:fen:boss'], lvl: window.wyrm.level.def.id, state: window.wyrm.state }));
+  h.check('winning the rematch untouched earns the boss Skill Point, and the realm carries on', !won.alive && won.got && won.lvl === 'fen' && won.state === 'play', JSON.stringify(won));
+
+  // The Journal lists them.
+  await h.eval(() => { const g = window.wyrm; g.player.invuln = false; g.pause(); });
+  await h.wait(300);
+  const j = await h.eval(() => {
+    const btn = [...document.querySelectorAll('.menu button')].find((b) => /Journal/.test(b.textContent));
+    btn?.click();
+    const tab = [...document.querySelectorAll('.tabs button')].find((b) => /Skill Points/.test(b.textContent));
+    tab?.click();
+    const entries = [...document.querySelectorAll('.panel.lore .entry.feat')];
+    return { entries: entries.length, done: entries.filter((e) => e.classList.contains('done')).length };
+  });
+  h.check('the Journal lists every Skill Point, marking the ones earned', j.entries >= 12 && j.done === 3, JSON.stringify(j));
+  await h.shot('journal-skills');
+}

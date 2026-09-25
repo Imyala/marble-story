@@ -77,6 +77,9 @@ export class Player {
   /** Supercharge built up on speed runes: topped up while charging over them. */
   superT = 0;
   private touchT = 0;
+  /** Counts charges, so speed runes can tell one unbroken run from the next. */
+  chargeId = 0;
+  private chargeFoes = new Set<Hittable>();
   private jumps = 0;
   private jumpCut = true;
   private coyote = 0;
@@ -262,6 +265,10 @@ export class Player {
   setState(s: PState): void {
     if (this.state === 'breath' && s !== 'breath') this.breath.stop();
     if (this.state === 'charge' && s !== 'charge') this.game.audio.stopLoop('charge');
+    if (s === 'charge' && this.state !== 'charge') {
+      this.chargeId++;
+      this.chargeFoes.clear();
+    }
     this.state = s;
     this.stateT = 0;
   }
@@ -1122,6 +1129,10 @@ export class Player {
         hitstop: 0.06, heavy: dmgMul > 1, source: 'charge', move: 'charge', ox: b.x, oz: b.z,
       }));
       this.onDealt(r, h, 8 * dmgMul, 'charge', 12);
+      if (sup && h.isEnemy && (r === 'hit' || r === 'killed')) {
+        this.chargeFoes.add(h);
+        if (this.chargeFoes.size >= 3 && g.level?.def.id === 'plains') g.skill('plains:bowl');
+      }
     }
     if (b.hitWall && Math.hypot(b.vx, b.vz) < speed * 0.5 && this.stateT > 0.2) {
       g.shake(0.25, 0.2);
@@ -1737,6 +1748,7 @@ export class Player {
           hitstop: 0.04, source: 'charge', move: 'starTouch', ox: b.x, oz: b.z,
         }));
         this.onDealt(r, e, 14, 'starTouch', 9);
+        if (r === 'killed' && ++g.visit.starKills >= 6 && g.level?.def.id === 'keep') g.skill('keep:star');
         g.fx.sparkle(e.x, e.y + e.height * 0.5, e.z, 0xffe070, 8);
       }
     }

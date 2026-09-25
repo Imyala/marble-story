@@ -279,6 +279,7 @@ export class Butterfly implements Prop {
     g.fx.sparkle(this.x, this.y, this.z, 0xffe07a, 10);
     g.audio.play('gemGreen', 1.5, 0.6);
     bump(g.save, 'butterflies');
+    if (++g.visit.butterflies >= 5 && g.level?.def.id === 'fen') g.skill('fen:butterflies');
     if (p.hp < p.maxHp) {
       p.heal(Math.round(p.maxHp * 0.15));
     } else {

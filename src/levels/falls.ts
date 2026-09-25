@@ -516,7 +516,7 @@ function stormspire(b: Builder): void {
   b.level.npcs.push(new Npc(g, 'stormcrest', STORMCREST, kx, b.y(kx, kz), kz, Math.PI));
   b.story('rim', cx, cz, SPIRE.r, () => say('Aster, look! A cage, on the far side. And something BIG is circling up there...', 6));
   bossFight(b, {
-    id: 'skrieka', x: cx, z: cz, r: ARENA_R, triggerX: cx, triggerZ: cz, triggerR: 7,
+    id: 'skrieka', name: 'Skrieka', x: cx, z: cz, r: ARENA_R, triggerX: cx, triggerZ: cz, triggerR: 7,
     spawn: (gg) => new Skrieka(gg, cx, floor, cz, ARENA_R),
     intro: [
       { who: 'stormcrest', text: 'Hey! HEY! Over here! In the very sparkly cage! Are you a rescue? You look like a rescue. A small one.' },

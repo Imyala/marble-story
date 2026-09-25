@@ -131,6 +131,7 @@ export class Game {
   private autosaveT = 0;
   activeArena: Arena | null = null;
   private titleT = 0;
+  private hintHeld = -1;
   /** Aster gliding over the Fen behind the title menu. */
   private titleBeat = -1;
   private titleDragon: { rig: DragonRig; pose: DragonPose; lastYaw: number } | null = null;
@@ -439,7 +440,22 @@ export class Game {
         break;
     }
 
-    if (this.state === 'play' && this.input.take('hint', 0.1)) this.hud.flick(this.flick.seek(), 4, true);
+    // Flick: a tap finds a secret, holding asks where the path goes next.
+    if (this.state === 'play') {
+      const inp = this.input;
+      if (inp.pressed('hint')) this.hintHeld = 0;
+      if (inp.down('hint') && this.hintHeld >= 0) {
+        this.hintHeld += dt;
+        if (this.hintHeld > 0.45) {
+          this.hintHeld = -1;
+          this.hud.flick(this.flick.guide(), 4, true);
+        }
+      }
+      if (inp.released('hint') && this.hintHeld >= 0) {
+        this.hintHeld = -1;
+        this.hud.flick(this.flick.seek(), 4, true);
+      }
+    }
     if (this.state !== 'title' && this.state !== 'menu' && this.level && !this.photo.active) this.cam.update(dt, this);
     this.hud.update(dt);
     this.touch.update();

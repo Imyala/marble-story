@@ -761,7 +761,7 @@ export class Menus {
       ['Move', 'W A S D', 'Left stick'], ['Camera', 'Mouse', 'Right stick'], ['Jump / flap / glide', 'Space (hold to glide)', 'A'],
       ['Horn attack', 'Left mouse / J', 'X'], ['Tail attack', 'E / L', 'Y'], ['Breath', 'Hold right mouse / K', 'RT'],
       ['Burst', 'Q / U', 'LB'], ['Fury', 'X', 'Back'], ['Dodge / hold to charge', 'Shift', 'B'], ['Dragon Time', 'Hold C', 'LT'],
-      ['Lock on', 'Tab / middle mouse', 'RB'], ['Change element', '1-4, mouse wheel, R', 'D-pad'], ['Interact', 'F', 'L3'], ['Flick, find a secret!', 'H', 'R3'], ['Pause', 'Esc', 'Start'],
+      ['Lock on', 'Tab / middle mouse', 'RB'], ['Change element', '1-4, mouse wheel, R', 'D-pad'], ['Interact', 'F', 'L3'], ['Flick: tap for a secret, hold for the way on!', 'H', 'R3'], ['Pause', 'Esc', 'Start'],
     ];
     const p = this.div('panel', `<h2>Controls</h2><div class="stats" style="grid-template-columns:auto auto auto;gap:8px 28px">
       <b style="text-align:left;color:#f5c46b">Action</b><b style="text-align:left;color:#f5c46b">Keyboard &amp; mouse</b><b style="text-align:left;color:#f5c46b">Gamepad</b>

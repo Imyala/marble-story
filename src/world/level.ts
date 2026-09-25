@@ -64,6 +64,8 @@ export class Level {
   readonly climbWalls: ClimbWall[] = [];
   /** Every collectible the level places, found or not: the pause screen counts from this. */
   readonly secrets: { kind: CollectKind; id: string }[] = [];
+  /** Where the realm's story goes next: fights to win and the boss. Flick points the way. */
+  readonly goals: { x: number; y: number; z: number; label: string; done: () => boolean }[] = [];
   readonly conduits: Conduit[] = [];
   readonly reflectTargets: ReflectSwitch[] = [];
   readonly boulders: Boulder[] = [];
@@ -492,6 +494,7 @@ export class Builder {
   arena(id: string, x: number, z: number, r: number, waves: SpawnSpec[][], reward = 40): Arena {
     const a = this.addProp(new Arena(this.game, id, x, this.y(x, z), z, r, waves, reward));
     this.level.arenas.push(a);
+    this.level.goals.push({ x, y: this.y(x, z), z, label: 'fight', done: () => a.state === 'cleared' });
     return a;
   }
 

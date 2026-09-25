@@ -90,6 +90,38 @@ export class Flick {
     return bestD < 8 ? `Right here! Look close!${high}` : `This way! Something's hidden about ${paces} paces off.${high}`;
   }
 
+  /**
+   * "Flick, where now?" He flies toward the nearest fight still to win, or the
+   * realm's boss once those are done. Returns what he said.
+   */
+  guide(): string {
+    const g = this.game;
+    if (this.seekCd > 0) return 'Give my wings a second!';
+    const p = g.player;
+    const open = (g.level?.goals ?? []).filter((q) => !q.done());
+    if (open.length === 0) return 'We\'ve done everything the path asks here. A Wardstone can take us home!';
+    // Fights first (nearest), then the boss.
+    const fights = open.filter((q) => q.label !== 'boss');
+    const pool = fights.length ? fights : open;
+    let best = pool[0]!;
+    let bestD = Infinity;
+    for (const q of pool) {
+      const d = Math.hypot(q.x - p.x, q.z - p.z);
+      if (d < bestD) {
+        bestD = d;
+        best = q;
+      }
+    }
+    this.seekCd = 5;
+    this.seekTarget = new THREE.Vector3(best.x, best.y + 2.5, best.z);
+    this.seekT = Math.min(6, 1.6 + bestD / 14);
+    g.sfx('relic', best.x, best.y, best.z, 1.2, 0.35);
+    if (bestD < 10) return best.label === 'boss' ? 'It\'s right here. Deep breath...' : 'Right here! Get ready!';
+    return best.label === 'boss'
+      ? `The big one waits about ${Math.round(bestD)} paces that way. Ready when you are!`
+      : `The path goes on this way, about ${Math.round(bestD)} paces. Stay sharp!`;
+  }
+
   update(dt: number): void {
     const p = this.game.player;
     this.t += dt;

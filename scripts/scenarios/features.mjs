@@ -587,3 +587,15 @@ export async function footsteps(h) {
   const m = await h.eval(() => window.wyrm.audio.muffleAmt);
   h.check('the pause menu muffles the world', m > 0.4, String(m));
 }
+
+/** Holding the Flick button sends him toward the next fight on the path. */
+export async function guide(h) {
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  await h.eval(() => window.wyrm.input.simulate('hint', true));
+  await h.wait(700);
+  await h.eval(() => window.wyrm.input.simulate('hint', false));
+  await h.wait(300);
+  const r = await h.eval(() => { const f = window.wyrm.flick; return { t: f.seekTarget && [Math.round(f.seekTarget.x), Math.round(f.seekTarget.z)], line: document.querySelector('.flick p')?.textContent ?? '', goals: window.wyrm.level.goals.map((q) => q.label) }; });
+  h.check('holding Flick points toward the willow fight', !!r.t && /path goes on|Right here/.test(r.line), JSON.stringify(r));
+}

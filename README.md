@@ -127,7 +127,7 @@ dragoness, beneath the eclipse.
 | Lock on | Tab or middle mouse | RB |
 | Change element | 1 to 4, mouse wheel, R | D-pad |
 | Interact | F | L3 |
-| Flick, find a secret | H | R3 |
+| Flick: tap for a secret, hold for the way on | H | R3 |
 | Pause | Esc | Start |
 
 On a phone or tablet, touch controls appear on the first touch: a joystick

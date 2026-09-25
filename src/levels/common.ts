@@ -123,6 +123,7 @@ export function bossFight(b: Builder, o: BossFightOpts): void {
   const barrier = new Barrier(g, o.x, b.y(o.x, o.z), o.z, o.r);
   b.level.props.push(barrier);
   let defeated = false;
+  b.level.goals.push({ x: o.triggerX, y: b.y(o.triggerX, o.triggerZ), z: o.triggerZ, label: 'boss', done: () => defeated || !!g.save.levelsDone[lvl] });
   // The outro waits two seconds of game time (not wall time, which slow frames would outrun).
   let outroT = -1;
   b.level.props.push({

@@ -34,14 +34,18 @@ async function gameWait(ms) {
     await page.waitForTimeout(Math.min(40, ms));
     const t = await now();
     if (t === null || (t - t0) * 1000 >= ms || Date.now() > deadline) return;
-    // Frames stepped by the scenario itself (game time frozen between steps): plain wall wait.
-    if (t === t0 && Date.now() - start >= ms) return;
+    // Frames stepped by the scenario itself (game time frozen between steps): after a real
+    // stall (longer than any slow frame), fall back to a plain wall wait.
+    if (t === t0 && Date.now() - start >= Math.max(ms, 2500)) return;
   }
 }
 
 const h = {
   base: BASE,
   async go(q, wait = 2000) {
+    // Coarse steps (a slow headless frame at maxdt=0.25) make contact checks flaky; waits
+    // are in game time, so finer steps only cost wall time. MAXDT=keep leaves URLs alone.
+    if (process.env.MAXDT !== 'keep') q = q.replace(/maxdt=([\d.]+)/, (_, v) => `maxdt=${Math.min(Number(v), 0.1)}`);
     await page.goto(`${BASE}${q}`, { waitUntil: 'load' });
     await page.waitForFunction(() => !!window.wyrm, null, { timeout: 20000 });
     await page.waitForTimeout(wait);

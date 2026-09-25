@@ -1947,6 +1947,9 @@ export class Player {
       // Footing again (a beach or a shelf), or thrown clear of the water: back to the ordinary moves.
       if ((!deep && floor > b.y - 0.4) || b.y > wl + 0.5) {
         this.swimUnder = false;
+        // Paddling up to a steep bank: climb straight out rather than wading into it.
+        const m = this.wish(this.w);
+        if (!deep && m > 0.5 && this.tryLedge(this.w.x, this.w.z, 2.2, true)) return false;
         this.setState('move');
         return false;
       }

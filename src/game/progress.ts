@@ -261,10 +261,32 @@ export function maxMana(s: SaveData): number {
 
 const SAVE_KEY = 'wyrmling.save.v1';
 const OPT_KEY = 'wyrmling.options.v1';
+const SLOT_KEY = 'wyrmling.slot';
 
-export function loadSave(): SaveData | null {
+/** Save slots: slot 1 keeps the original key, so saves from before slots carry over. */
+export const SLOTS = 3;
+const slotKey = (n: number): string => (n <= 1 ? SAVE_KEY : `${SAVE_KEY}.slot${n}`);
+
+export function activeSlot(): number {
   try {
-    const raw = localStorage.getItem(SAVE_KEY);
+    const n = Number(localStorage.getItem(SLOT_KEY) ?? 1);
+    return n >= 1 && n <= SLOTS ? Math.floor(n) : 1;
+  } catch {
+    return 1;
+  }
+}
+
+export function setActiveSlot(n: number): void {
+  try {
+    localStorage.setItem(SLOT_KEY, String(Math.max(1, Math.min(SLOTS, Math.floor(n)))));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadSave(slot = activeSlot()): SaveData | null {
+  try {
+    const raw = localStorage.getItem(slotKey(slot));
     if (!raw) return null;
     const s = JSON.parse(raw) as SaveData;
     if (s.version !== 1 || typeof s.level !== 'string') return null;
@@ -275,17 +297,17 @@ export function loadSave(): SaveData | null {
   }
 }
 
-export function writeSave(s: SaveData): void {
+export function writeSave(s: SaveData, slot = activeSlot()): void {
   try {
-    localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+    localStorage.setItem(slotKey(slot), JSON.stringify(s));
   } catch {
     /* storage full or blocked: the game still plays, it just cannot resume */
   }
 }
 
-export function clearSave(): void {
+export function clearSave(slot = activeSlot()): void {
   try {
-    localStorage.removeItem(SAVE_KEY);
+    localStorage.removeItem(slotKey(slot));
   } catch {
     /* ignore */
   }

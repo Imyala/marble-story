@@ -912,3 +912,36 @@ export async function replay(h) {
   h.check('the Gloom is tougher on a Legend Run', ng.hpK > 1.4, JSON.stringify(ng));
   await h.shot('ngplus');
 }
+
+/** Three save slots: each keeps its own journey; Continue and New Game use the chosen one. */
+export async function slots(h) {
+  await h.page.addInitScript(() => { if (!sessionStorage.getItem('kept')) { localStorage.clear(); sessionStorage.setItem('kept', '1'); } });
+  await h.go('?level=falls&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  await h.eval(() => { const g = window.wyrm; g.save.gems = 777; g.save.level = 'falls'; g.save.unlocked.push('falls'); g.saveNow(); g.showTitle(); });
+  await h.wait(600);
+  const clickText = (re) => h.eval((src) => { const b = [...document.querySelectorAll('button')].find((x) => new RegExp(src).test(x.textContent)); b?.click(); return !!b; }, re);
+  await clickText('^Save Slots');
+  await h.wait(300);
+  const cards = await h.eval(() => [...document.querySelectorAll('.levels .lvl')].map((b) => b.textContent));
+  h.check('the slot screen lists three slots, the first holding the journey', cards.length === 3 && /Slot 1/.test(cards[0]) && /Stormspire|Falls/i.test(cards[0]) && /Empty/.test(cards[1]), JSON.stringify(cards));
+  await h.eval(() => document.querySelectorAll('.levels .lvl')[1].click());
+  await h.wait(400);
+  const t2 = await h.eval(() => [...document.querySelectorAll('.menu-list button')].map((b) => b.textContent));
+  h.check('an empty slot offers no Continue', !t2.some((s) => /^Continue/.test(s)) && t2.some((s) => /Slot 2/.test(s)), JSON.stringify(t2));
+  await h.eval(() => window.wyrm.newGame('normal'));
+  await h.wait(3000);
+  await h.skipDialogue(6000);
+  const s2 = await h.eval(() => ({ lvl: window.wyrm.level.def.id, gems: window.wyrm.save.gems, slot: localStorage.getItem('wyrmling.slot') }));
+  await h.eval(() => { const g = window.wyrm; g.saveNow(); g.showTitle(); });
+  await h.wait(600);
+  await clickText('^Save Slots');
+  await h.wait(300);
+  await h.eval(() => document.querySelectorAll('.levels .lvl')[0].click());
+  await h.wait(400);
+  await clickText('^Continue');
+  await h.wait(3000);
+  await h.skipDialogue(6000);
+  const s1 = await h.eval(() => ({ lvl: window.wyrm.level.def.id, gems: window.wyrm.save.gems }));
+  h.check('a new game in slot 2 leaves slot 1 untouched', s2.lvl === 'fen' && s2.gems === 0 && s2.slot === '2' && s1.lvl === 'falls' && s1.gems === 777, JSON.stringify({ s2, s1 }));
+}

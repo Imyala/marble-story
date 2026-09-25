@@ -1,6 +1,6 @@
 import type { Game } from '../game/game';
 import {
-  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, explored, skinUnlocked, recordTime, PAR_TIMES, clock, type UpgradeTree, type Difficulty,
+  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, explored, skinUnlocked, recordTime, PAR_TIMES, clock, activeSlot, setActiveSlot, clearSave, SLOTS, type UpgradeTree, type Difficulty,
 } from '../game/progress';
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
@@ -202,6 +202,7 @@ export class Menus {
     }
     list.append(
       this.btn('New Game', () => this.showDifficulty()),
+      this.btn(`Save Slots <small style="opacity:.6">&middot; Slot ${activeSlot()}</small>`, () => this.showSlots()),
       this.btn('Options', () => this.showOptions()),
       this.btn('Controls', () => this.showControls()),
       this.btn('Credits', () => this.showCredits()),
@@ -209,6 +210,63 @@ export class Menus {
     t.append(list);
     m.append(t, this.div('menu-foot', 'A fan-made elemental dragon adventure &middot; best with mouse and keyboard or a gamepad'));
     this.push(m, null);
+  }
+
+  /** Three save slots: pick which one Continue and New Game use, or clear one. */
+  private showSlots(confirmDelete = 0): void {
+    const m = this.div('menu dim');
+    const p = this.div('panel', '<h2>Save Slots</h2><div class="sub">Continue and New Game use the chosen slot. Each keeps its own journey.</div>');
+    const grid = this.div('levels');
+    const cur = activeSlot();
+    for (let n = 1; n <= SLOTS; n++) {
+      const s = loadSave(n);
+      const b = document.createElement('button');
+      b.className = `lvl${n === cur ? ' done' : ''}`;
+      b.dataset.f = '1';
+      let info = 'Empty';
+      if (s) {
+        const mins = Math.floor(s.stats.playTime / 60);
+        const ex = explored(s, s.level);
+        info = [s.ngPlus ? `Legend Run ${s.ngPlus}` : '', LEVEL_INFO[s.level]?.name ?? s.level, DIFFICULTY[s.difficulty].label, `${Math.floor(mins / 60)}h ${mins % 60}m`,
+          ex !== null ? `${Math.round(ex * 100)}% explored` : '', `${eggsFound(s)} eggs`].filter(Boolean).join(' &middot; ');
+      }
+      b.innerHTML = `<h3>Slot ${n}${n === cur ? ' &middot; chosen' : ''}</h3><p>${info}</p>`;
+      b.addEventListener('click', () => {
+        setActiveSlot(n);
+        this.game.audio.play('uiConfirm');
+        this.showTitle();
+      });
+      grid.append(b);
+    }
+    p.append(grid);
+    const row = this.div('menu-list');
+    row.style.flexDirection = 'row';
+    row.style.flexWrap = 'wrap';
+    row.style.justifyContent = 'center';
+    for (let n = 1; n <= SLOTS; n++) {
+      if (!loadSave(n)) continue;
+      const sure = confirmDelete === n;
+      const d = this.btn(sure ? `Really erase Slot ${n}?` : `Erase Slot ${n}`, () => {
+        if (!sure) {
+          this.pop();
+          this.showSlots(n);
+          return;
+        }
+        clearSave(n);
+        this.game.audio.play('uiBack');
+        this.pop();
+        this.showSlots();
+      });
+      d.classList.add('small');
+      row.append(d);
+    }
+    const back = this.btn('Back', () => this.showTitle());
+    back.classList.add('small');
+    row.append(back);
+    row.style.marginTop = '14px';
+    p.append(row);
+    m.append(p);
+    this.push(m, () => this.showTitle(), 2);
   }
 
   /** New Game+: explains what carries over, then starts the next Legend Run. */
@@ -240,7 +298,7 @@ export class Menus {
     for (const d of ['story', 'normal', 'hard'] as Difficulty[]) {
       list.append(this.btn(`${DIFFICULTY[d].label}<br><small style="text-transform:none;letter-spacing:0;opacity:.7;font-family:system-ui">${desc[d]}</small>`, () => this.showPrologue(d)));
     }
-    if (loadSave()) list.append(this.div('sub', '<br>Starting a new game replaces your saved progress.'));
+    if (loadSave()) list.append(this.div('sub', `<br>Starting a new game replaces the journey in Slot ${activeSlot()}. Choose another slot from Save Slots to keep it.`));
     p.append(list);
     m.append(p);
     this.push(m, () => this.pop());

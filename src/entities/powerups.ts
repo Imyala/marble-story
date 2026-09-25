@@ -178,6 +178,8 @@ export class SpeedLane implements Prop {
       const base = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.25, 0.08, 8), mat(0x5a5060, { rough: 0.8, flat: true }));
       base.position.set(p.x, p.y + 0.02, p.z);
       base.receiveShadow = true;
+      // Merged with the level's other static scenery at the end of the build.
+      base.userData.static = true;
       game.level!.root.add(base);
       this.runes.push({ m, mat: mt, x: p.x, y: p.y, z: p.z, flash: 0 });
     }

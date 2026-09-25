@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Game } from '../game/game';
+import type { Sfx } from '../core/audio';
 import type { Hit, HitResult, Hittable } from '../game/types';
 import type { Prop } from './props';
 import { mat, glow } from '../render/materials';
@@ -25,13 +26,13 @@ export const REALM_CRITTERS: Record<string, CritterKind[]> = {
   keep: ['moth'],
 };
 
-const SPEC: Record<CritterKind, { walk: number; run: number; hop: boolean; hover: number; sfx: number }> = {
-  sheep: { walk: 1.1, run: 4.6, hop: false, hover: 0, sfx: 1 },
-  goat: { walk: 1.3, run: 5.4, hop: false, hover: 0, sfx: 1.2 },
-  frog: { walk: 1.6, run: 4.2, hop: true, hover: 0, sfx: 0.6 },
-  hare: { walk: 1.8, run: 6.2, hop: true, hover: 0, sfx: 1.8 },
-  beetle: { walk: 0.9, run: 3.4, hop: false, hover: 0, sfx: 2.2 },
-  moth: { walk: 1.4, run: 4.4, hop: false, hover: 1.4, sfx: 2.6 },
+const SPEC: Record<CritterKind, { walk: number; run: number; hop: boolean; hover: number; voice: Sfx; pitch: number }> = {
+  sheep: { walk: 1.1, run: 4.6, hop: false, hover: 0, voice: 'bleat', pitch: 1 },
+  goat: { walk: 1.3, run: 5.4, hop: false, hover: 0, voice: 'bleat', pitch: 1.3 },
+  frog: { walk: 1.6, run: 4.2, hop: true, hover: 0, voice: 'croak', pitch: 1 },
+  hare: { walk: 1.8, run: 6.2, hop: true, hover: 0, voice: 'squeak', pitch: 1 },
+  beetle: { walk: 0.9, run: 3.4, hop: false, hover: 0, voice: 'chirr', pitch: 1 },
+  moth: { walk: 1.4, run: 4.4, hop: false, hover: 1.4, voice: 'chirr', pitch: 1.4 },
 };
 
 function buildModel(kind: CritterKind): THREE.Group {
@@ -114,6 +115,7 @@ export class Critter implements Prop, Hittable {
   private idleT = Math.random() * 3;
   private t = Math.random() * 10;
   private fleeing = 0;
+  private callT = 4 + Math.random() * 10;
   private spec: (typeof SPEC)[CritterKind];
 
   /** Tall enough to cover a moth's hover, so a swing at it connects. */
@@ -148,7 +150,8 @@ export class Critter implements Prop, Hittable {
     g.level!.root.remove(this.model);
     g.fx.shadowPoof(this.x, this.y + 0.4, this.z, 0.7);
     g.fx.sparkle(this.x, this.y + 0.5, this.z, 0xfff0c0, 8);
-    g.sfx('talk', this.x, this.y, this.z, this.spec.sfx, 0.7);
+    g.sfx(this.spec.voice, this.x, this.y, this.z, this.spec.pitch * 1.2, 0.9);
+    g.sfx('pound', this.x, this.y, this.z, 2, 0.25);
     bump(g.save, 'critters');
     g.checkFeats();
     g.style.bonus(3);
@@ -172,7 +175,16 @@ export class Critter implements Prop, Hittable {
     }
     if (far) return;
     let speed = 0;
-    if (pd < 5 && g.player.alive) this.fleeing = 1.5;
+    if (pd < 5 && g.player.alive) {
+      // A startled cry as it bolts.
+      if (this.fleeing <= 0 && Math.random() < 0.6) g.sfx(this.spec.voice, this.x, this.y, this.z, this.spec.pitch * 1.1, 0.8);
+      this.fleeing = 1.5;
+    }
+    this.callT -= dt;
+    if (this.callT <= 0) {
+      this.callT = 6 + Math.random() * 10;
+      if (pd < 28) g.sfx(this.spec.voice, this.x, this.y, this.z, this.spec.pitch * (0.9 + Math.random() * 0.2), 0.5);
+    }
     if (this.fleeing > 0) {
       this.fleeing -= dt;
       const away = Math.atan2(this.x - p.x, this.z - p.z);

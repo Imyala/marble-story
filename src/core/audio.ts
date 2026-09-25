@@ -14,7 +14,8 @@ export type Sfx =
   | 'enemyAlert' | 'enemyDie' | 'enemyHurt' | 'enemyAttack' | 'shieldBlock' | 'bossRoar'
   | 'hurt' | 'death' | 'ui' | 'uiConfirm' | 'uiBack' | 'checkpoint' | 'fury' | 'dragonTimeOn'
   | 'dragonTimeOff' | 'unlock' | 'door' | 'torch' | 'switch' | 'splash' | 'charge' | 'pound'
-  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue' | 'woodBreak' | 'potBreak' | 'chest' | 'page' | 'egg' | 'thunder';
+  | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue' | 'woodBreak' | 'potBreak' | 'chest' | 'page' | 'egg' | 'thunder'
+  | 'bleat' | 'croak' | 'squeak' | 'chirr';
 
 export type LoopId = 'breath' | 'glide' | 'charge' | 'rain';
 
@@ -580,6 +581,23 @@ export class Audio {
         break;
       case 'talk':
         this.tone(500 + Math.random() * 200, 0.04, 'triangle', 0.05 * v);
+        break;
+      // Critter voices.
+      case 'bleat': {
+        const f = 340 * p * (0.95 + Math.random() * 0.1);
+        this.tone(f, 0.1, 'sawtooth', 0.05 * v, { filter: 1500, slide: f * 1.06 });
+        this.tone(f * 1.05, 0.09, 'sawtooth', 0.045 * v, { filter: 1500, delay: 0.09 });
+        this.tone(f * 1.02, 0.3, 'sawtooth', 0.05 * v, { filter: 1300, delay: 0.17, slide: f * 0.86 });
+        break;
+      }
+      case 'croak':
+        for (let i = 0; i < 2; i++) this.tone(130 * p, 0.11, 'square', 0.05 * v, { filter: 520, delay: i * 0.15, slide: 105 * p });
+        break;
+      case 'squeak':
+        for (let i = 0; i < 2; i++) this.tone(1900 * p, 0.05, 'sine', 0.04 * v, { slide: 2600 * p, delay: i * 0.08 });
+        break;
+      case 'chirr':
+        for (let i = 0; i < 4; i++) this.tone(3600 * p, 0.025, 'sine', 0.025 * v, { delay: i * 0.05 });
         break;
     }
   }

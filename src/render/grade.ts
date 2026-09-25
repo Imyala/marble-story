@@ -26,13 +26,15 @@ export const GradeShader = {
     uPhotoSat: { value: 1 },
     uCalm: { value: 0 },
     uImpact: { value: 0 },
+    /** 0..1: the camera is under water (a blue-green cast, darker at the edges). */
+    uWater: { value: 0 },
   },
   vertexShader: /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
 uniform sampler2D tDiffuse;
-uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat, uCalm, uImpact;
+uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat, uCalm, uImpact, uWater;
 uniform vec3 uTint;
 uniform vec3 uShadow, uHigh;
 varying vec2 vUv;
@@ -59,6 +61,8 @@ void main() {
   // Fury: warm, and the edges of the frame smoulder.
   col = mix(col, col * vec3(1.1, 0.96, 0.86), uFury * 0.7);
   col += vec3(1.0, 0.42, 0.12) * smoothstep(0.45, 0.95, r) * uFury * (0.22 + 0.08 * sin(uTime * 9.0) * (1.0 - uCalm));
+  // Under water: a mild blue-green cast that deepens toward the edges of the frame.
+  col = mix(col, col * vec3(0.62, 0.9, 1.0) + vec3(0.0, 0.025, 0.04), uWater * (0.7 + 0.3 * smoothstep(0.3, 0.9, r)));
   // Impact frame: a bright, drained pop on the biggest hits.
   float il = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(col, vec3(il * 1.35 + 0.08), uImpact * 0.55);

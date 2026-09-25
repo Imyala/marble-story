@@ -6,7 +6,7 @@ import { MOVES, SLAM_HIT, FINISHERS, DELAY_FOLLOWUPS, type HitWindow, type MoveD
 import { BreathController, BREATH_COST, BURST_COST } from './breath';
 import type { Game } from '../game/game';
 import { ELEMENTS, makeHit, type Element, type Hit, type HitResult, type Hittable } from '../game/types';
-import { angleDiff, approachAngle, clamp, dampAngle, yawOf } from '../core/math';
+import { angleDiff, approachAngle, clamp, damp, dampAngle, yawOf } from '../core/math';
 import { maxHp, maxMana, upgradeLevel } from '../game/progress';
 import { POWERS, type PowerKind } from '../entities/powerups';
 import type { Enemy } from '../enemies/enemy';
@@ -14,7 +14,9 @@ import { Collectible, type ClimbWall } from '../entities/props';
 
 export type PState =
   | 'move' | 'attack' | 'slam' | 'dodge' | 'charge' | 'breath' | 'burst' | 'fury'
-  | 'hurt' | 'down' | 'dead' | 'locked' | 'fall' | 'ledge' | 'climb';
+  | 'hurt' | 'down' | 'dead' | 'locked' | 'fall' | 'ledge' | 'climb'
+  // Swimming in realms whose water sets `swim` (see swimWater).
+  | 'swim';
 
 interface LedgeMove {
   /** Where the body is when the grab starts, where it hangs, and where it ends up. */
@@ -45,6 +47,20 @@ const TURN = 15;
 const CHARGE = 15.5;
 const DODGE_TIME = 0.32;
 const COYOTE = 0.13;
+
+// Swimming (only where LevelDef.water.swim is set).
+/** Paddling speed at the surface: a little slower than running. */
+const SWIM = 6.4;
+/** Swimming speed underwater. */
+const SWIM_UNDER = 5.6;
+/** How far below the surface the feet hang while floating: back and head stay above water. */
+const FLOAT = 0.8;
+/** Upward speed of a leap out of the water (a flap can follow). */
+const SWIM_LEAP = 11.2;
+/** Seconds of air on one breath. */
+const AIR_MAX = 15;
+/** Extra speed from a strong stroke (Horn in the water). */
+const SURGE = 5.5;
 
 const INFUSE_COLOR: Record<Element, number> = { fire: 0xff8a30, lightning: 0xbfe8ff, ice: 0x9fe8ff, earth: 0xb8e07a };
 
@@ -142,6 +158,28 @@ export class Player {
   private lockSwitchCd = 0;
   private lastFlickFrame = -1;
 
+  // --- swimming ---
+  /** Diving (below the surface) rather than paddling on top of it. */
+  swimUnder = false;
+  /** Air left while diving, in seconds (the HUD's breath meter). */
+  air = AIR_MAX;
+  readonly airMax = AIR_MAX;
+  /** Held up by the water this step: swimming, or talking while afloat. */
+  private afloat = false;
+  private swimPhase = 0;
+  private swimPitch = 0;
+  private surgeT = 0;
+  private strokeCd = 0;
+  private drownT = 0;
+  private bubbleT = 0;
+  private wakeT = 0;
+  private swimHintT = 0;
+  /** What the current strong stroke has already bumped. */
+  private strokeHits = new Set<Hittable>();
+  /** 0..1, how far the camera has gone under with the dragon. */
+  private uwCam = 0;
+  private readonly uwPos = new THREE.Vector3();
+
   constructor(game: Game) {
     this.game = game;
     this.breath = new BreathController(game, this);
@@ -172,6 +210,18 @@ export class Player {
   }
   get magnetRadius(): number {
     return 3.5 + upgradeLevel(this.game.save, 'magnet') * 3;
+  }
+  /** Swimming, at the surface or under it. */
+  get swimming(): boolean {
+    return this.state === 'swim';
+  }
+  /** Diving with the head under water: air runs down. */
+  get submerged(): boolean {
+    return this.state === 'swim' && this.swimUnder && this.body.y + 1.05 < this.game.waterLevel;
+  }
+  /** Does this realm's water hold the dragon up (LevelDef.water.swim)? */
+  private get swimLevel(): boolean {
+    return !!this.game.level?.def.water?.swim;
   }
   /** Charging faster than the wind: from a shrine, or speed runes. */
   get supercharged(): boolean {
@@ -240,6 +290,9 @@ export class Player {
     this.yaw = yaw;
     this.visYaw = yaw;
     this.lastSafe.set(x, y, z);
+    this.swimUnder = false;
+    this.afloat = false;
+    this.air = AIR_MAX;
     this.syncRig(0);
   }
 
@@ -356,6 +409,7 @@ export class Player {
       case 'breath': this.updateBreath(dt); break;
       case 'burst': this.updateBurst(dt); break;
       case 'fury': this.updateFury(dt); break;
+      case 'swim': this.updateSwim(dt); break;
       case 'hurt':
       case 'down':
         this.gravity(dt, 1);
@@ -464,8 +518,8 @@ export class Player {
       if (this.dtimeIdle > 1.2) this.dtime = Math.min(this.dtimeMax, this.dtime + (9 + (lvl >= 2 ? 6 : 0)) * dt);
     }
 
-    // Fury.
-    if (inp.take('fury', 0.2) && this.fury >= 100 && this.element && this.state !== 'fury') {
+    // Fury (not in the water: it needs room to rear up and breathe).
+    if (inp.take('fury', 0.2) && this.fury >= 100 && this.element && this.state !== 'fury' && this.state !== 'swim') {
       this.startFury();
     }
   }
@@ -1785,6 +1839,14 @@ export class Player {
       this.die();
       return 'killed';
     }
+    if (this.state === 'swim') {
+      // The water soaks up the blow: pushed back, still swimming.
+      b.vx = hit.dirX * hit.knockback * 0.6;
+      b.vz = hit.dirZ * hit.knockback * 0.6;
+      this.hurtT = 0.4;
+      this.iframes = 0.9;
+      return 'hit';
+    }
     b.vx = hit.dirX * hit.knockback;
     b.vz = hit.dirZ * hit.knockback;
     b.vy = Math.max(b.vy, hit.launch > 0 ? hit.launch : 2.5);
@@ -1803,6 +1865,7 @@ export class Player {
   private die(): void {
     const g = this.game;
     this.alive = false;
+    this.afloat = false;
     this.clearPower();
     this.setState('dead');
     g.sfx('death');
@@ -1832,9 +1895,17 @@ export class Player {
     const b = this.body;
     const wl = g.waterLevel;
     this.inWater = false;
-    if (wl <= -1e3) return;
+    this.afloat = false;
+    if (wl <= -1e3) {
+      this.air = AIR_MAX;
+      return;
+    }
+    // Swimmable water holds the dragon up instead of washing it back ashore.
+    const swim = this.swimLevel;
+    if (swim && this.swimWater(dt)) return;
+    if (this.air < AIR_MAX) this.air = Math.min(AIR_MAX, this.air + dt * 6);
     if (b.y < wl + 0.05 && b.grounded) {
-      if (g.isDeepWater(b.x, b.z, b.y)) {
+      if (!swim && g.isDeepWater(b.x, b.z, b.y)) {
         g.fx.splash(b.x, wl, b.z);
         g.sfx('splash');
         g.playerFell();
@@ -1846,11 +1917,361 @@ export class Player {
         this.wadeFx = 0.12;
         g.fx.emit(b.x, wl + 0.05, b.z, { count: 3, speed: 2, dir: [0, 1, 0], spread: 0.8, life: [0.3, 0.5], size: [0.12, 0.2], color: 0xd0f0ff, gravity: 12, additive: false, alpha: 0.8 });
       }
-    } else if (!b.grounded && b.y < wl - 0.8) {
+    } else if (!swim && !b.grounded && b.y < wl - 0.8) {
       g.fx.splash(b.x, wl, b.z);
       g.sfx('splash');
       g.playerFell();
     }
+  }
+
+  // --- swimming -------------------------------------------------------------------------
+  //
+  // Only in realms whose water sets `swim` (LevelDef.water). Deep water there
+  // floats the dragon at the surface; WASD paddles (turning like running),
+  // Jump leaps out (and a flap can follow), Horn is a strong stroke, and
+  // holding Dodge dives. Underwater, movement follows the camera in 3D (tilt
+  // the view down to swim down), Dodge sinks and Jump rises, and the breath
+  // meter drains; empty, it hurts and the water pushes Aster back up.
+  // Breath, bursts, tail and Fury wait until there is ground underfoot.
+
+  /**
+   * Swimmable water, run after each move. Returns true while the water has
+   * the dragon (swimming, just dived in, or afloat during a conversation);
+   * false hands back to the ordinary wading code.
+   */
+  private swimWater(dt: number): boolean {
+    const g = this.game;
+    const b = this.body;
+    const wl = g.waterLevel;
+    const floor = g.col.groundAt(b.x, b.z, b.y + 0.3, 0.1).y;
+    const deep = g.isDeepWater(b.x, b.z, floor);
+    if (this.state === 'swim') {
+      // Footing again (a beach or a shelf), or thrown clear of the water: back to the ordinary moves.
+      if ((!deep && floor > b.y - 0.4) || b.y > wl + 0.5) {
+        this.swimUnder = false;
+        // Paddling up to a steep bank: climb straight out rather than wading into it.
+        const m = this.wish(this.w);
+        if (!deep && m > 0.5 && this.tryLedge(this.w.x, this.w.z, 2.2, true)) return false;
+        this.setState('move');
+        return false;
+      }
+      this.afloat = true;
+      if (this.submerged) {
+        this.air = Math.max(0, this.air - dt);
+        if (this.air <= 0) {
+          this.drownT -= dt;
+          if (this.drownT <= 0) {
+            this.drownT = 0.6;
+            this.drown(6);
+          }
+        }
+      } else {
+        this.air = Math.min(AIR_MAX, this.air + dt * 6);
+        this.drownT = 0.35;
+      }
+      this.swimFx(dt);
+      return true;
+    }
+    if (!deep || b.y > wl - 0.25) return false;
+    if (this.state === 'locked') {
+      // A conversation while afloat: bob at the surface instead of sinking.
+      this.afloat = true;
+      b.y += (wl - FLOAT - b.y) * (1 - Math.exp(-6 * dt));
+      b.vy = 0;
+      return true;
+    }
+    if (this.state === 'ledge' || this.state === 'climb' || this.state === 'dead' || this.state === 'fall') return false;
+    this.enterSwim();
+    return true;
+  }
+
+  private enterSwim(): void {
+    const g = this.game;
+    const b = this.body;
+    const wl = g.waterLevel;
+    const plunge = -b.vy;
+    this.move = null;
+    this.gliding = false;
+    this.diving = false;
+    this.setState('swim');
+    this.afloat = true;
+    this.swimUnder = false;
+    this.swimPitch = 0;
+    this.strokeCd = 0;
+    this.surgeT = 0;
+    this.drownT = 0.35;
+    // A hard landing ducks under for a moment; the float spring brings Aster back up.
+    b.vy = plunge > 4 ? -Math.min(6, plunge * 0.3) : Math.min(0, b.vy);
+    b.vx *= 0.6;
+    b.vz *= 0.6;
+    if (plunge > 3) {
+      g.fx.splash(b.x, wl, b.z);
+      g.sfx('splash', b.x, wl, b.z, 1, Math.min(1, 0.4 + plunge / 20));
+    } else g.fx.ring(b.x, wl + 0.03, b.z, 0.3, 1.6, 0xcfefff, 0.5);
+    if (!g.save.found['tip:swim']) {
+      g.save.found['tip:swim'] = true;
+      g.hud.flick('We can swim here! WASD to paddle, Space to leap out. Hold Shift to dive, Space to rise, Left Mouse for a strong stroke. Mind your breath!', 9);
+    }
+  }
+
+  private updateSwim(dt: number): void {
+    const g = this.game;
+    const inp = g.input;
+    const b = this.body;
+    const wl = g.waterLevel;
+    this.surgeT = Math.max(0, this.surgeT - dt);
+    this.strokeCd = Math.max(0, this.strokeCd - dt);
+    this.swimHintT = Math.max(0, this.swimHintT - dt);
+    const noAir = this.air <= 0;
+    // No dodging in the water: Dodge is the dive button.
+    if (inp.buffered('dodge', 0.3)) inp.consume('dodge');
+    // Horn: a strong stroke forward.
+    if (inp.take('horn', 0.15) && this.strokeCd <= 0) {
+      this.surgeT = 0.4;
+      this.strokeCd = 0.55;
+      this.strokeHits.clear();
+      // Along the way Aster is pointing: level at the surface, pitched underwater.
+      const pitch = this.swimUnder ? this.swimPitch : 0;
+      b.vx += Math.sin(this.yaw) * Math.cos(pitch) * SURGE;
+      b.vz += Math.cos(this.yaw) * Math.cos(pitch) * SURGE;
+      b.vy += Math.sin(pitch) * SURGE;
+      g.sfx('dodge', b.x, b.y, b.z, 0.7, 0.6);
+      if (this.swimUnder) this.bubbles(8);
+      else g.fx.emit(b.x - Math.sin(this.yaw) * 0.8, wl + 0.05, b.z - Math.cos(this.yaw) * 0.8, {
+        count: 12, speed: 3, dir: [-Math.sin(this.yaw) * 0.5, 1, -Math.cos(this.yaw) * 0.5], spread: 0.5, life: [0.3, 0.6], size: [0.14, 0.26],
+        color: 0xe0f6ff, gravity: 14, additive: false, alpha: 0.85,
+      });
+    }
+    // The rest of the moveset waits for dry land.
+    if ((inp.take('tail', 0.15) || inp.take('burst', 0.15) || inp.pressed('breath')) && this.swimHintT <= 0) {
+      this.swimHintT = 12;
+      g.hud.flick('No fire in the water, Aster! Horn gives a strong stroke. Fight once we\'re back on land.', 5);
+    }
+    const speedK = this.surgeT > 0 ? 1.7 : 1;
+    this.swimPhase += dt * (3 + Math.hypot(b.vx, b.vz, b.vy) * 0.9);
+    // A strong stroke bumps open what it swims into: chests, urns and crates in the water.
+    if (this.surgeT > 0) {
+      const fx = Math.sin(this.yaw);
+      const fz = Math.cos(this.yaw);
+      for (const h of g.hittables()) {
+        if (!h.alive || this.strokeHits.has(h)) continue;
+        const dx = h.x - b.x;
+        const dz = h.z - b.z;
+        const d = Math.hypot(dx, dz);
+        if (d > h.radius + b.radius + 1.1 || (dx * fx + dz * fz) < -0.2 * d) continue;
+        if (h.y > b.y + 1.6 || h.y + h.height < b.y - 0.4) continue;
+        this.strokeHits.add(h);
+        const r = h.takeHit(makeHit({ damage: 6, dirX: dx / (d || 1), dirZ: dz / (d || 1), knockback: 3, stagger: 10, source: 'melee', move: 'stroke', ox: b.x, oz: b.z }));
+        this.onDealt(r, h, 6, 'stroke', 4);
+      }
+    }
+
+    if (!this.swimUnder) {
+      // --- at the surface ---
+      const m = this.paddle(dt, SWIM * speedK);
+      // Bob on the float line: a stiff spring, well damped.
+      const target = wl - FLOAT + Math.sin(this.clock * 2.1) * 0.035;
+      b.vy += ((target - b.y) * 34 - b.vy * 9) * dt;
+      this.swimPitch = damp(this.swimPitch, 0, 6, dt);
+      // Hold Dodge to dive.
+      if (inp.down('dodge') && !noAir && this.stateT > 0.12) {
+        this.swimUnder = true;
+        b.vy = -4.5;
+        g.sfx('splash', b.x, wl, b.z, 1.5, 0.35);
+        g.fx.ring(b.x, wl + 0.03, b.z, 0.3, 2.2, 0xcfefff, 0.5);
+        this.bubbles(10);
+        return;
+      }
+      // Jump leaps out of the water: onto the bank if it is close, and a flap can follow.
+      if (inp.take('jump', 0.12) && this.stateT > 0.08) {
+        const hs = Math.max(Math.hypot(b.vx, b.vz), m > 0.3 ? 5.5 : 2.5);
+        b.vx = Math.sin(this.yaw) * hs;
+        b.vz = Math.cos(this.yaw) * hs;
+        b.vy = SWIM_LEAP;
+        b.grounded = false;
+        this.jumps = 1;
+        this.jumpCut = false;
+        this.coyote = 0;
+        this.setState('move');
+        g.fx.splash(b.x, wl, b.z);
+        g.sfx('splash', b.x, wl, b.z, 1.25, 0.7);
+        g.sfx('jump');
+        return;
+      }
+      // Paddling into a low bank or a pier climbs out of the water.
+      if (b.hitWall && m > 0.5) {
+        this.pushT += dt;
+        if (this.pushT > 0.1 && this.tryLedge(this.w.x, this.w.z, 2.2, true)) return;
+      } else this.pushT = 0;
+      return;
+    }
+
+    // --- underwater: camera-relative, in three dimensions ---
+    const cy = g.cam.yaw;
+    const fx = Math.sin(cy);
+    const fz = Math.cos(cy);
+    // Tilting the view down from its usual angle aims forward strokes down, and up aims them up.
+    const elev = -clamp((g.cam.pitch - 0.3) * 1.25, -1.15, 1.15);
+    const ce = Math.cos(elev);
+    const se = Math.sin(elev);
+    const fwd = inp.moveY;
+    const side = inp.moveX;
+    let dx = fx * ce * fwd - Math.cos(cy) * side;
+    let dz = fz * ce * fwd + Math.sin(cy) * side;
+    let dy = se * fwd;
+    const rise = inp.down('jump') ? 1 : 0;
+    const sink = inp.down('dodge') && !noAir ? 1 : 0;
+    dy += (rise - sink) * 0.9;
+    const mag = Math.hypot(dx, dy, dz);
+    if (mag > 1) {
+      dx /= mag;
+      dy /= mag;
+      dz /= mag;
+    }
+    const sp = SWIM_UNDER * speedK;
+    let tvx = dx * sp;
+    let tvz = dz * sp;
+    let tvy = dy * sp;
+    // Out of air, the water shoves Aster back up (and nothing else matters).
+    if (noAir) {
+      tvx *= 0.4;
+      tvz *= 0.4;
+      tvy = 4.2;
+    } else if (mag < 0.05) tvy = 0.45;
+    const k = 1 - Math.exp(-(mag > 0.05 ? 3.2 : 1.8) * dt);
+    b.vx += (tvx - b.vx) * k;
+    b.vz += (tvz - b.vz) * k;
+    b.vy += (tvy - b.vy) * k;
+    const hs = Math.hypot(b.vx, b.vz);
+    const hw = Math.hypot(dx, dz);
+    if (hw > 0.15) this.yaw = dampAngle(this.yaw, yawOf(dx, dz), 7, dt);
+    this.swimPitch = damp(this.swimPitch, hs + Math.abs(b.vy) > 0.6 ? Math.atan2(b.vy, Math.max(hs, 0.4)) : 0, 5, dt);
+    // Back at the top: surface (unless still holding the dive).
+    if (b.y >= wl - FLOAT - 0.05 && b.vy > -0.3 && !sink) {
+      this.swimUnder = false;
+      b.y = Math.min(b.y, wl - FLOAT + 0.05);
+      b.vy = Math.min(b.vy, 1.5);
+      g.fx.ring(b.x, wl + 0.03, b.z, 0.3, 1.8, 0xcfefff, 0.5);
+      g.sfx('splash', b.x, wl, b.z, 1.6, 0.3);
+      if (this.air < AIR_MAX * 0.3) g.sfx('flap', b.x, b.y, b.z, 1.4, 0.5);
+      return;
+    }
+    if (b.y > wl - FLOAT && b.vy > 0) b.vy *= 0.5;
+  }
+
+  /** Surface swimming: turns like running (arcs, not snaps), with a softer pull and a long glide. */
+  private paddle(dt: number, speed: number): number {
+    const b = this.body;
+    const m = this.wish(this.w);
+    let align = 1;
+    if (m > 0.1) {
+      const want = yawOf(this.w.x, this.w.z);
+      const diff = angleDiff(this.yaw, want);
+      const step = Math.min(Math.abs(diff), 7.5 * dt, Math.abs(diff) * (1 - Math.exp(-9 * dt)) + 0.9 * dt);
+      this.yaw += Math.sign(diff) * step;
+      align = Math.cos(angleDiff(this.yaw, want));
+    }
+    const target = m > 0.05 ? speed * m * clamp(0.5 + 0.5 * align, 0.2, 1) : 0;
+    const k = 1 - Math.exp(-(m > 0.05 ? 3.4 : 1.5) * dt);
+    b.vx += (Math.sin(this.yaw) * target - b.vx) * k;
+    b.vz += (Math.cos(this.yaw) * target - b.vz) * k;
+    return m;
+  }
+
+  /** Out of air: the water takes its toll. Not a hit (no knockback), but it can end the dive for good. */
+  private drown(dmg: number): void {
+    const g = this.game;
+    if (!this.alive || this.invuln || this.power === 'invincible') return;
+    this.hp -= dmg;
+    g.stats.damageTaken += dmg;
+    g.hud.hurt(dmg / this.maxHp);
+    g.sfx('hurt', this.x, this.y, this.z, 0.85, 0.7);
+    this.flashT = 0.2;
+    this.bubbles(14);
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.die();
+    }
+  }
+
+  private bubbles(n: number): void {
+    const m = this.mouth(new THREE.Vector3());
+    this.game.fx.emit(m.x, Math.min(m.y, this.game.waterLevel - 0.1), m.z, {
+      count: n, speed: 0.9, dir: [0, 1, 0], spread: 0.6, life: [0.7, 1.4], size: [0.08, 0.2], sizeEnd: 1.3,
+      color: 0xd8f6ff, alpha: 0.8, additive: false, drag: 1.5, gravity: -5, jitter: 0.15,
+    });
+  }
+
+  /** A wake behind a paddling dragon, and bubbles from a diving one. */
+  private swimFx(dt: number): void {
+    const g = this.game;
+    const b = this.body;
+    const wl = g.waterLevel;
+    const hs = Math.hypot(b.vx, b.vz);
+    if (!this.swimUnder) {
+      this.wakeT -= dt * (0.5 + hs / SWIM);
+      if (this.wakeT <= 0) {
+        this.wakeT = 0.14;
+        const fx = Math.sin(this.yaw);
+        const fz = Math.cos(this.yaw);
+        if (hs > 1.2) {
+          for (const s of [-1, 1]) {
+            g.fx.emit(b.x + fz * s * 0.45 - fx * 0.3, wl + 0.04, b.z - fx * s * 0.45 - fz * 0.3, {
+              count: 2, speed: 1.2, dir: [fz * s, 0.5, -fx * s], spread: 0.4, life: [0.35, 0.6], size: [0.12, 0.22], sizeEnd: 1.6,
+              color: 0xe8f8ff, gravity: 5, additive: false, alpha: 0.75,
+            });
+          }
+          if (Math.floor(this.swimPhase) % 3 === 0) g.fx.ring(b.x - fx * 0.6, wl + 0.03, b.z - fz * 0.6, 0.4, 1.6, 0xcfefff, 0.7);
+        } else if (Math.floor(this.clock * 1.4) !== Math.floor((this.clock - dt) * 1.4)) {
+          g.fx.ring(b.x, wl + 0.03, b.z, 0.4, 1.3, 0xcfefff, 0.9);
+        }
+      }
+      return;
+    }
+    this.bubbleT -= dt;
+    if (this.bubbleT <= 0) {
+      this.bubbleT = this.air < AIR_MAX * 0.3 ? 0.25 : 0.7 + Math.random() * 0.5;
+      this.bubbles(this.air < AIR_MAX * 0.3 ? 5 : 3);
+    }
+  }
+
+  /**
+   * Underwater, the camera follows the dragon below the surface (the orbit
+   * camera never dips under water), and the view takes on the water's tint.
+   * Runs every frame after the camera rig.
+   */
+  swimCamera(dt: number): void {
+    const g = this.game;
+    const cam = g.camera;
+    const wl = g.waterLevel;
+    const want = this.submerged && !g.cam.inShot && g.state !== 'dead' ? 1 : 0;
+    this.uwCam += (want - this.uwCam) * (1 - Math.exp(-7 * dt));
+    if (want === 0 && this.uwCam < 0.02) this.uwCam = 0;
+    if (this.uwCam > 0) {
+      const b = this.body;
+      const fy = b.y + 0.8;
+      const yaw = g.cam.yaw;
+      const pitch = clamp(g.cam.pitch, -0.3, 1.1);
+      const cp = Math.cos(pitch);
+      const dx = -Math.sin(yaw) * cp;
+      const dy = Math.sin(pitch);
+      const dz = -Math.cos(yaw) * cp;
+      const L = 5.8;
+      const hit = g.col.raycast(b.x, fy, b.z, dx, dy, dz, L, true, true);
+      const t = clamp(hit.t - 0.35, 1.3, L);
+      let py = fy + dy * t;
+      const px = b.x + dx * t;
+      const pz = b.z + dz * t;
+      py = Math.min(py, wl - 0.35);
+      const floor = g.col.terrainAt(px, pz);
+      if (floor > -1e3) py = Math.max(py, Math.min(wl - 0.35, floor + 0.5));
+      this.uwPos.set(px, py, pz);
+      cam.position.lerp(this.uwPos, this.uwCam);
+      cam.lookAt(b.x, b.y + 1.35 + (fy - b.y - 1.35) * this.uwCam, b.z);
+      // lookAt refreshes the matrices before turning: refresh again, so the HUD projects through this pose.
+      cam.updateMatrixWorld();
+    }
+    g.renderer.look.underwater = wl > -1e3 && cam.position.y < wl - 0.05 ? 1 : 0;
   }
 
   private trackSafeGround(dt: number): void {
@@ -1953,6 +2374,14 @@ export class Player {
     P.pull = this.state === 'ledge' && !!this.ledge && this.ledge.pulling;
     P.dive = this.gliding && this.diving;
     P.skid = this.skidT > 0;
+    // Afloat: level body, folded wings, paddling legs (see DragonRig).
+    P.swim = this.afloat ? this.swimPhase : -1;
+    P.swimPitch = this.swimPitch;
+    P.under = this.afloat && this.swimUnder;
+    if (this.afloat) {
+      P.speed = 0;
+      P.grounded = false;
+    }
     this.updateGaze(dt);
     // Turning in place still steps the feet.
     if (P.speed < 0.15 && Math.abs(P.turn) > 1.2 && b.grounded && this.state === 'move') P.speed = 0.25;
@@ -1987,7 +2416,7 @@ export class Player {
 
     // Blob shadow on whatever is below, plus a landing marker when high up.
     const gy = this.game.col.groundAt(b.x, b.z, b.y + 0.1, 0.1).y;
-    if (gy > -1e3 && !this.hidden) {
+    if (gy > -1e3 && !this.hidden && !this.afloat) {
       const h = Math.max(0, b.y - gy);
       this.blob.visible = true;
       this.blob.position.set(b.x, gy + 0.03, b.z);
@@ -2000,7 +2429,8 @@ export class Player {
         this.marker.position.set(b.x, gy + 0.05, b.z);
         this.marker.scale.setScalar(1 + Math.min(1.5, h * 0.04));
         this.markerMat.opacity = 0.25 + 0.2 * Math.sin(this.game.time * 8);
-        this.markerMat.color.setHex(this.game.isDeepWater(b.x, b.z, gy) || gy < this.game.killY + 1 ? 0xff6a5a : 0xfff0c0);
+        // Red over water that would wash Aster back (swimmable water is a fine place to land).
+        this.markerMat.color.setHex((!this.swimLevel && this.game.isDeepWater(b.x, b.z, gy)) || gy < this.game.killY + 1 ? 0xff6a5a : 0xfff0c0);
       }
     } else {
       this.blob.visible = false;

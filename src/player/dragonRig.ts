@@ -71,6 +71,12 @@ export interface DragonPose {
   /** Where something interesting is, relative to the body (radians); null when nothing. */
   gaze?: number | null;
   gazePitch?: number;
+  /** Swimming: the stroke phase; negative (or unset) when not in the water. */
+  swim?: number;
+  /** Swimming: climb angle of the stroke (radians, up positive). */
+  swimPitch?: number;
+  /** Swimming under the surface rather than on it. */
+  under?: boolean;
 }
 
 export function defaultPose(): DragonPose {
@@ -123,6 +129,8 @@ export class DragonRig {
   private lastGrounded = true;
   private flapT = 1;
   private climbLegs = -1;
+  /** Paddle phase while swimming; negative otherwise. */
+  private swimLegs = -1;
 
   /** `skinned` draws the rig as a few GPU-skinned meshes; off for rigs posed once and baked into statues. */
   constructor(look: DragonLook = HERO_LOOK, skinned = true) {
@@ -566,6 +574,23 @@ export class DragonRig {
       tuck = 0.8;
       rate = 25;
     }
+    // Swimming: body level with the water (pitched along a dive), wings folded
+    // tight, head up at the surface or stretched ahead underwater, legs paddling.
+    if (pose.swim !== undefined && pose.swim >= 0) {
+      const s = pose.swim;
+      const under = !!pose.under;
+      bodyPitch = clampRange(-(pose.swimPitch ?? 0), -1.1, 1.1) + Math.sin(s * 2) * 0.03;
+      bodyRoll = clampRange(-pose.turn * 0.1, -0.45, 0.45) + Math.sin(s) * 0.05;
+      bodyY = Math.sin(s * 2) * 0.03;
+      neckPitch = under ? -0.12 : -0.62 + Math.sin(s * 2 + 0.6) * 0.04;
+      headPitch = under ? 0.1 : 0.5;
+      wingSpread = 0;
+      wingFlap = 0;
+      tuck = 0;
+      tailPitch = 0;
+      rate = 10;
+      this.swimLegs = s;
+    } else this.swimLegs = -1;
     if (pose.dodge >= 0) {
       const d = pose.dodge;
       roll = d * Math.PI * 2;
@@ -821,19 +846,28 @@ export class DragonRig {
         swing = (leg.front ? -1.2 : -0.2) + Math.sin(ph) * 0.45;
         knee = 0.6 + Math.cos(ph) * 0.3;
       }
-      // Keep feet planted when the body pitches.
-      leg.hip.rotation.set(swing - P.bodyPitch, 0, leg.side * 0.05);
+      if (this.swimLegs >= 0) {
+        // Paddling: the front legs reach and pull in turn, the hind legs kick out behind.
+        const ph = this.swimLegs * 1.6 + leg.phase;
+        swing = leg.front ? -0.45 + Math.sin(ph) * 0.8 : 0.9 + Math.sin(ph) * 0.45;
+        knee = leg.front ? 0.75 + Math.cos(ph) * 0.5 : -0.25 + Math.cos(ph) * 0.4;
+      }
+      // Keep feet planted when the body pitches (a swimmer's legs follow the body instead).
+      const comp = this.swimLegs >= 0 ? 0 : P.bodyPitch;
+      leg.hip.rotation.set(swing - comp, 0, leg.side * 0.05);
       leg.knee.rotation.set(leg.front ? knee : -knee * 0.6 + (pose.grounded ? 0 : 0), 0, 0);
-      leg.foot.rotation.set(-(swing - P.bodyPitch) - (leg.front ? knee : -knee * 0.6), 0, 0);
+      leg.foot.rotation.set(-(swing - comp) - (leg.front ? knee : -knee * 0.6), 0, 0);
     }
 
-    // Tail: a travelling wave, stiffer when running.
+    // Tail: a travelling wave, stiffer when running (and a strong sculling sweep when swimming).
     const n = this.tail.length;
-    const amp = pose.glide ? 0.05 : 0.12 * (1 - sp * 0.6);
+    const swimming = this.swimLegs >= 0;
+    const amp = swimming ? 0.26 : pose.glide ? 0.05 : 0.12 * (1 - sp * 0.6);
+    const wave = swimming ? 4.2 : 2.2;
     for (let i = 0; i < n; i++) {
       const seg = this.tail[i]!;
       const f = i / n;
-      seg.rotation.y = Math.sin(t * 2.2 - i * 0.55) * amp + P.tailYaw * (0.5 + f * 0.5) / n * 3;
+      seg.rotation.y = Math.sin(t * wave - i * 0.55) * amp + P.tailYaw * (0.5 + f * 0.5) / n * 3;
       seg.rotation.x = P.tailPitch / n * 2 + (i === 0 ? 0.1 : 0) - (pose.grounded ? f * 0.02 : 0);
     }
   }

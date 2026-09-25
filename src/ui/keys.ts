@@ -10,6 +10,13 @@ type Rule = [RegExp, string, string];
 // [pattern, touch wording, gamepad wording]
 const RULES: Rule[] = [
   [/WASD to move, mouse to look/g, 'Left thumb to move, drag the right side to look', 'Left stick to move, right stick to look'],
+  // Swimming (the touch buttons read Dive, Leap and Stroke while in the water).
+  [/\bWASD to paddle\b/g, 'Left thumb to paddle', 'Left stick to paddle'],
+  [/\bSpace to leap out\b/g, 'Leap to jump out', 'A to leap out'],
+  [/\bHold Shift to dive\b/g, 'Hold Dive to go under', 'Hold B to dive'],
+  [/\bSpace to rise\b/g, 'Leap to rise', 'A to rise'],
+  [/\bLeft Mouse for a strong stroke\b/g, 'Stroke to surge ahead', 'X for a strong stroke'],
+  [/\bHorn gives a strong stroke\b/g, 'Stroke gives a burst of speed', 'X gives a strong stroke'],
   [/Space \/ Click/g, 'Tap', 'A'],
   [/Esc to skip/g, 'Pause to skip', 'Start to skip'],
   [/Hold Right Mouse/g, 'Hold Breath', 'Hold RT'],

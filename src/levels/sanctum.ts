@@ -12,6 +12,7 @@ import { GEO } from '../render/decor';
 import { mat, glow } from '../render/materials';
 import { mergeStatic } from '../render/shapes';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { hollowRoot } from '../world/kits';
 
 /**
  * The Warden Sanctum: the hub. Emberhold teaches fire here; the Wardgate
@@ -203,6 +204,8 @@ export const sanctum: LevelDef = {
     stargazers(b);
     hatcheryLife(b);
     hubLife(b);
+    // Act II: once the Keep is won, the ground splits open south of the courtyard.
+    if (g.save.levelsDone.keep) hollowFissure(b);
   },
 
   onEnter(g, fresh) {
@@ -227,6 +230,14 @@ export const sanctum: LevelDef = {
         g.say(lines, () => g.saveNow());
         return;
       }
+    }
+    // Act II: the first time back after the Keep, the ground gives way (see hollowFissure).
+    if (g.save.levelsDone.keep && !g.save.found['story:sanctum:fissure']) {
+      g.save.found['story:sanctum:fissure'] = true;
+      g.shake(0.5, 1.6);
+      g.sfx('rumble', FISSURE.x, 0, FISSURE.z, 0.6);
+      g.hud.flick('Whoa! Did you feel that? The lawn south of the courtyard just split open, and there\'s light coming up out of it!', 8);
+      return;
     }
     if (fresh) g.hud.flick('The Wardgate is up the north stairs. Wardstones let you spend gems on new abilities.', 5);
   },
@@ -862,4 +873,65 @@ function hubLife(b: Builder): void {
     b.decor.add(GEO.cyl(), M.straw(), x - 0.15, y + 1.55, z, 0.62, 0.24, 0.62, 0, 0, Math.PI / 2);
     b.decor.add(GEO.cyl(), M.banner(), x - 0.29, y + 1.55, z, 0.3, 0.04, 0.3, 0, 0, Math.PI / 2);
   }
+}
+
+// ============================================================================================
+// Act II: the fissure. After Eclipse Keep the Hollow King's roots break up through the lawn
+// south of the courtyard, and a crack full of cave-light leads down to the Hollow Gate.
+// ============================================================================================
+
+const FISSURE = { x: 0, z: -25 };
+
+function hollowFissure(b: Builder): void {
+  const g = b.game;
+  const { x, z } = FISSURE;
+  const y = b.y(x, z);
+  const dark = mat(0x05030a, { rough: 1 });
+  const lip = mat(0x6a6070, { rough: 0.95, flat: true });
+  const light = glowOf(0x6ae0d0);
+  // A jagged crack across the lawn: a black gash, cave-light glowing up from inside it.
+  const pts: [number, number][] = [[-7, 3.5], [-4.5, 1.8], [-2.2, 2.4], [0, 0], [2.4, -1.4], [4.4, -0.6], [7, -3.2]];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const [ax, az] = pts[i]!;
+    const [cx, cz] = pts[i + 1]!;
+    const len = Math.hypot(cx - ax, cz - az);
+    const yaw = Math.atan2(cx - ax, cz - az);
+    const w = i === 3 || i === 2 ? 2.4 : 1.4 - Math.abs(i - 2.5) * 0.12;
+    const mx = x + (ax + cx) / 2;
+    const mz = z + (az + cz) / 2;
+    b.decor.add(GEO.box(), dark, mx, y - 0.26, mz, w, 0.6, len + 0.4, 0, yaw, 0, false);
+    b.decor.add(GEO.box(), light, mx, y + 0.02, mz, w * 0.32, 0.1, len * 0.85, 0, yaw, 0, false);
+    // Heaved turf and broken flagstones along both lips.
+    for (const side of [-1, 1]) {
+      const ox = Math.cos(yaw) * side * (w / 2 + 0.3);
+      const oz = -Math.sin(yaw) * side * (w / 2 + 0.3);
+      b.decor.add(GEO.box(), lip, mx + ox, y + 0.12, mz + oz, 0.9, 0.5, len * 0.8, 0.3 * side, yaw + jitter(i, side) * 0.3, 0.2 * side);
+      b.decor.rock(mx + ox * 1.6 + jitter(i, 3) * 0.5, y, mz + oz * 1.6, 0.3 + Math.abs(jitter(i, side + 4)) * 0.4, 0x7a7466);
+    }
+  }
+  // The roots that did it, bursting up out of the crack.
+  hollowRoot(b, [[x - 3, y - 3, z + 2], [x - 4.5, y + 3, z + 3.5], [x - 7, y + 4.2, z + 5], [x - 9.5, y - 0.4, z + 5.5]], 0.75);
+  hollowRoot(b, [[x + 2, y - 3, z - 1], [x + 3.5, y + 3.8, z - 2.4], [x + 6.5, y + 3.2, z - 4.6], [x + 8.5, y - 0.4, z - 6]], 0.65);
+  hollowRoot(b, [[x - 0.5, y - 3, z + 0.3], [x + 0.4, y + 2, z + 1.4], [x + 1.6, y + 5.6, z + 3.4], [x + 1.4, y + 4.2, z + 6], [x + 0.6, y - 0.3, z + 7.4]], 0.5);
+  // Light welling up from below, visible from the courtyard.
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(4.5, 2.2, 16, 18, 1, true), new THREE.MeshBasicMaterial({
+    color: 0x5ae8d8, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
+  }));
+  beam.position.set(x, y + 8, z);
+  b.level.root.add(beam);
+  b.level.props.push({
+    update: () => {
+      const p = g.player;
+      if (Math.hypot(p.x - x, p.z - z) > 45 || Math.random() > 0.5) return;
+      const k = Math.floor(Math.random() * (pts.length - 1));
+      const [ax, az] = pts[k]!;
+      const [cx, cz] = pts[k + 1]!;
+      const t = Math.random();
+      g.fx.emit(x + ax + (cx - ax) * t, y + 0.1, z + az + (cz - az) * t, {
+        count: 1, speed: 0.8, dir: [0, 1, 0], spread: 0.3, life: [1.5, 2.8], size: [0.1, 0.2], sizeEnd: 0.4, color: 0x8ff0e0, bright: 2, drag: 0.3, gravity: -0.5,
+      });
+    },
+  });
+  b.portal(x, z, 0.5, 'hollow', 'Descend into the Hollow Below', 0x6ae0d0);
+  b.story('fissure', x, z + 6, 7, () => g.hud.flick('It goes all the way down... and those roots came up from underneath. Something\'s down there, Aster. Nyxa\'s coming too.', 7));
 }

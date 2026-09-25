@@ -12,6 +12,9 @@ import { Backdrop } from './backdrop';
 
 export type Quality = 'low' | 'medium' | 'high';
 
+/** The color the world fades into seen from under water. */
+const UNDERWATER_FOG = new THREE.Color(0x0e4a5a);
+
 export class Renderer {
   readonly gl: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -26,7 +29,10 @@ export class Renderer {
   private grade: ShaderPass | null = null;
   private bokeh: BokehPass | null = null;
   /** Wanted grade state; eased every frame. */
-  readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null, impact: 0 };
+  readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null, impact: 0, underwater: 0 };
+  /** The realm's own fog, and how far the view has gone under water (eased 0..1). */
+  private fogBase = { color: new THREE.Color(), near: 60, far: 260 };
+  private uw = 0;
   /** Reduced flashing: no lens ripple or fringing, a gentler Fury glow, softer lightning. */
   calm = false;
   quality: Quality = 'high';
@@ -174,6 +180,11 @@ export class Renderer {
     const fogColor = new THREE.Color(def.fog ?? def.horizon);
     this.scene.fog = new THREE.Fog(fogColor, def.fogNear, def.fogFar);
     this.scene.background = fogColor;
+    this.fogBase = { color: fogColor.clone(), near: def.fogNear, far: def.fogFar };
+    // A new realm starts dry (the swimmer's camera sets this again each frame it is under).
+    this.look.underwater = 0;
+    this.uw = 0;
+    if (this.grade) this.grade.uniforms.uWater!.value = 0;
     this.sun.color.setHex(def.sunColor);
     this.sun.intensity = def.sunIntensity;
     this.hemi.color.setHex(def.hemiSky);
@@ -183,6 +194,27 @@ export class Renderer {
     WATER_LIGHT.uSunDir.value.set(...def.sunDir).normalize();
     WATER_LIGHT.uSunColor.value.setHex(def.sunColor);
     WATER_LIGHT.uSky.value.setHex(def.horizon);
+  }
+
+  /**
+   * With the camera under water (look.underwater), the fog closes in and
+   * turns blue-green, and the grade (when there is one) tints the view.
+   */
+  private underwater(dt: number): void {
+    const want = this.look.underwater > 0 ? 1 : 0;
+    const was = this.uw;
+    this.uw += (want - this.uw) * (1 - Math.exp(-(want ? 9 : 6) * dt));
+    if (this.uw < 0.002) this.uw = 0;
+    if (this.uw === 0 && was === 0) return;
+    const fog = this.scene.fog as THREE.Fog | null;
+    if (fog) {
+      const k = this.uw;
+      const base = this.fogBase;
+      fog.color.copy(base.color).lerp(UNDERWATER_FOG, k);
+      fog.near = base.near + (1.5 - base.near) * k;
+      fog.far = base.far + (34 - base.far) * k;
+    }
+    if (this.grade) this.grade.uniforms.uWater!.value = this.uw;
   }
 
   /** Keeps the shadow frustum centered on the action. */
@@ -196,6 +228,7 @@ export class Renderer {
   }
 
   render(time: number, dt = 1 / 60): void {
+    this.underwater(dt);
     if (this.grade) {
       const L = this.look;
       const was = L.dt;

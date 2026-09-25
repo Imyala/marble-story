@@ -86,6 +86,10 @@ export class Hud {
   private proj = new THREE.Vector3();
   private threats: Enemy[] = [];
   private arrows: HTMLDivElement[] = [];
+  /** The breath meter beside a swimming dragon: a ring of air that empties underwater. */
+  private airBox!: HTMLElement;
+  private airArc!: SVGCircleElement;
+  private airShow = 0;
 
   constructor(private game: Game, parent: HTMLElement) {
     this.overlay = el('div', 'ui-layer');
@@ -219,6 +223,15 @@ export class Hud {
       r.appendChild(a);
       this.arrows.push(a);
     }
+
+    this.airBox = el('div', 'air-meter');
+    this.airBox.innerHTML = `<svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="18" fill="rgba(4,20,32,.55)" stroke="rgba(0,0,0,.4)" stroke-width="5"/>
+      <circle class="arc" cx="22" cy="22" r="18" fill="none" stroke="#8ee8ff" stroke-width="4" stroke-linecap="round"
+      stroke-dasharray="113.1" stroke-dashoffset="0" transform="rotate(-90 22 22)"/>
+      <circle cx="19" cy="25" r="5" fill="none" stroke="#dff8ff" stroke-width="1.6"/><circle cx="26.5" cy="17" r="3" fill="none" stroke="#dff8ff" stroke-width="1.4"/>
+      <circle cx="17.5" cy="23.5" r="1.2" fill="#fff"/></svg>`;
+    this.airArc = this.airBox.querySelector('.arc') as SVGCircleElement;
+    r.appendChild(this.airBox);
 
     this.deathBox = el('div', 'death', '<h1>The light fades...</h1>');
     o.appendChild(this.deathBox);
@@ -391,9 +404,35 @@ export class Hud {
       }
     }
     this.wardT -= dt;
+    this.updateAir(dt);
     this.updateThreats();
     const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad && !g.input.usingTouch;
     this.clickHint.style.opacity = needClick ? '1' : '0';
+  }
+
+  /** Shown while diving, and while the air comes back after a dive; red and pulsing when nearly out. */
+  private updateAir(dt: number): void {
+    const p = this.game.player;
+    const k = Math.max(0, p.air / p.airMax);
+    const want = p.alive && (p.submerged || k < 0.999);
+    this.airShow = Math.max(0, Math.min(1, this.airShow + (want ? dt * 6 : -dt * 2)));
+    if (this.airShow <= 0) {
+      if (this.airBox.style.display !== 'none') this.airBox.style.display = 'none';
+      return;
+    }
+    const s = this.toScreen(p.x, p.y + 1.6, p.z);
+    if (!s) {
+      this.airBox.style.display = 'none';
+      return;
+    }
+    this.airBox.style.display = 'block';
+    // Beside the dragon's head, so the eye never has to leave the swim.
+    this.airBox.style.left = `${s[0] + 46}px`;
+    this.airBox.style.top = `${s[1] - 30}px`;
+    this.airBox.style.opacity = String(this.airShow);
+    this.airArc.setAttribute('stroke-dashoffset', String(113.1 * (1 - k)));
+    this.airBox.classList.toggle('low', k < 0.3);
+    this.airBox.classList.toggle('empty', k <= 0);
   }
 
   private toScreen(x: number, y: number, z: number): [number, number] | null {

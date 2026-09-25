@@ -20,7 +20,9 @@ export type Sfx =
 export type LoopId = 'breath' | 'glide' | 'charge' | 'rain';
 
 /** A realm's background soundscape. */
-export type AmbienceKind = 'fen' | 'sanctum' | 'falls' | 'frostworks' | 'plains' | 'keep';
+export type AmbienceKind = 'fen' | 'sanctum' | 'falls' | 'frostworks' | 'plains' | 'keep'
+  // Act II.
+  | 'hollow';
 
 interface AmbienceDef {
   /** Continuous bed: filtered noise, with slow gusts. */
@@ -36,6 +38,8 @@ const AMBIENCE: Record<AmbienceKind, AmbienceDef> = {
   frostworks: { bed: { type: 'bandpass', freq: 420, q: 1.2, vol: 0.05, gust: 0.8 }, calls: [['clang', 2.5, 7], ['creak', 9, 20], ['gust', 5, 11]] },
   plains: { bed: { type: 'bandpass', freq: 1300, q: 0.35, vol: 0.028, gust: 0.7 }, calls: [['lark', 2.5, 6], ['buzz', 8, 16], ['bird', 4, 9]] },
   keep: { bed: { type: 'lowpass', freq: 300, q: 0.6, vol: 0.04, gust: 0.4, drone: [55, 82.4] }, calls: [['crow', 6, 14], ['chime', 9, 20]] },
+  // The Hollow Gate: a deep cave hum, water dripping into the lake, the roots creaking far off, crystals ringing.
+  hollow: { bed: { type: 'lowpass', freq: 240, q: 0.8, vol: 0.05, gust: 0.35, drone: [41.2, 61.7] }, calls: [['drip', 0.8, 3], ['drip', 2, 6], ['groan', 14, 30], ['crystal', 7, 16]] },
 };
 
 export interface MusicTheme {
@@ -344,6 +348,24 @@ export class Audio {
       case 'crow': {
         const n = 1 + Math.floor(r() * 3);
         for (let i = 0; i < n; i++) this.tone(640, 0.22, 'sawtooth', 0.022, { ...b, filter: 1400, q: 3, slide: 460, delay: i * 0.3 });
+        break;
+      }
+      case 'drip': {
+        // A drop into still water, and its echo off the cavern walls.
+        const f = 900 + r() * 900;
+        this.tone(f, 0.09, 'sine', 0.03, { ...b, slide: f * 2.2, attack: 0.002 });
+        this.tone(f * 1.1, 0.12, 'sine', 0.01, { ...b, slide: f * 2.4, delay: 0.32 + r() * 0.1 });
+        break;
+      }
+      case 'groan':
+        // Somewhere deep, the Hollow King's roots shift in the rock.
+        this.tone(48 + r() * 14, 2.6, 'sawtooth', 0.02, { ...b, filter: 260, slide: 38, attack: 0.8 });
+        this.noise(2.2, 0.018, { type: 'lowpass', freq: 180, freqEnd: 90, attack: 0.7, bus: pan });
+        break;
+      case 'crystal': {
+        const f = [880, 1175, 1318, 1760][Math.floor(r() * 4)]!;
+        this.tone(f, 3, 'sine', 0.012, { ...b, attack: 0.02 });
+        this.tone(f * 1.5, 2.2, 'sine', 0.006, { ...b, attack: 0.02, delay: 0.05 });
         break;
       }
       case 'chime': {
@@ -787,6 +809,8 @@ export const THEMES: Record<string, MusicTheme> = {
   keep: { bpm: 100, chords: [[0, 3, 7], [1, 5, 8], [-2, 1, 5], [-5, -1, 2]], scale: [0, 1, 3, 6, 7, 10], pad: 'sawtooth', lead: 'triangle', mood: 'tense' },
   boss: { bpm: 132, chords: [[0, 3, 7], [-2, 2, 5], [-4, 0, 3], [-5, -1, 2]], scale: [0, 3, 5, 7, 10, 12], pad: 'sawtooth', lead: 'square', mood: 'tense' },
   title: { bpm: 76, chords: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], scale: [0, 2, 4, 7, 9, 12], pad: 'sine', lead: 'triangle', mood: 'calm' },
+  // Act II: the Hollow Gate. Slow and deep, minor with a raised sixth, glassy on top.
+  hollow: { bpm: 72, chords: [[-5, -2, 2], [-8, -5, -1], [-3, 0, 4], [-7, -3, 0]], scale: [0, 2, 3, 7, 9, 12, 14], pad: 'sine', lead: 'triangle', mood: 'mysterious' },
 };
 
 export const audio = new Audio();

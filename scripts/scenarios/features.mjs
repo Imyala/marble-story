@@ -194,3 +194,27 @@ export async function gaze(h) {
   h.check('the head turns toward the nearby foe', r.gaze != null && r.gaze > 0.5, JSON.stringify(r));
   await h.shot('feature-gaze');
 }
+
+/** Dragon Time drains the color with a ripple; the grade pass runs on high quality. */
+export async function grade(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.realTime);
+    for (let i = 0; i < 150; i++) {
+      await h.wait(60);
+      if ((await h.eval(() => window.wyrm.realTime)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=sanctum&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => { const g = window.wyrm; g.hud.show(false); g.player.dtime = 100; });
+  await waitGame(0.5);
+  await h.shot('grade-normal');
+  await h.eval(() => { window.wyrm.player.dtime = 100; window.wyrm.input.simulate('dragonTime', true); });
+  await waitGame(0.25);
+  await h.shot('grade-dtime-ripple');
+  await waitGame(0.8);
+  const r = await h.eval(() => ({ on: window.wyrm.player.dragonTimeActive, grading: window.wyrm.renderer.grading, dt: window.wyrm.renderer.look.dt }));
+  h.check('Dragon Time eases the grade in', r.on && r.grading && r.dt > 0.8, JSON.stringify(r));
+  await h.shot('grade-dtime');
+  await h.eval(() => window.wyrm.input.simulate('dragonTime', false));
+}

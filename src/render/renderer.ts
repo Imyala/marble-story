@@ -3,6 +3,8 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { GradeShader, chroma } from './grade';
 import { Sky, type SkyDef } from './sky';
 import { WATER_LIGHT } from './water';
 import { Backdrop } from './backdrop';
@@ -20,6 +22,9 @@ export class Renderer {
   readonly canvas: HTMLCanvasElement;
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
+  private grade: ShaderPass | null = null;
+  /** Wanted grade state; eased every frame. */
+  readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null };
   quality: Quality = 'high';
   private sunOffset = new THREE.Vector3(30, 50, 20);
 
@@ -75,16 +80,22 @@ export class Renderer {
     }
     if (q === 'high') {
       if (!this.composer) {
-        this.composer = new EffectComposer(this.gl);
+        // Multisampled, so the post chain keeps its antialiasing.
+        const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+        this.composer = new EffectComposer(this.gl, rt);
         this.composer.addPass(new RenderPass(this.scene, this.camera));
         this.bloom = new UnrealBloomPass(new THREE.Vector2(512, 512), 0.55, 0.5, 0.82);
         this.composer.addPass(this.bloom);
         this.composer.addPass(new OutputPass());
+        this.grade = new ShaderPass(GradeShader);
+        this.composer.addPass(this.grade);
+        if (this.look.sky) this.applyGrade(this.look.sky);
       }
     } else if (this.composer) {
       this.composer.dispose();
       this.composer = null;
       this.bloom = null;
+      this.grade = null;
     }
     this.resize();
   }
@@ -105,8 +116,22 @@ export class Renderer {
     return this.gl.domElement.height;
   }
 
+  /** True when the post chain draws Dragon Time itself (no CSS filter needed). */
+  get grading(): boolean {
+    return !!this.grade;
+  }
+
+  private applyGrade(def: SkyDef): void {
+    if (!this.grade) return;
+    const u = this.grade.uniforms;
+    (u.uShadow!.value as THREE.Vector3).copy(chroma(def.top));
+    (u.uHigh!.value as THREE.Vector3).copy(chroma(def.sunColor));
+  }
+
   applySky(def: SkyDef): void {
     this.sky.apply(def);
+    this.look.sky = def;
+    this.applyGrade(def);
     const fogColor = new THREE.Color(def.fog ?? def.horizon);
     this.scene.fog = new THREE.Fog(fogColor, def.fogNear, def.fogFar);
     this.scene.background = fogColor;
@@ -131,7 +156,20 @@ export class Renderer {
     this.sun.position.set(x + this.sunOffset.x, center.y + this.sunOffset.y, z + this.sunOffset.z);
   }
 
-  render(time: number): void {
+  render(time: number, dt = 1 / 60): void {
+    if (this.grade) {
+      const L = this.look;
+      const was = L.dt;
+      L.dt += ((L.dragon ? 1 : 0) - L.dt) * (1 - Math.exp(-(L.dragon ? 7 : 4) * dt));
+      if (L.dragon && was < 0.05) L.pulse = 0;
+      L.pulse = Math.min(1, L.pulse + dt * 1.8);
+      const u = this.grade.uniforms;
+      u.uDT!.value = L.dt;
+      u.uPulse!.value = L.pulse;
+      u.uFury!.value += (L.fury - u.uFury!.value) * (1 - Math.exp(-5 * dt));
+      u.uTime!.value = time;
+      u.uAspect!.value = this.camera.aspect;
+    }
     this.sky.update(this.camera.position, time);
     this.backdrop.update(this.camera.position);
     if (this.composer) this.composer.render();

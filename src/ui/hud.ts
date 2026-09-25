@@ -450,7 +450,9 @@ export class Hud {
   }
 
   dragonTime(on: boolean): void {
-    this.game.renderer.canvas.classList.toggle('dtime', on);
+    const r = this.game.renderer;
+    r.look.dragon = on;
+    r.canvas.classList.toggle('dtime', on && !r.grading);
   }
 
   /**

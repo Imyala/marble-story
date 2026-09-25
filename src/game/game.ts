@@ -395,7 +395,8 @@ export class Game {
     if (this.level) this.blobs.update(this);
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
-    this.renderer.render(this.realTime);
+    this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;
+    this.renderer.render(this.realTime, dt);
   }
 
   private titleCamera(dt: number): void {

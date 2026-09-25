@@ -55,12 +55,12 @@ export const TRIALS: TrialDef[] = [
     waves: [ring(4, 'grunt'), [...ring(3, 'grunt'), ...ring(2, 'slinger', R * 0.8, 1)], ring(5, 'grunt', R * 0.7, 0.4), ring(5, 'shieldbearer')],
   },
   {
-    id: 'guardian', name: 'Trial of the Wardens', desc: 'Survive the Sanctum\'s hardest drill: totems, brutes and a Shade Knight.', needs: ['fire', 'lightning', 'ice'], time: 150, goal: 'clear', reward: 300, repeat: 30,
-    waves: [[{ type: 'totem', x: 0, z: 0 }, ...ring(3, 'grunt')], [{ type: 'brute', x: 3, z: 3 }, { type: 'brute', x: -3, z: -3 }, ...ring(2, 'slinger', R * 0.8)], [{ type: 'knight', x: 0, z: R * 0.5 }, ...ring(2, 'shieldbearer', R * 0.7, 1)]],
+    id: 'guardian', name: 'Trial of the Wardens', desc: 'Survive the Sanctum\'s hardest drill: totems, brutes, a Shade Knight and a pair of Shade Drakes.', needs: ['fire', 'lightning', 'ice'], time: 150, goal: 'clear', reward: 300, repeat: 30,
+    waves: [[{ type: 'totem', x: 0, z: 0 }, ...ring(3, 'grunt')], [{ type: 'brute', x: 3, z: 3 }, { type: 'brute', x: -3, z: -3 }, ...ring(2, 'slinger', R * 0.8)], [{ type: 'knight', x: 0, z: R * 0.5 }, ...ring(2, 'shieldbearer', R * 0.7, 1)], [{ type: 'drake', x: R * 0.5, z: 0 }, { type: 'drake', x: -R * 0.5, z: 0, delay: 1.2 }]],
   },
   {
     id: 'legend', name: 'Trial of Legends', desc: 'Every element, every foe, and the Legendary style rank. For the truly fearless.', needs: ['fire', 'lightning', 'ice', 'earth'], time: 180, goal: 'style', target: 5, reward: 500, repeat: 40,
-    waves: [[...ring(4, 'grunt'), { type: 'totem', x: 0, z: 0 }], [...ring(2, 'crawler'), ...ring(2, 'wisp', R * 0.6, 1)], [{ type: 'frostGolem', x: 3, z: 0 }, { type: 'stoneGolem', x: -3, z: 0 }], [{ type: 'knight', x: 2, z: 2 }, { type: 'knight', x: -2, z: -2 }, ...ring(3, 'grunt')]],
+    waves: [[...ring(4, 'grunt'), { type: 'totem', x: 0, z: 0 }], [...ring(2, 'crawler'), ...ring(2, 'wisp', R * 0.6, 1)], [{ type: 'frostGolem', x: 3, z: 0 }, { type: 'stoneGolem', x: -3, z: 0 }], [{ type: 'knight', x: 2, z: 2 }, { type: 'knight', x: -2, z: -2 }, ...ring(3, 'grunt')], [...ring(3, 'drake', R * 0.7), { type: 'sapper', x: 0, z: 0, delay: 1 }]],
   },
 ];
 

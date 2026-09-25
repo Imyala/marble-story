@@ -12,7 +12,7 @@ export async function look(h) {
   const c = await census(h);
   console.log('census', JSON.stringify(c));
   h.check('four letters placed', c.letters.length === 4, JSON.stringify(c.letters));
-  h.check('five eggs placed', c.eggs.length === 5, JSON.stringify(c.eggs));
+  h.check('five eggs placed, plus the thief egg', c.eggs.length === 6, JSON.stringify(c.eggs));
   h.check('two chests', c.chests === 2);
   h.check('40-90 breakables', c.breakables >= 40 && c.breakables <= 90, `${c.breakables}`);
   // Ground where the new areas should be.

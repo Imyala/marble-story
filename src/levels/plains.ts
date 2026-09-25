@@ -222,6 +222,8 @@ export const plains: LevelDef = {
     b.enemy('grunt', 5, 50, Math.PI);
     b.story('shellback', -3, 46, 7, () => g.hud.flick('A Shellback! Horns and breath bounce off that shell. Flip it with a heavy hit: a Tail whip (E) or a Ground Pound!', 8));
     b.enemy('slinger', 20, 60, Math.PI);
+    // An egg thief skulks through the tall grass on the Meadow's west side.
+    b.eggThief('thief', -26, 58, 12);
     b.enemy('grunt', -14, 72, Math.PI);
     b.enemy('grunt', -8, 77, Math.PI);
     b.enemy('crawler', 16, 84, Math.PI);

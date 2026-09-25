@@ -23,6 +23,7 @@ export interface EnemyModel {
   root: THREE.Group;
   update(dt: number, pose: EnemyPose): void;
   setFlash(amount: number, color: number): void;
+  dropPack?(): void;
   /** Rim-lights the model's own skin. */
   rim?(color: number, strength: number): void;
   dispose?(): void;
@@ -68,6 +69,8 @@ export interface ImpOpts {
   weapon: 'club' | 'spear' | 'staff' | 'sword' | 'none';
   offhand: 'shield' | 'orb' | 'none';
   hood?: number;
+  /** Carries a powder keg on its back (Gloom Sappers). */
+  pack?: 'keg';
   armor?: number;
   cracks?: number;
   weaponGlow?: number;
@@ -82,6 +85,12 @@ export class ImpModel extends BaseModel {
   private p = { lean: 0.25, armR: 0, elbowR: 0, armL: 0, elbowL: 0, twist: 0, bodyY: 0, headPitch: 0, back: 0, sideRoll: 0 };
   private phase = 0;
   private o: ImpOpts;
+  private packGroup: THREE.Group | null = null;
+
+  /** The keg on its back is gone (thrown or blown up). */
+  dropPack(): void {
+    if (this.packGroup) this.packGroup.visible = false;
+  }
 
   constructor(o: ImpOpts) {
     super();
@@ -97,6 +106,23 @@ export class ImpModel extends BaseModel {
     const hipY = 0.5 + bulk * 0.15;
     this.body.position.y = hipY;
     this.body.add(this.torso);
+    if (o.pack === 'keg') {
+      const keg = new THREE.Group();
+      const wood = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.19, 0.5, 10), mat(0x6a2a20, { rough: 0.9 }));
+      keg.add(wood);
+      for (const y of [-0.14, 0.14]) {
+        const band = new THREE.Mesh(new THREE.CylinderGeometry(0.235, 0.235, 0.04, 10), mat(0x2a2a30, { rough: 0.5, metal: 0.5 }));
+        band.position.y = y;
+        keg.add(band);
+      }
+      const fuse = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 5), glow(0xffb030));
+      fuse.position.y = 0.3;
+      keg.add(fuse);
+      keg.position.set(0, 0.42, -0.34);
+      keg.rotation.x = 0.35;
+      this.torso.add(keg);
+      this.packGroup = keg;
+    }
 
     const tw = 0.34 + bulk * 0.2;
     const chest = ellipsoid(tw, 0.38 + bulk * 0.12, 0.3 + bulk * 0.12, skin, 14);

@@ -32,7 +32,11 @@ export interface AttackDef {
   hitArc?: number;
   /** Forward speed during the active phase. */
   lunge?: number;
-  projectile?: Omit<ProjectileSpec, 'x' | 'y' | 'z' | 'dx' | 'dy' | 'dz' | 'fromPlayer'> & { count?: number; spread?: number; aimLead?: number };
+  projectile?: Omit<ProjectileSpec, 'x' | 'y' | 'z' | 'dx' | 'dy' | 'dz' | 'fromPlayer'> & {
+    count?: number; spread?: number; aimLead?: number;
+    /** Lobbed on a ballistic arc landing on the target after this many seconds (marked on the ground). */
+    lob?: number;
+  };
   shockwave?: { radius: number; speed: number };
   type?: DamageType;
   /** Ground ring telegraph for big hits. */
@@ -42,6 +46,8 @@ export interface AttackDef {
 export interface EnemyDef {
   id: string;
   name: string;
+  /** Carries something that blows up (Gloom Sappers). */
+  volatile?: boolean;
   hp: number;
   radius: number;
   height: number;
@@ -199,11 +205,37 @@ export class Enemy implements Hittable {
 
   // --- hits ------------------------------------------------------------------
 
+  /** Sappers carry a powder keg: fire or a blast sets it off, taking its friends with it. */
+  private packLit = false;
+
+  /** Elites: tougher, hit harder, glow gold and drop more. */
+  elite = false;
+  eliteDmg = 1;
+  private auraT = 0;
+
+  makeElite(): void {
+    if (this.elite) return;
+    this.elite = true;
+    this.maxHp = this.hp = this.hp * 1.8;
+    this.eliteDmg = 1.3;
+    this.model.rim?.(0xffd070, 0.75);
+    this.model.root.scale.multiplyScalar(1.12);
+  }
+
   takeHit(hit: Hit): HitResult {
     if (!this.alive || this.state === 'spawn') return 'none';
     const g = this.game;
     if (!this.aggro) this.alertAllies();
     this.aggro = true;
+    if (this.def.volatile && !this.packLit && (hit.type === 'fire' || hit.move === 'keg' || hit.move === 'explosion')) {
+      this.packLit = true;
+      this.model.dropPack?.();
+      const b = this.body;
+      g.explode(b.x, b.y + 0.8, b.z, 3.4, 32, 'fire', true, {
+        buildup: 60, knockback: 10, launch: 6, stagger: 70, heavy: true, move: 'keg', color: 0xffa040, burnGround: true,
+      });
+      g.toast('Kaboom!', 'good');
+    }
 
     // Frontal guard.
     if (this.def.shield && this.guardBroken <= 0 && !this.status.stunned && this.state !== 'hitstun' &&
@@ -451,6 +483,15 @@ export class Enemy implements Hittable {
       }
     }
     this.statusVisuals(dt);
+    if (this.elite) {
+      this.auraT -= dt;
+      if (this.auraT <= 0) {
+        this.auraT = 0.18;
+        g.fx.emit(b.x, b.y + this.def.height * (0.3 + rng.next() * 0.7), b.z, {
+          count: 1, speed: 0.6, dir: [0, 1, 0], life: [0.5, 0.8], size: [0.1, 0.16], sizeEnd: 0, color: 0xffd070, bright: 2, jitter: this.def.radius,
+        });
+      }
+    }
 
     if (this.state === 'spawn') {
       if (this.spawnDelay > 0) {
@@ -816,6 +857,21 @@ export class Enemy implements Hittable {
       const tx = p.x + p.vx * lead;
       const tz = p.z + p.vz * lead;
       const ty = p.y + 0.8;
+      if (a.projectile.lob) {
+        // A ballistic arc onto where the dragon is heading, with a warning on the ground.
+        const T = a.projectile.lob;
+        const gy = g.col.groundAt(tx, tz, ty + 4, 0.1).y;
+        const ly = gy > -1e3 ? gy + 0.3 : ty - 0.5;
+        const grav = a.projectile.gravity ?? 0;
+        const vx = (tx - ox) / T;
+        const vz = (tz - oz) / T;
+        const vy = (ly - oy + 0.5 * grav * T * T) / T;
+        const sp = Math.hypot(vx, vy, vz);
+        g.spawnProjectile({ ...a.projectile, damage: a.projectile.damage * this.eliteDmg, speed: sp, x: ox, y: oy, z: oz, dx: vx / sp, dy: vy / sp, dz: vz / sp, fromPlayer: false });
+        const r = a.projectile.explode ?? 2;
+        g.fx.ring(tx, ly - 0.25, tz, r * 0.25, r, 0xff3020, T);
+        return;
+      }
       for (let i = 0; i < count; i++) {
         const off = count === 1 ? 0 : (i / (count - 1) - 0.5) * spread * 2;
         const yaw = yawOf(tx - ox, tz - oz) + off;
@@ -823,13 +879,14 @@ export class Enemy implements Hittable {
         const pitch = Math.atan2(ty - oy, horiz);
         g.spawnProjectile({
           ...a.projectile,
+          damage: a.projectile.damage * this.eliteDmg,
           x: ox, y: oy, z: oz,
           dx: Math.sin(yaw) * Math.cos(pitch), dy: Math.sin(pitch), dz: Math.cos(yaw) * Math.cos(pitch),
           fromPlayer: false,
         });
       }
     } else if (a.kind === 'slam' && a.shockwave) {
-      g.spawnShockwave(b.x, b.y, b.z, a.shockwave.radius, a.shockwave.speed, a.damage * g.difficultyInfo.enemyDamage, a.knockback, this);
+      g.spawnShockwave(b.x, b.y, b.z, a.shockwave.radius, a.shockwave.speed, a.damage * g.difficultyInfo.enemyDamage * this.eliteDmg, a.knockback, this);
       g.shake(0.35, 0.3);
       g.fx.dust(b.x, b.y, b.z, 14);
       g.sfx('pound', b.x, b.y, b.z);
@@ -856,7 +913,7 @@ export class Enemy implements Hittable {
     this.attackHit = true;
     const n = Math.hypot(dx, dz) || 1;
     p.takeHit(makeHit({
-      damage: a.damage * g.difficultyInfo.enemyDamage, type: a.type ?? 'physical', dirX: dx / n, dirZ: dz / n,
+      damage: a.damage * g.difficultyInfo.enemyDamage * this.eliteDmg, type: a.type ?? 'physical', dirX: dx / n, dirZ: dz / n,
       knockback: a.knockback, launch: a.launch ?? 0, source: 'enemy', move: a.id, fromPlayer: false, ox: b.x, oz: b.z,
     }), this);
   }

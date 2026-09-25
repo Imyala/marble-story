@@ -77,3 +77,61 @@ export default async function (h) {
   const wet = await h.eval(() => ({ y: window.__wet[0].y, water: window.wyrm.waterLevel }));
   h.check('lightning on a wet foe arcs to another in the water', after[1] < before[1] && before[0] - after[0] > 6, `${before} -> ${after} ${JSON.stringify(wet)}`);
 }
+
+/** The Gloom Sapper lobs kegs; fire on the keg it carries blows up its friends. Elites glow gold. */
+export async function sapper(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 150; i++) {
+      await h.wait(60);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=sanctum&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    g.player.place(0, 0.3, -8, 0);
+    g.player.invuln = true;
+    const s = g.spawnEnemy('sapper', 0, 0.3, 2, Math.PI, false);
+    s.aggro = true;
+    window.__sap = s;
+    window.__lobbed = 0;
+    const orig = g.spawnProjectile.bind(g);
+    g.spawnProjectile = (spec) => { if (!spec.fromPlayer && spec.explode) window.__lobbed++; return orig(spec); };
+  });
+  for (let i = 0; i < 40; i++) {
+    await waitGame(0.3);
+    if (await h.eval(() => window.__lobbed > 0)) break;
+  }
+  h.check('the sapper lobs a keg', await h.eval(() => window.__lobbed > 0));
+  await h.shot('feature-sapper-lob');
+  // Fire on the sapper sets off its keg and hurts a grunt standing beside it.
+  await h.eval(() => {
+    const g = window.wyrm;
+    const s = window.__sap;
+    const gr = g.spawnEnemy('grunt', s.x + 1.2, s.y, s.z, Math.PI, false);
+    gr.state = 'idle';
+    window.__gr = gr;
+  });
+  await waitGame(0.2);
+  const r = await h.eval(() => {
+    const s = window.__sap;
+    const gr = window.__gr;
+    const hp0 = gr.hp;
+    s.takeHit({ damage: 3, type: 'fire', dirX: 0, dirZ: 1, knockback: 0, launch: 0, stagger: 0, hitstop: 0, buildup: 5, heavy: false, spike: false, source: 'breath', move: 'fireBreath', fromPlayer: true, ox: 0, oz: -8 });
+    return { grunt: [hp0, gr.hp, gr.alive], sapper: s.alive };
+  });
+  h.check('fire detonates the sapper\'s keg and it hurts its allies', r.grunt[1] < r.grunt[0], JSON.stringify(r));
+  // An elite: tougher and gold.
+  const el = await h.eval(() => {
+    const g = window.wyrm;
+    const e = g.spawnEnemy('grunt', 4, 0.3, 0, Math.PI, false);
+    const hp = e.maxHp;
+    e.makeElite();
+    return { hp, eliteHp: e.maxHp, elite: e.elite };
+  });
+  h.check('an elite has more health', el.elite && el.eliteHp > el.hp * 1.5, JSON.stringify(el));
+  await waitGame(0.5);
+  await h.shot('feature-elite');
+}

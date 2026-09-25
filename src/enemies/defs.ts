@@ -39,6 +39,18 @@ export const ENEMIES: Record<string, EnemyDef> = {
     build: () => new ImpModel({ skin: 0x2e2448, belly: 0x4a3c68, eye: 0xff7040, scale: 0.95, bulk: 0, ears: 'short', weapon: 'staff', offhand: 'none', hood: 0x241a30, weaponGlow: 0xc070ff }),
     styleValue: 1.1,
   },
+  sapper: {
+    id: 'sapper', name: 'Gloom Sapper', hp: 40, radius: 0.5, height: 1.3, speed: 4.4, turnRate: 7, mass: 1, poise: 0,
+    resist: {}, statusResist: {}, aggroRange: 20, keepAway: 8, panics: true, volatile: true,
+    gems: { blue: 9, red: 1 },
+    attacks: [
+      { id: 'keg', pose: 'throw', range: 14, minRange: 4, windup: 0.95, active: 0.1, recover: 0.9, cooldown: 3.4, weight: 3, kind: 'projectile', damage: 14, knockback: 8,
+        projectile: { speed: 10, radius: 0.42, damage: 14, type: 'fire', color: 0x8a3a20, life: 4, gravity: 22, explode: 2.8, kind: 'boulder', lob: 1.05, aimLead: 0.5 } },
+      { id: 'club', pose: 'swing', range: 2.0, windup: 0.55, active: 0.2, recover: 0.6, cooldown: 1.4, weight: 1, kind: 'melee', damage: 8, knockback: 5, hitRange: 1.5, hitArc: 1.1, lunge: 4 },
+    ],
+    build: () => new ImpModel({ skin: 0x4a2a2a, belly: 0x6a4038, eye: 0xffa040, scale: 1, bulk: 0.25, ears: 'short', weapon: 'none', offhand: 'none', hood: 0x3a2018, pack: 'keg' }),
+    styleValue: 1.2,
+  },
   shieldbearer: {
     id: 'shieldbearer', name: 'Gloom Bulwark', hp: 60, radius: 0.6, height: 1.45, speed: 3.6, turnRate: 4.5, mass: 0.7, poise: 20,
     resist: {}, statusResist: {}, aggroRange: 16, shield: true,

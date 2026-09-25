@@ -610,6 +610,9 @@ export class Game {
       e.state = 'idle';
       e.model.root.visible = true;
     }
+    // Now and then a foe is an elite: gold-lit, tougher, and worth more.
+    const common = def.speed > 0 && def.id !== 'dummy' && def.id !== 'totem';
+    if (common && this.level && this.level.def.id !== 'fen' && rng.chance(arena ? 0.06 : 0.1)) e.makeElite();
     this.enemies.push(e);
     return e;
   }
@@ -678,10 +681,10 @@ export class Game {
 
   onEnemyKilled(e: Enemy, reaction: Reaction | null): void {
     this.save.stats.kills++;
-    const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1);
+    const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1) * (e.elite ? 2.5 : 1);
     const g = e.def.gems;
     this.spawnGems(e.x, e.y + e.height * 0.5, e.z, {
-      blue: Math.round(g.blue * mul), red: g.red ?? 0, green: g.green ?? 0, purple: g.purple ?? 0,
+      blue: Math.round(g.blue * mul), red: (g.red ?? 0) + (e.elite ? 1 : 0), green: g.green ?? 0, purple: (g.purple ?? 0) + (e.elite ? 1 : 0),
     }, true);
     this.style.bonus(15 * (e.def.styleValue ?? 1));
     this.player.gainFury(5);

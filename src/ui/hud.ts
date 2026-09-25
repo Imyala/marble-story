@@ -7,6 +7,7 @@ import type { Boss } from '../enemies/boss';
 import { Enemy } from '../enemies/enemy';
 import { SHARDS_PER_UPGRADE, eggsFound } from '../game/progress';
 import { forInput } from './keys';
+import { POWERS } from '../entities/powerups';
 
 const EL_COLORS: Record<Element, string> = { fire: '#ff7a2a', lightning: '#7ac8ff', ice: '#8fe4ff', earth: '#8bd05a' };
 const EL_KEYS: Record<Element, string> = { fire: '1', lightning: '2', ice: '3', earth: '4' };
@@ -39,6 +40,9 @@ export class Hud {
   private hpLag!: HTMLElement;
   private manaFill!: HTMLElement;
   private dtFill!: HTMLElement;
+  private powerBox!: HTMLElement;
+  private powerName!: HTMLElement;
+  private powerFill!: HTMLElement;
   private hpBar!: HTMLElement;
   private manaBar!: HTMLElement;
   private furyArc!: SVGCircleElement;
@@ -125,7 +129,13 @@ export class Hud {
     const dt = el('div', 'bar thin dt');
     this.dtFill = el('i', 'fill');
     dt.append(this.dtFill);
-    bars.append(this.hpBar, this.manaBar, dt);
+    this.powerBox = el('div', 'power-meter');
+    this.powerName = el('b');
+    const pb = el('div', 'bar thin');
+    this.powerFill = el('i', 'fill');
+    pb.append(this.powerFill);
+    this.powerBox.append(this.powerName, pb);
+    bars.append(this.hpBar, this.manaBar, dt, this.powerBox);
     tl.append(emblem, bars);
     r.appendChild(tl);
 
@@ -235,6 +245,16 @@ export class Hud {
     this.manaBar.style.width = `${200 + (p.maxMana - 100) * 0.8}px`;
     this.dtFill.style.width = `${(p.dtime / p.dtimeMax) * 100}%`;
     this.furyArc.setAttribute('stroke-dashoffset', String(220 - (p.fury / 100) * 220));
+    const pw = p.power ?? (p.superT > 0 ? 'supercharge' : null);
+    this.powerBox.classList.toggle('on', !!pw);
+    if (pw) {
+      const def = POWERS[pw];
+      const k = p.power ? p.powerT / def.secs : p.superT / 3;
+      if (this.powerName.textContent !== def.name) this.powerName.textContent = def.name;
+      this.powerBox.style.setProperty('--pc', def.css);
+      this.powerFill.style.width = `${Math.max(0, k) * 100}%`;
+      this.powerBox.classList.toggle('ending', !!p.power && p.powerT < 3);
+    }
     this.furyRing.classList.toggle('ready', p.fury >= 100);
     this.gemText.textContent = String(g.save.gems);
     const hs = g.save.heartShards % SHARDS_PER_UPGRADE;

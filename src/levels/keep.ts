@@ -826,6 +826,9 @@ function storehouse(b: Builder, flames: Flames): void {
   b.enemy('grunt', 41.8, -107.2, -Math.PI / 2);
   b.enemy('grunt', 38.6, -107.8, -Math.PI / 2);
   b.enemy('slinger', wx + 1.5, wz - 0.8, -Math.PI / 2, ry);
+  // What they guard: an Invincibility shrine, and the quartermaster's iron-bound chest.
+  b.powerShrine('landing', 'invincible', 43, -109, -Math.PI / 2, 16);
+  b.ironChest('landing', 40, -101, -Math.PI / 2, { blue: 35, red: 4, purple: 2 });
   // Stores round the yard.
   b.breakables('crate', [[41.2, -97.8], [41.2, -97.8], [42.4, -97], [49.8, -107.8], [49.8, -107.8]]);
   b.breakables('barrel', [[40.2, -99.4], [51, -103.2]]);

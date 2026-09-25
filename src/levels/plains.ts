@@ -214,6 +214,9 @@ export const plains: LevelDef = {
 
     // --- Stonewild Meadow -------------------------------------------------------------------
     b.checkpoint('meadow', 8, 34, 0);
+    // Speed runes across the meadow, to a farmer's iron-bound strongbox.
+    b.speedRunes(0, 60, 13.4, 46.6, 6);
+    b.ironChest('meadow', 17, 43, -Math.PI / 4, { blue: 30, red: 3, purple: 1 });
     b.gemLine([[0, 30], [3, 44], [8, 58]]);
     b.crystal(-6, 36, 'blue', 8);
     b.crystal(14, 38, 'green', 3);
@@ -1135,6 +1138,9 @@ function farmstead(b: Builder): void {
   b.enemy('grunt', 44, -13.2, -Math.PI / 2);
   b.enemy('grunt', 39.2, -11.8, Math.PI / 2);
   b.enemy('slinger', 36, -8.6, Math.PI / 2);
+  // Their prize: a Supercharge shrine, and an iron-bound strongbox to test it on.
+  b.powerShrine('yard', 'supercharge', 40, -11, -Math.PI / 2, 12);
+  b.ironChest('yard', 42, -8, -Math.PI / 2, { blue: 30, red: 4, purple: 1 });
 
   // Stores around the yard.
   b.breakables('crate', [[41.1, -18.9], [41.2, -17.6], [41.1, -18.9]]);

@@ -90,7 +90,8 @@ export class BreathController {
     if (!el) return;
     const g = this.game;
     const lvl = this.level(el);
-    const mul = lvl === 1 ? 1 : lvl === 2 ? 1.35 : 1.7;
+    const sf = this.player.power === 'superflame';
+    const mul = (lvl === 1 ? 1 : lvl === 2 ? 1.35 : 1.7) * (sf ? 2.5 : 1);
     this.tick -= dt;
     this.spawn -= dt;
     this.sfxT -= dt;
@@ -100,12 +101,12 @@ export class BreathController {
         this.computeAim(range);
         g.fx.emit(mouth.x, mouth.y, mouth.z, {
           count: 5, speed: range * 2.6, speedJitter: 0.25, dir: [aim.x, aim.y, aim.z], spread: 0.13, life: [0.28, 0.4],
-          size: [0.25, 0.4], sizeEnd: 5, color: 0xffe28a, colorEnd: 0xff3a08, bright: 2, drag: 1.2, gravity: -2,
+          size: [0.25, 0.4], sizeEnd: sf ? 6 : 5, color: sf ? 0xf0f8ff : 0xffe28a, colorEnd: sf ? 0x3a80ff : 0xff3a08, bright: sf ? 2.6 : 2, drag: 1.2, gravity: -2,
         });
         if (rng.chance(0.25)) g.fx.emit(mouth.x + aim.x * range * 0.7, mouth.y + aim.y * range * 0.7 + 0.5, mouth.z + aim.z * range * 0.7, {
           count: 1, speed: 1, dir: [0, 1, 0], life: [0.5, 0.9], size: [0.8, 1.2], sizeEnd: 2.5, color: 0x3a3030, alpha: 0.35, additive: false, gravity: -2,
         });
-        g.fx.flash(mouth.x + aim.x, mouth.y, mouth.z + aim.z, 0xff8a30, 3 + rng.next(), 9, 0.12);
+        g.fx.flash(mouth.x + aim.x, mouth.y, mouth.z + aim.z, sf ? 0x9ad8ff : 0xff8a30, 3 + rng.next(), 9, 0.12);
         if (this.tick <= 0) {
           this.tick = 0.1;
           this.coneHits(range, 0.42, { damage: 2.4 * mul, type: 'fire', buildup: 9, knockback: 0.8, stagger: 3, move: 'fireBreath' });

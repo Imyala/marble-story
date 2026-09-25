@@ -674,3 +674,84 @@ export async function critters(h) {
   h.check('a struck critter frees a butterfly that Flick eats to mend Aster', !r.alive && r.butterfly && after.hp > before.hp && after.bf === 1 && after.cr === 1, JSON.stringify({ r, before, after }));
   await h.shot('critters');
 }
+
+/** Speed runes supercharge a charge; iron-bound chests only open to power. Shrines wake when their guards fall. */
+export async function powerups(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 400; i++) {
+      await h.wait(50);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const iron = await h.eval(() => {
+    const g = window.wyrm;
+    const c = g.level.props.find((p) => p.constructor.name === 'Chest' && p.iron);
+    window.__ic = c;
+    return { found: !!c, res: c && c.takeHit({ source: 'melee', type: 'physical' }), alive: c && c.alive };
+  });
+  h.check('an iron-bound chest shrugs off an ordinary blow', iron.found && iron.res === 'blocked' && iron.alive, JSON.stringify(iron));
+  // Charge down the rune lane into it.
+  await h.eval(() => {
+    const g = window.wyrm; const p = g.player;
+    const yaw = Math.atan2(10.1 + 2.5, 6.1 + 6.5);
+    p.place(-4, g.col.groundAt(-4, -8, 1e4, 0.2).y + 0.05, -8, yaw);
+    g.cam.snapBehind(yaw, 0.3);
+    window.__maxSuper = 0;
+    const tick = () => { window.__maxSuper = Math.max(window.__maxSuper, p.superT); if (window.__ic.alive) requestAnimationFrame(tick); };
+    tick();
+  });
+  await h.page.keyboard.down('KeyW');
+  await waitGame(0.15);
+  await h.page.keyboard.down('ShiftLeft');
+  await waitGame(2.2);
+  await h.shot('runes-charge');
+  await h.page.keyboard.up('ShiftLeft');
+  await h.page.keyboard.up('KeyW');
+  const run = await h.eval(() => ({ maxSuper: window.__maxSuper, alive: window.__ic.alive, found: !!window.wyrm.save.found['fen:chest:runes'], p: [window.wyrm.player.x, window.wyrm.player.z] }));
+  h.check('charging over speed runes supercharges the dragon and smashes the iron chest', run.maxSuper > 1 && !run.alive && run.found, JSON.stringify(run));
+
+  // Plains: the Supercharge shrine sleeps while its guards stand.
+  await h.eval(() => window.wyrm.loadLevel('plains', {}));
+  await h.skipDialogue(4000);
+  await waitGame(0.3);
+  const s0 = await h.eval(() => {
+    const g = window.wyrm;
+    const s = g.level.props.find((p) => p.constructor.name === 'PowerShrine');
+    window.__s = s;
+    return { state: s.state, guards: s.guards.length };
+  });
+  await h.eval(() => {
+    const g = window.wyrm; const s = window.__s;
+    for (const e of s.guards) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    g.player.place(s.x - 8, s.y + 0.1, s.z, Math.PI / 2);
+  });
+  await waitGame(0.5);
+  const s1 = await h.eval(() => window.__s.state);
+  await h.eval(() => { const g = window.wyrm; const s = window.__s; g.cam.snapBehind(Math.PI / 2, 0.25); g.player.place(s.x, s.y + 0.1, s.z, Math.PI / 2); });
+  await waitGame(0.4);
+  await h.shot('shrine-power');
+  const s2 = await h.eval(() => { const p = window.wyrm.player; return { state: window.__s.state, power: p.power, t: p.powerT, sup: p.supercharged, hud: document.querySelector('.power-meter')?.className }; });
+  h.check('a shrine sleeps while its guards stand, then wakes', s0.state === 'locked' && s0.guards >= 3 && s1 === 'ready', JSON.stringify({ s0, s1 }));
+  h.check('walking through a woken shrine grants its power', s2.state === 'spent' && s2.power === 'supercharge' && s2.sup && /on/.test(s2.hud ?? ''), JSON.stringify(s2));
+  // Invincibility shrugs off a blow.
+  const inv = await h.eval(() => {
+    const g = window.wyrm; const p = g.player;
+    p.grantPower('invincible');
+    const hp = p.hp;
+    const r = p.takeHit({ damage: 30, dirX: 1, dirZ: 0, knockback: 5, launch: 0, source: 'enemy', type: 'physical' }, null);
+    return { r, hp0: hp, hp1: p.hp };
+  });
+  h.check('invincibility takes no damage', inv.r !== 'hit' && inv.hp1 === inv.hp0, JSON.stringify(inv));
+  const sf = await h.eval(() => {
+    const p = window.wyrm.player;
+    p.clearPower();
+    const before = p.canBreakIron({ source: 'breath', type: 'fire' });
+    p.grantPower('superflame');
+    return { before, after: p.canBreakIron({ source: 'breath', type: 'fire' }), melee: p.canBreakIron({ source: 'melee', type: 'physical' }) };
+  });
+  h.check('Superflame breath melts iron; plain blows still do not', !sf.before && sf.after && !sf.melee, JSON.stringify(sf));
+}

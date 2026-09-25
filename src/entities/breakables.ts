@@ -359,7 +359,11 @@ export class BreakableSet implements Prop {
 
 // --- treasure chests ------------------------------------------------------------------
 
-/** A chest that opens with any blow, once per save, and spills a generous hoard. */
+/**
+ * A chest that opens with any blow, once per save, and spills a generous
+ * hoard. An iron-bound one shrugs off everything but a powered-up dragon:
+ * a supercharged ram, a Superflame, or Invincibility.
+ */
 export class Chest implements Prop, Hittable {
   readonly isEnemy = false;
   alive = true;
@@ -368,12 +372,15 @@ export class Chest implements Prop, Hittable {
   private lid = new THREE.Group();
   private openT = -1;
   private solid: Solid;
+  private clangT = 0;
+  private hintT = 0;
+  private rune: THREE.MeshBasicMaterial | null = null;
 
   constructor(private game: Game, readonly id: string, readonly x: number, readonly y: number, readonly z: number, yaw: number,
-    private loot: Partial<Record<GemKind, number>>) {
+    private loot: Partial<Record<GemKind, number>>, readonly iron = false) {
     const root = new THREE.Group();
-    const wood = mat(0x7a4a2a, { rough: 0.8, flat: true });
-    const gold = mat(0xe0b050, { rough: 0.3, metal: 0.8, flat: true });
+    const wood = iron ? mat(0x9aa0b0, { rough: 0.45, metal: 0.35, flat: true }) : mat(0x7a4a2a, { rough: 0.8, flat: true });
+    const gold = iron ? mat(0x4a4e5a, { rough: 0.4, metal: 0.5, flat: true }) : mat(0xe0b050, { rough: 0.3, metal: 0.8, flat: true });
     const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.7, 0.85), wood);
     box.position.y = 0.35;
     box.castShadow = true;
@@ -390,6 +397,19 @@ export class Chest implements Prop, Hittable {
     const lock = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.26, 0.08), gold);
     lock.position.set(0, -0.02, 0.44);
     this.lid.add(lock);
+    if (iron) {
+      // Riveted straps, and a rune on the lock that glows the colours of the powers that open it.
+      lock.scale.set(1.6, 1.4, 1.4);
+      for (const sz of [-0.3, 0.3]) {
+        const strap = new THREE.Mesh(new THREE.BoxGeometry(1.36, 0.1, 0.1), gold);
+        strap.position.set(0, 0.12, sz);
+        root.add(strap);
+      }
+      this.rune = new THREE.MeshBasicMaterial({ color: 0xffa040 });
+      const r = new THREE.Mesh(new THREE.OctahedronGeometry(0.13), this.rune);
+      r.position.set(0, -0.02, 0.5);
+      this.lid.add(r);
+    }
     // The lid hinges along the back edge.
     this.lid.position.set(0, 0.7, -0.42);
     top.position.z = 0.42;
@@ -407,10 +427,27 @@ export class Chest implements Prop, Hittable {
     }
   }
 
-  takeHit(): HitResult {
+  takeHit(hit?: Hit): HitResult {
     if (!this.alive) return 'none';
     const g = this.game;
+    if (this.iron && !g.player.canBreakIron(hit)) {
+      if (this.clangT <= 0) {
+        this.clangT = 0.25;
+        g.sfx('shieldBlock', this.x, this.y, this.z, 0.8, 0.8);
+        g.fx.sparkle(this.x, this.y + 0.8, this.z, 0xffd080, 6);
+      }
+      if (this.hintT <= 0) {
+        this.hintT = 20;
+        g.hud.flick('That chest is bound in iron. We\'d need a power-up to crack it: a Supercharge from the speed runes, or a shrine\'s power!', 6);
+      }
+      return 'blocked';
+    }
     this.alive = false;
+    if (this.iron) {
+      g.shake(0.3, 0.25);
+      g.sfx('explosion', this.x, this.y, this.z, 1.4, 0.7);
+      g.fx.rocks(this.x, this.y + 0.6, this.z, 10);
+    }
     this.openT = 0;
     g.save.found[this.id] = true;
     bump(g.save, 'chests');
@@ -423,6 +460,17 @@ export class Chest implements Prop, Hittable {
   }
 
   update(dt: number): void {
+    this.clangT -= dt;
+    this.hintT -= dt;
+    if (this.rune && this.alive) {
+      const g = this.game;
+      const k = Math.floor(g.time * 1.5) % 3;
+      const c = k === 0 ? 0xffa040 : k === 1 ? 0x9ad8ff : 0xffe070;
+      this.rune.color.setHex(c);
+      // A glint now and then, so it catches the eye from across the way.
+      const p = g.player;
+      if (Math.floor(g.time * 2) !== Math.floor((g.time - dt) * 2) && (p.x - this.x) ** 2 + (p.z - this.z) ** 2 < 45 * 45) g.fx.sparkle(this.x, this.y + 1.1, this.z, c, 2);
+    }
     if (this.openT < 0 || this.openT >= 1) return;
     this.openT = Math.min(1, this.openT + dt * 2.2);
     const e = 1 - Math.pow(1 - this.openT, 3);

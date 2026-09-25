@@ -8,6 +8,7 @@ import type { Game } from '../game/game';
 import { ELEMENTS, makeHit, type Element, type Hit, type HitResult, type Hittable } from '../game/types';
 import { angleDiff, approachAngle, clamp, dampAngle, yawOf } from '../core/math';
 import { maxHp, maxMana, upgradeLevel } from '../game/progress';
+import { POWERS, type PowerKind } from '../entities/powerups';
 import type { Enemy } from '../enemies/enemy';
 import { Collectible, type ClimbWall } from '../entities/props';
 
@@ -70,6 +71,12 @@ export class Player {
   hidden = false;
   invuln = false;
   iframes = 0;
+  /** The power-up running (from a shrine), and how long it has left. */
+  power: PowerKind | null = null;
+  powerT = 0;
+  /** Supercharge built up on speed runes: topped up while charging over them. */
+  superT = 0;
+  private touchT = 0;
   private jumps = 0;
   private jumpCut = true;
   private coyote = 0;
@@ -163,6 +170,40 @@ export class Player {
   get magnetRadius(): number {
     return 3.5 + upgradeLevel(this.game.save, 'magnet') * 3;
   }
+  /** Charging faster than the wind: from a shrine, or speed runes. */
+  get supercharged(): boolean {
+    return this.power === 'supercharge' || this.superT > 0;
+  }
+
+  grantPower(kind: PowerKind): void {
+    const g = this.game;
+    const had = this.power === kind;
+    this.power = kind;
+    this.powerT = POWERS[kind].secs;
+    g.sfx('fury', this.x, this.y, this.z, 1.3, 0.8);
+    g.hud.bigText(POWERS[kind].name.toUpperCase(), POWERS[kind].color);
+    if (!had) g.hud.flick(POWERS[kind].line, 4);
+  }
+
+  /** A speed rune under a charging dragon: more speed, for a little while. */
+  boostCharge(): void {
+    this.superT = Math.min(3, Math.max(this.superT, 1.4) + 0.08);
+  }
+
+  clearPower(): void {
+    this.power = null;
+    this.powerT = 0;
+    this.superT = 0;
+  }
+
+  /** Iron gives way only to a powered-up dragon. */
+  canBreakIron(hit: Hit | undefined): boolean {
+    if (this.power === 'invincible') return true;
+    if (!hit) return false;
+    if (hit.source === 'charge' && this.supercharged) return true;
+    return this.power === 'superflame' && (hit.type === 'fire' || hit.source === 'breath' || hit.source === 'burst');
+  }
+
   get meleeMult(): number {
     return 1 + 0.15 * upgradeLevel(this.game.save, 'hornPower');
   }
@@ -211,6 +252,7 @@ export class Player {
     this.target = null;
     this.iframes = 0;
     this.gliding = false;
+    this.clearPower();
     this.breath.stop();
     this.rig.setFlash(0);
     this.rig.setOpacity(1);
@@ -254,6 +296,7 @@ export class Player {
     const b = this.body;
     this.stateT += dt;
     this.iframes = Math.max(0, this.iframes - dt);
+    this.updatePower(dt);
     this.counterWindow = Math.max(0, this.counterWindow - dt);
     this.hurtT = Math.max(0, this.hurtT - dt);
     this.flashT = Math.max(0, this.flashT - dt);
@@ -1054,12 +1097,17 @@ export class Player {
     const m = this.wish(this.w);
     if (m > 0.1) this.yaw = approachAngle(this.yaw, yawOf(this.w.x, this.w.z), 3.4 * dt);
     const k = 1 - Math.exp(-8 * dt);
-    b.vx += (Math.sin(this.yaw) * CHARGE - b.vx) * k;
-    b.vz += (Math.cos(this.yaw) * CHARGE - b.vz) * k;
+    const sup = this.supercharged;
+    const speed = CHARGE * (sup ? 1.55 : 1);
+    b.vx += (Math.sin(this.yaw) * speed - b.vx) * k;
+    b.vz += (Math.cos(this.yaw) * speed - b.vz) * k;
     this.gravity(dt, 1);
     if (this.stateT % 0.08 < dt) g.fx.dust(b.x - Math.sin(this.yaw) * 0.6, b.y, b.z - Math.cos(this.yaw) * 0.6, 2);
+    if (sup) g.fx.emit(b.x - Math.sin(this.yaw) * 0.8, b.y + 0.6, b.z - Math.cos(this.yaw) * 0.8, {
+      count: 2, speed: 1.5, life: [0.25, 0.45], size: [0.35, 0.55], sizeEnd: 0, color: 0xffd070, colorEnd: 0xff5010, bright: 2.2, gravity: -1,
+    });
     // Ram anything in front.
-    const dmgMul = this.hasUpgrade('ramBreaker') ? 2 : 1;
+    const dmgMul = (this.hasUpgrade('ramBreaker') ? 2 : 1) * (sup ? 3 : 1);
     for (const h of g.hittables()) {
       if (!h.alive || this.ramCooldown.has(h)) continue;
       const dx = h.x - b.x;
@@ -1070,12 +1118,12 @@ export class Player {
       if (h.y > b.y + 1.8 || h.y + h.height < b.y) continue;
       this.ramCooldown.set(h, 0.6);
       const r = h.takeHit(makeHit({
-        damage: 8 * dmgMul * this.meleeMult, dirX: dx / (d || 1), dirZ: dz / (d || 1), knockback: 12, launch: 3, stagger: 40,
+        damage: 8 * dmgMul * this.meleeMult, dirX: dx / (d || 1), dirZ: dz / (d || 1), knockback: sup ? 18 : 12, launch: sup ? 6 : 3, stagger: sup ? 100 : 40,
         hitstop: 0.06, heavy: dmgMul > 1, source: 'charge', move: 'charge', ox: b.x, oz: b.z,
       }));
       this.onDealt(r, h, 8 * dmgMul, 'charge', 12);
     }
-    if (b.hitWall && Math.hypot(b.vx, b.vz) < CHARGE * 0.5 && this.stateT > 0.2) {
+    if (b.hitWall && Math.hypot(b.vx, b.vz) < speed * 0.5 && this.stateT > 0.2) {
       g.shake(0.25, 0.2);
       g.sfx('hitHeavy', b.x, b.y, b.z, 0.7, 0.6);
       b.vx = -Math.sin(this.yaw) * 4;
@@ -1657,11 +1705,52 @@ export class Player {
     return best;
   }
 
+  // --- power-ups ---------------------------------------------------------------------------
+
+  private updatePower(dt: number): void {
+    const g = this.game;
+    if (this.superT > 0 && this.state !== 'charge') this.superT = Math.max(0, this.superT - dt * 3);
+    else this.superT = Math.max(0, this.superT - dt);
+    if (!this.power) return;
+    this.powerT -= dt;
+    if (this.powerT <= 0) {
+      g.sfx('dragonTimeOff', this.x, this.y, this.z, 1.2, 0.6);
+      g.hud.toast(`${POWERS[this.power].name} fades.`, 'info');
+      this.power = null;
+      this.powerT = 0;
+      return;
+    }
+    if (this.power === 'invincible' && this.alive) {
+      // Anything the dragon touches gets hurt.
+      this.touchT -= dt;
+      if (this.touchT > 0) return;
+      this.touchT = 0.2;
+      const b = this.body;
+      for (const e of g.enemies) {
+        if (!e.alive) continue;
+        const dx = e.x - b.x;
+        const dz = e.z - b.z;
+        const d = Math.hypot(dx, dz);
+        if (d > e.radius + 1.3 || e.y > b.y + 2 || e.y + e.height < b.y - 0.5) continue;
+        const r = e.takeHit(makeHit({
+          damage: 14, type: 'physical', dirX: dx / (d || 1), dirZ: dz / (d || 1), knockback: 9, launch: 3, stagger: 60, heavy: true,
+          hitstop: 0.04, source: 'charge', move: 'starTouch', ox: b.x, oz: b.z,
+        }));
+        this.onDealt(r, e, 14, 'starTouch', 9);
+        g.fx.sparkle(e.x, e.y + e.height * 0.5, e.z, 0xffe070, 8);
+      }
+    }
+  }
+
   // --- damage -----------------------------------------------------------------------------
 
   takeHit(hit: Hit, _attacker: Enemy | null): HitResult {
     const g = this.game;
     if (!this.alive || this.invuln || this.state === 'fury' || this.state === 'fall' || this.state === 'locked') return 'none';
+    if (this.power === 'invincible') {
+      g.fx.sparkle(this.x, this.y + 0.8, this.z, 0xffe070, 6);
+      return 'dodged';
+    }
     if (this.iframes > 0) {
       if (this.state === 'dodge') this.onEvaded();
       return 'dodged';
@@ -1702,6 +1791,7 @@ export class Player {
   private die(): void {
     const g = this.game;
     this.alive = false;
+    this.clearPower();
     this.setState('dead');
     g.sfx('death');
     g.onPlayerDied();
@@ -1875,7 +1965,12 @@ export class Player {
     if (this.flashT > 0) this.rig.setFlash(this.flashT * 4, 0xff3030);
     else if (this.counterWindow > 0) this.rig.setFlash(0.35 + Math.sin(this.game.time * 30) * 0.2, 0xb080ff);
     else if (this.state === 'fury') this.rig.setFlash(0.5, this.element === 'fire' ? 0xff6020 : this.element === 'ice' ? 0x60d0ff : this.element === 'earth' ? 0x80d050 : 0xa0e0ff);
-    else this.rig.setFlash(0);
+    else if (this.power || this.superT > 0) {
+      // A power-up shimmers, and flickers as it runs out.
+      const kind = this.power ?? 'supercharge';
+      const ending = this.power && this.powerT < 3 ? (Math.sin(this.game.time * 24) > 0 ? 1 : 0.2) : 1;
+      this.rig.setFlash((0.28 + Math.sin(this.game.time * 9) * 0.1) * ending, POWERS[kind].color);
+    } else this.rig.setFlash(0);
     this.rig.setOpacity(this.iframes > 0 && this.state !== 'dodge' && Math.sin(this.game.time * 40) > 0.3 ? 0.5 : 1);
 
     // Blob shadow on whatever is below, plus a landing marker when high up.

@@ -42,6 +42,13 @@
 .bar.mana > i.fill { background: linear-gradient(180deg, #9af0b0, var(--mana) 55%, #1a8a44); }
 .bar.dt > i.fill { background: linear-gradient(180deg, #fff0a8, var(--dtime)); }
 .bar.flash { animation: barFlash 0.5s; }
+.power-meter { display: flex; align-items: center; gap: 8px; height: 0; opacity: 0; overflow: hidden; transition: opacity .25s, height .25s; }
+.power-meter.on { height: 16px; opacity: 1; }
+.power-meter b { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--pc, #ffa040); text-shadow: 0 0 8px var(--pc, #ffa040); min-width: 92px; }
+.power-meter .bar { width: 140px; }
+.power-meter .bar > i.fill { background: var(--pc, #ffa040); box-shadow: 0 0 10px var(--pc, #ffa040); transition: width .1s linear; }
+.power-meter.ending { animation: powerBlink .3s steps(2) infinite; }
+@keyframes powerBlink { 50% { opacity: .35; } }
 @keyframes barFlash { 0%, 100% { box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); } 30% { box-shadow: inset 0 0 0 2px #fff, 0 0 12px #fff; } }
 .bar .seg { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(0,0,0,.35); }
 

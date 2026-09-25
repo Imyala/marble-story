@@ -17,6 +17,7 @@ import type { GemKind } from '../entities/gems';
 import { Breakable, BreakableSet, Chest, type BreakKind } from '../entities/breakables';
 import { WaterIce } from '../entities/waterice';
 import { Critter, REALM_CRITTERS } from '../entities/critters';
+import { PowerShrine, SpeedLane, type PowerKind } from '../entities/powerups';
 import {
   BoltTurret, Boulder, Conduit, Drawbridge, ElementLock, IceFloes, PuzzleHint, ReflectSwitch, Rope, SnapGate, SpinBlade, WeightPlate,
 } from '../entities/puzzles';
@@ -787,6 +788,35 @@ export class Builder {
     const c = this.addProp(new Chest(this.game, `${this.level.def.id}:chest:${id}`, x, y ?? this.y(x, z), z, yaw, loot));
     this.level.hittables.push(c);
     return c;
+  }
+
+  /** An iron-bound chest: only a supercharged ram, a Superflame or Invincibility opens it. */
+  ironChest(id: string, x: number, z: number, yaw: number, loot: Partial<Record<GemKind, number>>, y?: number): Chest {
+    const c = this.addProp(new Chest(this.game, `${this.level.def.id}:chest:${id}`, x, y ?? this.y(x, z), z, yaw, loot, true));
+    this.level.hittables.push(c);
+    return c;
+  }
+
+  /**
+   * A power-up shrine, facing `yaw` (walk through along it). It sleeps until
+   * every foe posted within `guardR` of it has fallen.
+   */
+  powerShrine(id: string, kind: PowerKind, x: number, z: number, yaw = 0, guardR = 18): PowerShrine {
+    const y = this.y(x, z);
+    for (const s of [-1, 1]) this.col.add(makeCyl(x + Math.cos(yaw) * 1.55 * s, z - Math.sin(yaw) * 1.55 * s, 0.32, y, y + 3.6));
+    return this.addProp(new PowerShrine(this.game, `${this.level.def.id}:shrine:${id}`, kind, x, y, z, yaw, guardR));
+  }
+
+  /** A lane of `n` speed runes from (x0, z0) to (x1, z1): charge along it to supercharge. */
+  speedRunes(x0: number, z0: number, x1: number, z1: number, n = 6): SpeedLane {
+    const yaw = Math.atan2(x1 - x0, z1 - z0);
+    const pts = Array.from({ length: n }, (_, i) => {
+      const t = n === 1 ? 0 : i / (n - 1);
+      const x = x0 + (x1 - x0) * t;
+      const z = z0 + (z1 - z0) * t;
+      return { x, y: this.y(x, z), z };
+    });
+    return this.addProp(new SpeedLane(this.game, pts, yaw));
   }
 
   /**

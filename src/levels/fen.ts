@@ -130,6 +130,10 @@ export const fen: LevelDef = {
     b.breakables('urn', [[6.5, -3], [7.6, -1.6], [5.4, -1.2]]);
     b.chest('hollow', -2.5, -13, 0.3, { blue: 18, red: 2 });
     b.egg('hollow', 14.5, -8.5);
+    // Speed runes across the hollow, and the iron-bound chest only a supercharged ram can crack.
+    b.speedRunes(-2.5, -6.5, 10.1, 6.1, 6);
+    b.ironChest('runes', 13, 9, -Math.PI * 0.75, { blue: 30, red: 3, purple: 1 });
+    b.story('runes', -2.5, -6.5, 3, () => g.hud.flick('See the glowing runes? Charge along them (Hold Shift) and don\'t stop: that iron chest won\'t know what hit it!', 6));
 
     b.story('intro-move', 0, 6, 5, () => g.hud.flick('WASD to move, mouse to look. Race you to the old willow! Loser eats a beetle.', 6));
     b.story('crystals', 0, -6, 4, () => g.hud.flick('Smash crystals with your horns (Left Mouse) for gems!', 5));

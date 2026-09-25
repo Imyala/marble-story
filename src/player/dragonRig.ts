@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mat, matUnique, glow } from '../render/materials';
 import { ellipsoid, taperedTube, spike, membrane, limb, mergeStatic } from '../render/shapes';
+import { addRim } from '../render/materials';
 import { clamp01, damp, dampAngle, smoothstep, lerp } from '../core/math';
 
 /**
@@ -125,6 +126,7 @@ export class DragonRig {
     this.root.add(this.model);
     this.model.scale.setScalar(look.scale);
     mergeStatic(this.model);
+    for (const m of this.flashMats) addRim(m, 0xfff0e0, 0.3);
   }
 
   private bodyMat(color: number): THREE.MeshStandardMaterial {

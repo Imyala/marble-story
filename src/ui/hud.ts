@@ -80,6 +80,8 @@ export class Hud {
   constructor(private game: Game, parent: HTMLElement) {
     this.overlay = el('div', 'ui-layer');
     this.root = el('div', 'ui-layer');
+    // A soft vignette frames the scene and pulls the eye to the middle.
+    parent.appendChild(el('div', 'vignette'));
     parent.appendChild(this.overlay);
     parent.appendChild(this.root);
     this.build();

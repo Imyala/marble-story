@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WIND } from '../render/materials';
 import { Renderer } from '../render/renderer';
 import { Input } from '../core/input';
 import { audio, THEMES, type Audio, type Sfx } from '../core/audio';
@@ -341,6 +342,7 @@ export class Game {
     // The first animation frame's stamp can precede the startup clock: never step backwards.
     const dt = Math.max(0, Math.min(rawDt, this.maxDt));
     this.realTime += dt;
+    WIND.value += dt;
     this.input.update(dt);
 
     switch (this.state) {

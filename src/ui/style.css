@@ -248,3 +248,6 @@
 .skin-card .sw { display: flex; justify-content: center; gap: 4px; margin-bottom: 6px; }
 .skin-card .sw span { width: 18px; height: 18px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .4); }
 .skin-card small { display: block; color: var(--muted); margin-top: 2px; }
+
+.vignette { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(ellipse 75% 70% at 50% 48%, rgba(0, 0, 0, 0) 58%, rgba(10, 6, 20, .32) 100%); }

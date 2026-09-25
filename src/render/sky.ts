@@ -16,6 +16,8 @@ export interface SkyDef {
   moons?: boolean;
   /** Fog color if it should differ from the horizon. */
   fog?: number;
+  /** Cloud cover, 0 (clear) to 1 (heavy). Defaults to a light scatter. */
+  clouds?: number;
 }
 
 const vert = /* glsl */ `
@@ -35,7 +37,20 @@ uniform vec3 uSunColor;
 uniform float uStars;
 uniform float uMoons;
 uniform float uTime;
+uniform float uClouds;
 varying vec3 vDir;
+
+float hash2(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+float vnoise(vec2 p) {
+  vec2 i = floor(p); vec2 f = fract(p);
+  vec2 u = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), u.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), u.x), u.y);
+}
+float fbm(vec2 p) {
+  float v = 0.0; float a = 0.5;
+  for (int i = 0; i < 4; i++) { v += a * vnoise(p); p = p * 2.03 + 11.7; a *= 0.5; }
+  return v;
+}
 
 float hash(vec3 p) {
   p = fract(p * 0.3183099 + 0.1);
@@ -56,6 +71,16 @@ void main() {
     float s = hash(cell);
     float tw = 0.6 + 0.4 * sin(uTime * 2.0 + s * 40.0);
     col += vec3(step(0.9965, s) * uStars * tw * smoothstep(0.0, 0.25, h));
+  }
+  if (uClouds > 0.0 && h > 0.0) {
+    // A soft cloud deck projected on the dome, drifting slowly.
+    vec2 uv = d.xz / (d.y + 0.22) * 0.9 + vec2(uTime * 0.012, uTime * 0.005);
+    float c = fbm(uv);
+    float cover = smoothstep(0.62 - uClouds * 0.28, 0.9, c);
+    vec3 lit = mix(uHorizon, vec3(1.0), 0.55) + uSunColor * (0.18 + pow(sd, 6.0) * 0.5);
+    vec3 shade = mix(uTop, uHorizon, 0.6) * 0.85;
+    vec3 cloud = mix(shade, lit, smoothstep(0.55, 0.95, c + 0.15));
+    col = mix(col, cloud, cover * smoothstep(0.0, 0.22, h) * 0.85);
   }
   if (uMoons > 0.0) {
     vec3 m1 = normalize(vec3(-0.45, 0.42, -0.78));
@@ -85,6 +110,7 @@ export class Sky {
       uStars: { value: 0 },
       uMoons: { value: 0 },
       uTime: { value: 0 },
+      uClouds: { value: 0.45 },
     };
     const m = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
@@ -107,6 +133,7 @@ export class Sky {
     (this.uniforms.uSunColor!.value as THREE.Color).setHex(def.sunColor);
     this.uniforms.uStars!.value = def.stars ?? 0;
     this.uniforms.uMoons!.value = def.moons ? 1 : 0;
+    this.uniforms.uClouds!.value = def.clouds ?? 0.45;
   }
 
   update(camPos: THREE.Vector3, time: number): void {

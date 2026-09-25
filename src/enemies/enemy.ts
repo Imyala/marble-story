@@ -138,6 +138,8 @@ export class Enemy implements Hittable {
     const hpScale = game.difficultyInfo.enemyHp;
     this.maxHp = this.hp = def.hp * hpScale;
     this.model = def.build();
+    // A cool violet rim: the Gloom reads against any backdrop.
+    this.model.rim?.(0xc8a0ff, 0.28);
     this.model.root.position.set(x, y, z);
     this.status = new Status(def.statusResist);
     game.scene.add(this.model.root);

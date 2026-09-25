@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mat, glow } from './materials';
+import { mat, glow, windy } from './materials';
 import { taperedTube } from './shapes';
 import { Rng } from '../core/rng';
 
@@ -134,7 +134,7 @@ export class DecorBatch {
       case 'round':
       case 'autumn': {
         const lc = palette?.leaf ?? (kind === 'autumn' ? 0xd87a2a : 0x5a9a42);
-        const leaf = mat(lc, { rough: 0.9, flat: true, emissive: lc, emissiveIntensity: 0.12 });
+        const leaf = windy(mat(lc, { rough: 0.9, flat: true, emissive: lc, emissiveIntensity: 0.12 }), 0.05);
         const th = 2.4 * sc;
         this.add(GEO.trunk(), bark, x, y, z, sc, th, sc, 0, ry, 0);
         this.add(GEO.blob(), leaf, x, y + th + 1.0 * sc, z, 1.9 * sc, 1.6 * sc, 1.9 * sc, 0, ry, 0);
@@ -144,8 +144,8 @@ export class DecorBatch {
       }
       case 'willow': {
         const lc = palette?.leaf ?? 0x4a7a40;
-        const leaf = mat(lc, { rough: 0.9, flat: true, emissive: lc, emissiveIntensity: 0.12 });
-        const strand = mat(lc, { rough: 0.9, emissive: lc, emissiveIntensity: 0.15 });
+        const leaf = windy(mat(lc, { rough: 0.9, flat: true, emissive: lc, emissiveIntensity: 0.12 }), 0.04);
+        const strand = windy(mat(lc, { rough: 0.9, emissive: lc, emissiveIntensity: 0.15 }), 0.14, true);
         this.add(GEO.willowTrunk(), bark, x, y, z, sc, sc, sc, 0, ry, 0);
         const top = y + 3.4 * sc;
         this.add(GEO.blob(), leaf, x + 0.2 * sc, top, z, 2.4 * sc, 1.2 * sc, 2.4 * sc, 0, ry, 0);
@@ -159,7 +159,7 @@ export class DecorBatch {
       case 'pine':
       case 'snowPine': {
         const lc = palette?.leaf ?? 0x2f5a3a;
-        const leaf = mat(lc, { rough: 0.9, flat: true, emissive: lc, emissiveIntensity: 0.1 });
+        const leaf = windy(mat(lc, { rough: 0.9, flat: true, emissive: lc, emissiveIntensity: 0.1 }), 0.025);
         const snow = mat(0xf2f7ff, { rough: 0.8, flat: true });
         this.add(GEO.trunk(), bark, x, y, z, sc * 0.7, 1.4 * sc, sc * 0.7, 0, ry, 0);
         for (let i = 0; i < 3; i++) {
@@ -213,7 +213,7 @@ export class DecorBatch {
 
   grass(x: number, y: number, z: number, scale: number, color = 0x6aa84a): void {
     const r = this.rng;
-    const m = mat(color, { rough: 1, emissive: color, emissiveIntensity: 0.18 });
+    const m = windy(mat(color, { rough: 1, emissive: color, emissiveIntensity: 0.18 }), 0.3);
     const n = 5 + r.int(0, 4);
     for (let i = 0; i < n; i++) {
       this.add(GEO.blade(), m, x + r.signed() * 0.3 * scale, y - 0.02, z + r.signed() * 0.3 * scale, scale * 1.6, scale * (0.28 + r.next() * 0.3), scale * 1.6,

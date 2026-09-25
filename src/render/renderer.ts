@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Sky, type SkyDef } from './sky';
+import { WATER_LIGHT } from './water';
 
 export type Quality = 'low' | 'medium' | 'high';
 
@@ -112,6 +113,9 @@ export class Renderer {
     this.hemi.groundColor.setHex(def.hemiGround);
     this.hemi.intensity = def.hemiIntensity;
     this.sunOffset.set(...def.sunDir).normalize().multiplyScalar(70);
+    WATER_LIGHT.uSunDir.value.set(...def.sunDir).normalize();
+    WATER_LIGHT.uSunColor.value.setHex(def.sunColor);
+    WATER_LIGHT.uSky.value.setHex(def.horizon);
   }
 
   /** Keeps the shadow frustum centered on the action. */

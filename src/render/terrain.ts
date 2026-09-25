@@ -1,3 +1,4 @@
+import { groundDetail } from './materials';
 import * as THREE from 'three';
 import { HOLE, type Heightfield } from '../world/collision';
 
@@ -54,7 +55,7 @@ export function buildTerrainMesh(hf: Heightfield, colorFn: TerrainColorFn): THRE
   g.setIndex(idx);
   g.computeVertexNormals();
   g.computeBoundingSphere();
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
+  const m = groundDetail(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 }));
   const mesh = new THREE.Mesh(g, m);
   mesh.receiveShadow = true;
   return mesh;

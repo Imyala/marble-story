@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mat, matUnique, glow } from '../render/materials';
+import { mat, matUnique, glow, addRim } from '../render/materials';
 import { ellipsoid, limb, spike, taperedTube, box, mergeStatic } from '../render/shapes';
 import { damp, lerp, smoothstep } from '../core/math';
 import type { EnemyState } from './enemy';
@@ -23,6 +23,8 @@ export interface EnemyModel {
   root: THREE.Group;
   update(dt: number, pose: EnemyPose): void;
   setFlash(amount: number, color: number): void;
+  /** Rim-lights the model's own skin. */
+  rim?(color: number, strength: number): void;
   dispose?(): void;
 }
 
@@ -43,6 +45,9 @@ abstract class BaseModel implements EnemyModel {
       m.emissive.setHex(color);
       m.emissiveIntensity = amount;
     }
+  }
+  rim(color: number, strength: number): void {
+    for (const m of this.flashMats) addRim(m, color, strength);
   }
   dispose(): void {
     for (const m of this.flashMats) m.dispose();

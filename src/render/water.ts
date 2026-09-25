@@ -26,13 +26,27 @@ uniform vec3 uShallow;
 uniform vec3 uGlint;
 uniform float uTime;
 uniform float uOpacity;
+uniform vec3 uSunDir;
+uniform vec3 uSunColor;
+uniform vec3 uSky;
 varying vec3 vWorld;
 varying float vWave;
 void main() {
   vec3 v = normalize(cameraPosition - vWorld);
-  float fres = pow(1.0 - max(v.y, 0.0), 3.0);
+  // A ripple normal from the slopes of the same waves that move the surface.
+  float t = uTime;
+  vec2 p = vWorld.xz;
+  float rx = sin(p.x * 1.9 + t * 2.0);
+  float rz = sin(p.y * 2.3 - t * 1.7);
+  float dx = 0.021 * cos(p.x * 0.35 + t * 1.3) + 0.17 * cos(p.x * 1.9 + t * 2.0) * rz + 0.06 * cos(p.x * 4.1 + p.y * 1.3 + t * 3.1);
+  float dz = 0.025 * cos(p.y * 0.42 - t * 1.1) + 0.2 * rx * cos(p.y * 2.3 - t * 1.7) + 0.06 * cos(p.y * 3.7 - p.x * 1.1 - t * 2.7);
+  vec3 n = normalize(vec3(-dx, 1.0, -dz));
+  float fres = pow(1.0 - max(dot(v, n), 0.0), 3.0);
   vec3 col = mix(uDeep, uShallow, 0.35 + 0.35 * vWave);
-  col = mix(col, uGlint, fres * 0.6);
+  col = mix(col, mix(uGlint, uSky, 0.6), fres * 0.7);
+  vec3 refl = reflect(-v, n);
+  float sd = max(dot(refl, normalize(uSunDir)), 0.0);
+  col += uSunColor * (pow(sd, 220.0) * 2.2 + pow(sd, 18.0) * 0.12);
   float r = sin(vWorld.x * 1.9 + uTime * 2.0) * sin(vWorld.z * 2.3 - uTime * 1.7);
   col += uGlint * smoothstep(0.85, 1.0, r) * 0.35;
   gl_FragColor = vec4(col, mix(uOpacity, 1.0, fres * 0.5));
@@ -40,6 +54,13 @@ void main() {
   #include <colorspace_fragment>
   #include <fog_fragment>
 }`;
+
+/** Sun and sky seen in every water surface, set by the renderer's applySky. */
+export const WATER_LIGHT = {
+  uSunDir: { value: new THREE.Vector3(0.4, 0.6, 0.3) },
+  uSunColor: { value: new THREE.Color(0xfff0d8) },
+  uSky: { value: new THREE.Color(0xbfd8ff) },
+};
 
 export class Water {
   readonly mesh: THREE.Mesh;
@@ -55,6 +76,10 @@ export class Water {
         uOpacity: { value: opacity },
       },
     ]);
+    // Shared, so the sky can update every body of water at once.
+    this.uniforms.uSunDir = WATER_LIGHT.uSunDir;
+    this.uniforms.uSunColor = WATER_LIGHT.uSunColor;
+    this.uniforms.uSky = WATER_LIGHT.uSky;
     const m = new THREE.ShaderMaterial({
       uniforms: this.uniforms,
       vertexShader: vert,

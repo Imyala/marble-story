@@ -852,6 +852,9 @@ export class Collectible implements Prop {
   update(dt: number): void {
     if (this.taken) return;
     const g = this.game;
+    // Far off it would be a speck: skip drawing it.
+    const cam = g.camera.position;
+    this.root.visible = (this.x - cam.x) ** 2 + (this.z - cam.z) ** 2 < 90 * 90;
     this.root.rotation.y += dt * 1.8;
     this.root.position.y = this.y + 1.2 + Math.sin(g.time * 2.5 + this.x) * 0.15;
     if (rng.chance(0.15)) g.fx.sparkle(this.x, this.y + 1.2, this.z, this.kind === 'heart' ? 0xff8a9a : this.kind === 'mana' ? 0x8af0aa : this.kind === 'egg' ? 0xd0a0ff : 0xfff0b0, 1);

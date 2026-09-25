@@ -111,12 +111,15 @@ export class DecorBatch {
 
   build(parent: THREE.Object3D): void {
     for (const b of this.batches.values()) {
+      // One batch spans the level: splitting it into cells culled a little
+      // more looking away, but cost far more calls looking down a long view.
       const im = new THREE.InstancedMesh(b.geo, b.mat, b.mats.length);
       b.mats.forEach((m, i) => im.setMatrixAt(i, m));
       im.instanceMatrix.needsUpdate = true;
       im.castShadow = b.cast;
       im.receiveShadow = true;
       im.computeBoundingSphere();
+      im.userData.cull = true;
       parent.add(im);
     }
     this.batches.clear();

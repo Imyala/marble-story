@@ -1021,7 +1021,9 @@ export class Enemy implements Hittable {
     // Past the fog a foe is invisible anyway: skip drawing it (dozens of draw calls each).
     if (!(this.state === 'spawn' && this.spawnDelay > 0) && !this.isBoss) {
       const cam = this.game.camera.position;
-      const far = ((this.game.scene.fog as THREE.Fog | null)?.far ?? 300) + 6;
+      // A gloomling 95 m off is a few pixels tall; big foes stay in view a little longer.
+      const reach = this.def.height > 2.2 ? 140 : 95;
+      const far = Math.min(((this.game.scene.fog as THREE.Fog | null)?.far ?? 300) + 6, this.aggro ? reach * 1.5 : reach);
       r.visible = (b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 < far * far;
       if (!r.visible) return;
     }

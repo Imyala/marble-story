@@ -420,6 +420,7 @@ export class Game {
     this.touch.update();
     if (this.level) this.blobs.update(this);
     this.gemBatch.update(this.gems);
+    this.fogCull(dt);
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;
@@ -731,6 +732,39 @@ export class Game {
       this.hud.gemBump();
       this.audio.play('levelUp');
       this.toast(`Feat: ${f.name}! +${f.reward} spirit gems`, 'good');
+    }
+  }
+
+  private cullT = 0;
+  private cullSphere = new THREE.Sphere();
+
+  /**
+   * Hides level chunks (merged statics, decor and breakable cells) that lie
+   * wholly beyond the fog along the view: they would draw as pure fog anyway.
+   */
+  private fogCull(dt: number): void {
+    this.cullT -= dt;
+    const level = this.level;
+    const fog = this.scene.fog as THREE.Fog | null;
+    if (this.cullT > 0 || !level || !fog) return;
+    this.cullT = 0.15;
+    const cam = this.camera.position;
+    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.quaternion);
+    const far = fog.far + 4;
+    const s = this.cullSphere;
+    for (const o of level.root.children) {
+      if (!o.userData.cull) continue;
+      const m = o as THREE.Mesh;
+      const im = o as THREE.InstancedMesh;
+      if (im.isInstancedMesh) {
+        if (!im.boundingSphere) im.computeBoundingSphere();
+        s.copy(im.boundingSphere!).applyMatrix4(im.matrixWorld);
+      } else {
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        s.copy(m.geometry.boundingSphere!).applyMatrix4(m.matrixWorld);
+      }
+      const depth = (s.center.x - cam.x) * fwd.x + (s.center.y - cam.y) * fwd.y + (s.center.z - cam.z) * fwd.z;
+      o.visible = depth - s.radius < far;
     }
   }
 

@@ -1333,6 +1333,8 @@ class FogCull implements Prop {
     };
     for (const o of level.root.children) {
       const m = o as THREE.Mesh;
+      // The game's own fog cull handles the level's merged chunks.
+      if (o.userData.cull) continue;
       if (m.isMesh && !(m as unknown as THREE.InstancedMesh).isInstancedMesh) {
         if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
         // The level root sits at the origin, so a child's own matrix is its world matrix.

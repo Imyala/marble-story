@@ -809,7 +809,10 @@ export class Builder {
       groups.set(key, list);
     }
     for (const list of groups.values()) {
-      if (list.length < 2) continue;
+      if (list.length < 2) {
+        list[0]!.userData.cull = true;
+        continue;
+      }
       const geos: THREE.BufferGeometry[] = [];
       for (const m of list) {
         m.updateMatrix();
@@ -826,10 +829,9 @@ export class Builder {
       const out = new THREE.Mesh(merged, list[0]!.material);
       out.castShadow = list[0]!.castShadow;
       out.receiveShadow = list.some((m) => m.receiveShadow);
-      for (const m of list) {
-        root.remove(m);
-        m.geometry.dispose();
-      }
+      // Sources are dropped, not disposed: a shared shape (GEO.*) may still draw elsewhere.
+      for (const m of list) root.remove(m);
+      out.userData.cull = true;
       root.add(out);
     }
   }

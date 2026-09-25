@@ -273,10 +273,10 @@ export class BreakableSet implements Prop {
   }
 
   build(root: THREE.Object3D): void {
-    // One instanced mesh per kind per 32 m cell, so off-screen piles are culled.
+    // One instanced mesh per kind (splitting by area measured worse down long views).
     const byKind = new Map<string, Breakable[]>();
     for (const b of this.items) {
-      const key = `${b.kind}|${Math.floor(b.x / 32)}|${Math.floor(b.z / 32)}`;
+      const key = b.kind;
       const l = byKind.get(key) ?? [];
       l.push(b);
       byKind.set(key, l);
@@ -293,6 +293,7 @@ export class BreakableSet implements Prop {
       });
       im.instanceMatrix.needsUpdate = true;
       im.computeBoundingSphere();
+      im.userData.cull = true;
       root.add(im);
     }
   }

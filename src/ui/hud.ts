@@ -5,7 +5,7 @@ import { ELEMENT_NAMES } from '../game/types';
 import { RANKS } from '../combat/style';
 import type { Boss } from '../enemies/boss';
 import { Enemy } from '../enemies/enemy';
-import { SHARDS_PER_UPGRADE } from '../game/progress';
+import { SHARDS_PER_UPGRADE, eggsFound } from '../game/progress';
 
 const EL_COLORS: Record<Element, string> = { fire: '#ff7a2a', lightning: '#7ac8ff', ice: '#8fe4ff', earth: '#8bd05a' };
 const EL_KEYS: Record<Element, string> = { fire: '1', lightning: '2', ice: '3', earth: '4' };
@@ -223,7 +223,8 @@ export class Hud {
     this.gemText.textContent = String(g.save.gems);
     const hs = g.save.heartShards % SHARDS_PER_UPGRADE;
     const ms = g.save.manaShards % SHARDS_PER_UPGRADE;
-    const shardHtml = `<span style="color:#ff8a9a">&#9829; <b>${hs}</b>/4</span><span style="color:#8af0aa">&#9670; <b>${ms}</b>/4</span>`;
+    const eggs = eggsFound(g.save);
+    const shardHtml = `<span style="color:#ff8a9a">&#9829; <b>${hs}</b>/4</span><span style="color:#8af0aa">&#9670; <b>${ms}</b>/4</span>${eggs ? `<span class="egg-count" title="Lost dragon eggs returned"><i></i><b>${eggs}</b></span>` : ''}`;
     if (this.shardsBox.innerHTML !== shardHtml) this.shardsBox.innerHTML = shardHtml;
 
     // Elements.

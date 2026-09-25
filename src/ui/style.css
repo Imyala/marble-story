@@ -251,3 +251,6 @@
 
 .vignette { position: absolute; inset: 0; pointer-events: none;
   background: radial-gradient(ellipse 75% 70% at 50% 48%, rgba(0, 0, 0, 0) 58%, rgba(10, 6, 20, .32) 100%); }
+.shards .egg-count { color: #d8b8ff; display: inline-flex; align-items: center; gap: 4px; }
+.shards .egg-count i { display: inline-block; width: 9px; height: 12px; border-radius: 50% 50% 50% 50% / 60% 60% 40% 40%;
+  background: radial-gradient(circle at 35% 30%, #fff8ea, #e8d6b8 60%, #b89ac8); box-shadow: 0 0 6px rgba(216, 184, 255, .6); }

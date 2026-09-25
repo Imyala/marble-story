@@ -500,3 +500,15 @@ export async function stack(h) {
   const r1 = await h.eval(() => { const [b, t] = window.__pair; return { baseAlive: b.alive, topAlive: t.alive, topY: +t.y.toFixed(2), falling: t.falling, baseY: +b.y.toFixed(2) }; });
   h.check('the one on top falls to where the base stood', !r1.baseAlive && r1.topAlive && !r1.falling && Math.abs(r1.topY - r1.baseY) < 0.4, JSON.stringify({ r0, r1 }));
 }
+
+/** Each realm starts its own soundscape, and its calls play without errors. */
+export async function ambience(h) {
+  for (const lvl of ['fen', 'frostworks', 'keep']) {
+    await h.go(`?level=${lvl}&seed=5&quality=low&maxdt=0.1`, 2000);
+    await h.eval(() => window.wyrm.audio.unlock());
+    await h.skipDialogue(6000);
+    await h.wait(1500);
+    const r = await h.eval(() => { const a = window.wyrm.audio; for (let i = 0; i < 40; i++) a.ambienceTick(1); return { kind: a.amb?.kind ?? null, state: a.ctx?.state }; });
+    h.check(`${lvl} plays its soundscape`, r.kind === lvl, JSON.stringify(r));
+  }
+}

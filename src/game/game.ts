@@ -279,6 +279,7 @@ export class Game {
     b.finish();
     this.renderer.backdrop.apply(BACKDROPS[def.id], def.sky, level.waterLevel > -1e3 ? level.waterLevel - 0.5 : -2);
     this.weather.apply(WEATHER[def.id]);
+    this.audio.setAmbience((['fen', 'sanctum', 'falls', 'frostworks', 'plains', 'keep'] as const).find((k) => k === def.id) ?? null);
     this.cam.collectOccluders(level.root);
     for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
     this.pendingSpawns = [];
@@ -426,7 +427,10 @@ export class Game {
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;
     PUSHER.value.set(this.player.body.x, this.player.body.y, this.player.body.z);
-    if (this.level && this.state !== 'menu' && this.state !== 'pause') this.weather.update(dt);
+    if (this.level && this.state !== 'menu' && this.state !== 'pause') {
+      this.weather.update(dt);
+      this.audio.ambienceTick(dt);
+    }
     this.renderer.render(this.realTime, dt);
   }
 

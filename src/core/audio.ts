@@ -18,6 +18,25 @@ export type Sfx =
 
 export type LoopId = 'breath' | 'glide' | 'charge' | 'rain';
 
+/** A realm's background soundscape. */
+export type AmbienceKind = 'fen' | 'sanctum' | 'falls' | 'frostworks' | 'plains' | 'keep';
+
+interface AmbienceDef {
+  /** Continuous bed: filtered noise, with slow gusts. */
+  bed: { type: BiquadFilterType; freq: number; q: number; vol: number; gust: number; drone?: number[] };
+  /** Occasional sounds: [name, min gap, max gap]. */
+  calls: [string, number, number][];
+}
+
+const AMBIENCE: Record<AmbienceKind, AmbienceDef> = {
+  fen: { bed: { type: 'lowpass', freq: 520, q: 0.5, vol: 0.035, gust: 0.3 }, calls: [['frog', 1.5, 5], ['cricket', 0.8, 2.5], ['owl', 12, 26]] },
+  sanctum: { bed: { type: 'bandpass', freq: 900, q: 0.4, vol: 0.022, gust: 0.6 }, calls: [['bird', 1.5, 5], ['bird', 3, 8]] },
+  falls: { bed: { type: 'lowpass', freq: 760, q: 0.3, vol: 0.075, gust: 0.25 }, calls: [['hawk', 14, 30], ['gust', 6, 14]] },
+  frostworks: { bed: { type: 'bandpass', freq: 420, q: 1.2, vol: 0.05, gust: 0.8 }, calls: [['clang', 2.5, 7], ['creak', 9, 20], ['gust', 5, 11]] },
+  plains: { bed: { type: 'bandpass', freq: 1300, q: 0.35, vol: 0.028, gust: 0.7 }, calls: [['lark', 2.5, 6], ['buzz', 8, 16], ['bird', 4, 9]] },
+  keep: { bed: { type: 'lowpass', freq: 300, q: 0.6, vol: 0.04, gust: 0.4, drone: [55, 82.4] }, calls: [['crow', 6, 14], ['chime', 9, 20]] },
+};
+
 export interface MusicTheme {
   bpm: number;
   /** Chord roots in semitones relative to A3, one per bar. */
@@ -50,6 +69,9 @@ export class Audio {
   private schedTimer: number | null = null;
   private combat = 0;
   private lastPlayed = new Map<string, number>();
+  private ambBus!: GainNode;
+  private amb: { kind: AmbienceKind; nodes: AudioScheduledSourceNode[]; gain: GainNode; timers: number[] } | null = null;
+  private wantAmb: AmbienceKind | null = null;
 
   /** Must be called from a user gesture. Safe to call repeatedly. */
   unlock(): void {
@@ -82,7 +104,11 @@ export class Audio {
     this.noiseBuf = c.createBuffer(1, len, c.sampleRate);
     const d = this.noiseBuf.getChannelData(0);
     for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    this.ambBus = c.createGain();
+    this.ambBus.gain.value = 1;
+    this.ambBus.connect(this.sfxBus);
     if (this.theme) this.startScheduler();
+    if (this.wantAmb) this.setAmbience(this.wantAmb);
   }
 
   applyVolumes(): void {
@@ -146,6 +172,142 @@ export class Audio {
     src.connect(f).connect(g).connect(opts.bus ?? this.sfxBus);
     src.start(t, Math.random() * 1.5);
     src.stop(t + dur + 0.05);
+  }
+
+  // ---- ambience -------------------------------------------------------------
+
+  /** Starts a realm's soundscape (or silence with null). Safe before audio unlocks. */
+  setAmbience(kind: AmbienceKind | null): void {
+    this.wantAmb = kind;
+    const c = this.ctx;
+    if (!c) return;
+    if (this.amb && this.amb.kind === kind) return;
+    if (this.amb) {
+      const old = this.amb;
+      old.gain.gain.setTargetAtTime(0.0001, c.currentTime, 0.6);
+      for (const n of old.nodes) n.stop(c.currentTime + 3);
+      old.timers.length = 0;
+      this.amb = null;
+    }
+    if (!kind) return;
+    const def = AMBIENCE[kind];
+    const gain = c.createGain();
+    gain.gain.value = 0.0001;
+    gain.gain.setTargetAtTime(1, c.currentTime, 1.5);
+    gain.connect(this.ambBus);
+    const nodes: AudioScheduledSourceNode[] = [];
+    // The bed: noise through a filter, swelling and falling slowly like wind.
+    const src = c.createBufferSource();
+    src.buffer = this.noiseBuf;
+    src.loop = true;
+    const f = c.createBiquadFilter();
+    f.type = def.bed.type;
+    f.frequency.value = def.bed.freq;
+    f.Q.value = def.bed.q;
+    const bedGain = c.createGain();
+    bedGain.gain.value = def.bed.vol;
+    const lfo = c.createOscillator();
+    lfo.frequency.value = 0.06 + Math.random() * 0.05;
+    const lfoGain = c.createGain();
+    lfoGain.gain.value = def.bed.vol * def.bed.gust;
+    lfo.connect(lfoGain).connect(bedGain.gain);
+    src.connect(f).connect(bedGain).connect(gain);
+    src.start(0, Math.random());
+    lfo.start();
+    nodes.push(src, lfo);
+    for (const hz of def.bed.drone ?? []) {
+      const o = c.createOscillator();
+      o.type = 'sine';
+      o.frequency.value = hz;
+      const og = c.createGain();
+      og.gain.value = 0.018;
+      o.connect(og).connect(gain);
+      o.start();
+      nodes.push(o);
+    }
+    const timers = def.calls.map(([, a, b]) => a + Math.random() * (b - a));
+    this.amb = { kind, nodes, gain, timers };
+  }
+
+  /** Advances the soundscape's occasional calls. */
+  ambienceTick(dt: number): void {
+    const a = this.amb;
+    const c = this.ctx;
+    if (!a || !c) return;
+    const def = AMBIENCE[a.kind];
+    def.calls.forEach(([name, lo, hi], i) => {
+      a.timers[i]! -= dt;
+      if (a.timers[i]! > 0) return;
+      a.timers[i] = lo + Math.random() * (hi - lo);
+      this.ambientCall(name, a.gain);
+    });
+  }
+
+  private ambientCall(name: string, out: AudioNode): void {
+    const c = this.ctx!;
+    // Somewhere off to one side, not too loud.
+    const pan = c.createStereoPanner();
+    pan.pan.value = Math.random() * 1.6 - 0.8;
+    pan.connect(out);
+    const b = { bus: pan };
+    const r = Math.random;
+    switch (name) {
+      case 'frog': {
+        const f = 110 + r() * 60;
+        for (let i = 0; i < 2; i++) this.tone(f, 0.12, 'square', 0.03, { ...b, filter: 500, delay: i * 0.16, slide: f * 0.8 });
+        break;
+      }
+      case 'cricket': {
+        const f = 4200 + r() * 800;
+        for (let i = 0; i < 3 + Math.floor(r() * 3); i++) this.tone(f, 0.03, 'sine', 0.012, { ...b, delay: i * 0.07 });
+        break;
+      }
+      case 'owl':
+        this.tone(420, 0.35, 'sine', 0.035, { ...b, slide: 380, attack: 0.05 });
+        this.tone(400, 0.5, 'sine', 0.03, { ...b, slide: 360, attack: 0.06, delay: 0.5 });
+        break;
+      case 'bird': {
+        const f = 2400 + r() * 1400;
+        const n = 2 + Math.floor(r() * 4);
+        for (let i = 0; i < n; i++) this.tone(f * (0.9 + r() * 0.25), 0.07, 'sine', 0.018, { ...b, slide: f * (1.2 + r() * 0.3), delay: i * (0.09 + r() * 0.05) });
+        break;
+      }
+      case 'lark': {
+        for (let i = 0; i < 8; i++) this.tone(3000 + r() * 1800, 0.04, 'sine', 0.014, { ...b, slide: 3500 + r() * 1500, delay: i * 0.055 });
+        break;
+      }
+      case 'hawk':
+        this.tone(2600, 0.9, 'sine', 0.03, { ...b, slide: 1500, attack: 0.08 });
+        this.noise(0.9, 0.012, { type: 'bandpass', freq: 2400, freqEnd: 1500, q: 6, bus: pan, attack: 0.08 });
+        break;
+      case 'gust':
+        this.noise(2.4, 0.05, { type: 'bandpass', freq: 380, freqEnd: 900, q: 0.8, attack: 0.9, bus: pan });
+        break;
+      case 'clang': {
+        // A distant forge hammer: a few inharmonic partials, softened by distance.
+        const base = 520 + r() * 120;
+        for (const [k, v] of [[1, 0.02], [2.76, 0.012], [5.4, 0.006]] as const) this.tone(base * k, 0.9, 'sine', v, { ...b, filter: 2400 });
+        this.noise(0.08, 0.02, { type: 'highpass', freq: 1800, bus: pan });
+        break;
+      }
+      case 'creak':
+        this.tone(160 + r() * 60, 0.6, 'sawtooth', 0.012, { ...b, filter: 700, slide: 120, attack: 0.1 });
+        break;
+      case 'buzz':
+        this.tone(190 + r() * 40, 0.8, 'sawtooth', 0.008, { ...b, filter: 900, attack: 0.2, slide: 220 });
+        break;
+      case 'crow': {
+        const n = 1 + Math.floor(r() * 3);
+        for (let i = 0; i < n; i++) this.tone(640, 0.22, 'sawtooth', 0.022, { ...b, filter: 1400, q: 3, slide: 460, delay: i * 0.3 });
+        break;
+      }
+      case 'chime': {
+        const f = [523, 659, 784, 988][Math.floor(r() * 4)]!;
+        this.tone(f, 2.4, 'sine', 0.02, { ...b, attack: 0.01 });
+        this.tone(f * 2.01, 1.6, 'sine', 0.008, { ...b, attack: 0.01 });
+        break;
+      }
+    }
   }
 
   // ---- sound effects ------------------------------------------------------

@@ -482,6 +482,10 @@ export class DragonRig {
     let flip = 0;
     let roll = 0;
     let rate = 14;
+    // A forepaw raking forward (the 'claw1' / 'claw2' poses): which front leg, and how it swings.
+    let clawSide = 0;
+    let clawSwing = 0;
+    let clawKnee = 0;
 
     if (pose.glide) {
       wingSpread = 1;
@@ -715,6 +719,26 @@ export class DragonRig {
           bodyPitch = -0.2;
           break;
         }
+        case 'claw1':
+        case 'claw2': {
+          // Rear up on the hind legs and rake one forepaw across (claw1 the right paw, claw2 the left).
+          const side = pose.attack === 'claw1' ? 1 : -1;
+          const rear = bump(a, 0.0, 0.3, 0.95);
+          const rake = smoothstep(0.3, 0.55, a);
+          bodyPitch = -0.48 * rear;
+          bodyY = 0.14 * rear;
+          bodyYaw = side * lerp(0.28, -0.32, rake);
+          neckPitch = lerp(-0.75, -0.3, rake);
+          headPitch = lerp(0.5, 0.85, rake);
+          headYaw = side * lerp(0.4, -0.3, rake);
+          jaw = 0.35 * rear;
+          wingSpread = 0.5 * rear;
+          tailPitch = 0.2 * rear;
+          clawSide = side;
+          clawSwing = lerp(-2.1, 0.45, rake) * rear + (1 - rear) * 0.1;
+          clawKnee = lerp(1.4, 0.2, rake) * rear;
+          break;
+        }
       }
     }
 
@@ -820,6 +844,11 @@ export class DragonRig {
         const ph = this.climbLegs + leg.phase;
         swing = (leg.front ? -1.2 : -0.2) + Math.sin(ph) * 0.45;
         knee = 0.6 + Math.cos(ph) * 0.3;
+      }
+      if (clawSide !== 0 && leg.front && leg.side === clawSide) {
+        // The raking paw: its swing is in the body's frame, so it rises with the rear.
+        swing = clawSwing + P.bodyPitch;
+        knee = clawKnee;
       }
       // Keep feet planted when the body pitches.
       leg.hip.rotation.set(swing - P.bodyPitch, 0, leg.side * 0.05);

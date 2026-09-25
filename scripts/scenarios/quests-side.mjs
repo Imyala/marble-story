@@ -367,6 +367,55 @@ export async function look(h) {
   await view('quests-look-camp', -33, 58, -2.0, 11, 6);
 }
 
+/**
+ * A goat can really be led home: Aster walks from where Clover strayed down
+ * to the farm (steering only, waiting when the goat falls behind), and the
+ * goat follows her all the way into the pen.
+ */
+export async function escort(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=plains&seed=5&quality=low&maxdt=0.05', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    g.quests.start('plains-goats');
+    g.player.invuln = true;
+    // The meadow's Gloom would only get in the way of the walk.
+    for (const e of g.enemies) if (e.alive) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    window.__goat = g.level.props.find((p) => p.constructor.name === 'QuestGoat' && p.name === (window.__name ?? 'Clover'));
+    const q = window.__goat;
+    g.player.place(q.x + 3, g.col.groundAt(q.x + 3, q.z, 1e4, 0.2).y + 0.05, q.z, 0);
+    // Over the meadow, down past its old wall, across the plank bridge over the channel, east to the farm.
+    window.__route = [[-30, 55], [-12, 42], [0, 34], [-1, 22], [-1.5, 14], [-1.5, 3], [5, -4], [20, -6], [30, -6], [38, -6], [43, -5.5]];
+    window.__wp = 0;
+  });
+  await h.skipDialogue(3000);
+  await waitGame(h, 0.6);
+  const trail = [];
+  let s = null;
+  for (let i = 0; i < 1500; i++) {
+    s = await h.eval(() => {
+      const g = window.wyrm;
+      const b = g.player.body;
+      const q = window.__goat;
+      const R = window.__route;
+      while (window.__wp < R.length - 1 && Math.hypot(R[window.__wp][0] - b.x, R[window.__wp][1] - b.z) < 1.5) window.__wp++;
+      const [tx, tz] = R[window.__wp];
+      g.cam.yaw = Math.atan2(tx - b.x, tz - b.z);
+      // Walk, and wait up for the goat when it falls behind.
+      const gap = Math.hypot(q.x - b.x, q.z - b.z);
+      g.input.forceMove = gap > 9 ? { x: 0, y: 0 } : { x: 0, y: 0.75 };
+      return { wp: window.__wp, mode: q.mode, gap: +gap.toFixed(1), p: [+b.x.toFixed(1), +b.z.toFixed(1)], goat: [+q.x.toFixed(1), +q.z.toFixed(1)], n: g.quests.state('plains-goats')?.n ?? 0 };
+    });
+    if (i % 25 === 0) trail.push(s);
+    if (s.mode === 'home') break;
+    await h.wait(30);
+  }
+  await h.eval(() => { window.wyrm.input.forceMove = null; });
+  h.check('a goat follows Aster from the meadow all the way into the pen', s?.mode === 'home' && s.n === 1, JSON.stringify({ s, trail: trail.slice(-8) }));
+  await h.shot('quests-escort');
+}
+
 /** The Journal's Quests tab with quests under way and one done, and the pause menu (stills). */
 export async function journal(h) {
   await h.page.addInitScript(() => localStorage.clear());

@@ -1058,7 +1058,7 @@ class QuestGoat implements Prop, Removable {
         this.mode = 'wait';
         g.hud.flick(`Aster, wait! ${this.name} can't keep up!`, 4);
       } else if (d > 2.8) {
-        const sp = Math.min(7.8, 2 + (d - 2.8) * 1.3);
+        const sp = Math.min(8.6, 2 + (d - 2.8) * 1.4);
         const nx = this.x + ((p.x - this.x) / d) * sp * dt;
         const nz = this.z + ((p.z - this.z) / d) * sp * dt;
         const gy = this.ok(nx, nz, this.y);

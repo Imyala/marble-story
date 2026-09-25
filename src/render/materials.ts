@@ -67,6 +67,8 @@ export const ELEMENT_COLORS = {
 
 /** Global wind clock, advanced by the game each frame. */
 export const WIND = { value: 0 };
+/** Where the dragon is, so grass and reeds can bend out of its way. */
+export const PUSHER = { value: new THREE.Vector3(0, -1e4, 0) };
 
 const windCache = new Map<string, THREE.Material>();
 
@@ -83,8 +85,9 @@ export function windy<T extends THREE.MeshStandardMaterial>(base: T, strength = 
   m.onBeforeCompile = (shader) => {
     shader.uniforms.uWind = { value: strength };
     shader.uniforms.uWindTime = WIND;
+    shader.uniforms.uPusher = PUSHER;
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uWind;\nuniform float uWindTime;')
+      .replace('#include <common>', '#include <common>\nuniform float uWind;\nuniform float uWindTime;\nuniform vec3 uPusher;')
       .replace('#include <begin_vertex>', `#include <begin_vertex>
       {
         vec3 origin = vec3(0.0);
@@ -97,6 +100,19 @@ export function windy<T extends THREE.MeshStandardMaterial>(base: T, strength = 
         float sway = sin(uWindTime * 1.6 + ph) * 0.7 + sin(uWindTime * 2.9 + ph * 1.7) * 0.3;
         transformed.x += sway * uWind * lift;
         transformed.z += cos(uWindTime * 1.2 + ph * 1.3) * uWind * 0.5 * lift;
+        ${hang ? '' : `// Parts around the dragon's feet, pushed aside in world space.
+        vec2 away = origin.xz - uPusher.xz;
+        float dd = length(away);
+        float push = (1.0 - smoothstep(0.35, 1.6, dd)) * (1.0 - smoothstep(0.8, 1.8, abs(origin.y - uPusher.y))) * min(lift, 1.2);
+        if (push > 0.001) {
+          mat3 toWorld = mat3(modelMatrix);
+          #ifdef USE_INSTANCING
+            toWorld = toWorld * mat3(instanceMatrix);
+          #endif
+          vec3 w = vec3(away / max(dd, 0.05) * 0.55, -0.25) * push;
+          // Rotation with uniform scale: the inverse is the transpose over the squared scale.
+          transformed += transpose(toWorld) * w / max(dot(toWorld[0], toWorld[0]), 1e-4);
+        }`}
       }`);
   };
   m.customProgramCacheKey = () => `wind${hang ? 'h' : ''}`;

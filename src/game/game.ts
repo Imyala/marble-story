@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { WIND } from '../render/materials';
+import { WIND, PUSHER } from '../render/materials';
 import { BlobShadows } from '../fx/blobs';
 import { Renderer } from '../render/renderer';
 import { Input } from '../core/input';
@@ -416,6 +416,7 @@ export class Game {
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;
+    PUSHER.value.set(this.player.body.x, this.player.body.y, this.player.body.z);
     if (this.level && this.state !== 'menu' && this.state !== 'pause') this.weather.update(dt);
     this.renderer.render(this.realTime, dt);
   }

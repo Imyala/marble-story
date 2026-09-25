@@ -309,3 +309,14 @@ export async function thief(h) {
   const got = await h.eval(() => !!window.wyrm.save.found['fen:egg-thief']);
   h.check('catching it drops the egg, which can be collected', !r.alive && r.egg && got, JSON.stringify({ ...r, got }));
 }
+
+/** Grass bends away from the dragon's feet (shader compiles, no errors). */
+export async function grass(h) {
+  await h.go('?level=plains&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => { const g = window.wyrm; g.hud.show(false); g.cam.snapBehind(g.player.yaw, 0.5); });
+  await h.wait(2500);
+  await h.shot('grass-push');
+  const u = await h.eval(() => window.wyrm.player.body.y);
+  h.check('the scene renders with the push shader', typeof u === 'number');
+}

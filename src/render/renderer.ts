@@ -5,6 +5,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { Sky, type SkyDef } from './sky';
 import { WATER_LIGHT } from './water';
+import { Backdrop } from './backdrop';
 
 export type Quality = 'low' | 'medium' | 'high';
 
@@ -15,6 +16,7 @@ export class Renderer {
   readonly sun: THREE.DirectionalLight;
   readonly hemi: THREE.HemisphereLight;
   readonly sky = new Sky();
+  readonly backdrop = new Backdrop();
   readonly canvas: HTMLCanvasElement;
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
@@ -52,6 +54,7 @@ export class Renderer {
     this.scene.add(this.sun);
     this.scene.add(this.sun.target);
     this.scene.add(this.sky.mesh);
+    this.scene.add(this.backdrop.mesh);
 
     this.setQuality('high');
     this.resize();
@@ -130,6 +133,7 @@ export class Renderer {
 
   render(time: number): void {
     this.sky.update(this.camera.position, time);
+    this.backdrop.update(this.camera.position);
     if (this.composer) this.composer.render();
     else this.gl.render(this.scene, this.camera);
   }

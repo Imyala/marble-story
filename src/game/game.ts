@@ -25,6 +25,7 @@ import type { Wardstone, Collectible, Arena } from '../entities/props';
 import { LEVELS } from '../levels';
 import { Hud } from '../ui/hud';
 import { Menus } from '../ui/menus';
+import { BACKDROPS } from '../render/backdrop';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
 import { RELICS } from './story';
@@ -256,6 +257,7 @@ export class Game {
     if (def.water) b.water(def.water);
     def.build(b);
     b.finish();
+    this.renderer.backdrop.apply(BACKDROPS[def.id], def.sky, level.waterLevel > -1e3 ? level.waterLevel - 0.5 : -2);
     this.cam.collectOccluders(level.root);
     for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
     this.pendingSpawns = [];

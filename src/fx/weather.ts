@@ -131,8 +131,9 @@ export class Weather {
     this.bolt.renderOrder = -800;
     g.renderer.scene.add(this.bolt);
     this.boltT = 0.28;
-    this.flash = 1;
-    g.renderer.sky.flash(1, az);
+    // Reduced flashing keeps the bolt but only a faint glow over the land.
+    this.flash = g.renderer.calm ? 0.25 : 1;
+    g.renderer.sky.flash(this.flash, az);
     this.thunder.push({ t: 0.6 + dist / 340, v: 1.25 - dist / 700 });
   }
 
@@ -176,8 +177,8 @@ export class Weather {
     }
     if (this.bolt) {
       this.boltT -= dt;
-      // Flickers: bright, dim, bright, gone.
-      this.boltMat.opacity = this.boltT > 0.2 ? 1 : this.boltT > 0.14 ? 0.25 : this.boltT > 0.06 ? 0.9 : Math.max(0, this.boltT / 0.06);
+      // Flickers: bright, dim, bright, gone (a steady fade with reduced flashing).
+      this.boltMat.opacity = g.renderer.calm ? Math.min(0.7, this.boltT / 0.28) : this.boltT > 0.2 ? 1 : this.boltT > 0.14 ? 0.25 : this.boltT > 0.06 ? 0.9 : Math.max(0, this.boltT / 0.06);
       if (this.boltT <= 0) this.clearBolt();
     }
     if (this.flash > 0) {

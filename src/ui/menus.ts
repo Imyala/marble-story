@@ -739,6 +739,7 @@ export class Menus {
     choice('Invert camera Y', [[false, 'Off'], [true, 'On']], () => o.invertY, (v) => (o.invertY = v));
     choice('Auto camera', [[true, 'On'], [false, 'Off']], () => o.autoCamera, (v) => (o.autoCamera = v));
     choice('Damage numbers', [[true, 'On'], [false, 'Off']], () => o.damageNumbers, (v) => (o.damageNumbers = v));
+    choice('Flashing effects', [[false, 'Full'], [true, 'Reduced']], () => !!o.reduceFlashing, (v) => (o.reduceFlashing = v));
     choice('Graphics', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], () => o.quality, (v) => (o.quality = v));
     if (g.state !== 'title') {
       choice('Difficulty', [['story', 'Story'], ['normal', 'Adventurer'], ['hard', 'Legend']] as [Difficulty, string][], () => g.save.difficulty, (v) => {

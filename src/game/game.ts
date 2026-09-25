@@ -195,6 +195,7 @@ export class Game {
     this.input.invertY = o.invertY;
     if (this.renderer.quality !== o.quality) this.renderer.setQuality(o.quality);
     this.fx.density = o.quality === 'low' ? 0.5 : o.quality === 'medium' ? 0.8 : 1;
+    this.renderer.calm = !!o.reduceFlashing;
     writeOptions(o);
   }
 

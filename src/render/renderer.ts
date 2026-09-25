@@ -25,6 +25,8 @@ export class Renderer {
   private grade: ShaderPass | null = null;
   /** Wanted grade state; eased every frame. */
   readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null };
+  /** Reduced flashing: no lens ripple or fringing, a gentler Fury glow, softer lightning. */
+  calm = false;
   quality: Quality = 'high';
   private sunOffset = new THREE.Vector3(30, 50, 20);
 
@@ -172,12 +174,13 @@ export class Renderer {
       const L = this.look;
       const was = L.dt;
       L.dt += ((L.dragon ? 1 : 0) - L.dt) * (1 - Math.exp(-(L.dragon ? 7 : 4) * dt));
-      if (L.dragon && was < 0.05) L.pulse = 0;
+      if (L.dragon && was < 0.05 && !this.calm) L.pulse = 0;
       L.pulse = Math.min(1, L.pulse + dt * 1.8);
       const u = this.grade.uniforms;
       u.uDT!.value = L.dt;
       u.uPulse!.value = L.pulse;
-      u.uFury!.value += (L.fury - u.uFury!.value) * (1 - Math.exp(-5 * dt));
+      u.uFury!.value += (L.fury * (this.calm ? 0.35 : 1) - u.uFury!.value) * (1 - Math.exp(-5 * dt));
+      u.uCalm!.value = this.calm ? 1 : 0;
       u.uTime!.value = time;
       u.uAspect!.value = this.camera.aspect;
     }

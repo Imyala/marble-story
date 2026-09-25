@@ -243,6 +243,8 @@ export interface Options {
   shake: number;
   damageNumbers: boolean;
   autoCamera: boolean;
+  /** Tones down lightning flashes, lens ripples, edge glows and strong hit flashes. */
+  reduceFlashing?: boolean;
 }
 
 /** Phones and tablets start on a lighter setting; everything else on the full look. */

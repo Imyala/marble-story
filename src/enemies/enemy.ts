@@ -1048,7 +1048,7 @@ export class Enemy implements Hittable {
     const windupCol = this.attack ? Enemy.telegraphColor(this.attack) : 0xff2020;
     const windupK = this.state === 'windup' && this.attack ? Math.min(1, this.stateT / Math.max(0.05, this.attack.windup)) : 0;
     const flashCol = this.flash > 0 ? 0xffffff : this.state === 'windup' ? windupCol : 0x000000;
-    const flashAmt = this.flash > 0 ? this.flash * 8 : this.state === 'windup' ? 0.1 + 0.42 * windupK + 0.1 * Math.sin(this.stateT * 30) : 0;
+    const flashAmt = this.flash > 0 ? this.flash * (this.game.renderer.calm ? 3 : 8) : this.state === 'windup' ? 0.1 + 0.42 * windupK + 0.1 * Math.sin(this.stateT * 30) : 0;
     this.model.setFlash(flashAmt, flashCol);
     if (this.state === 'dead') {
       const k = Math.max(0, 1 - Math.max(0, this.deadT - 0.25) * 2.5);

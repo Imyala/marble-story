@@ -24,13 +24,14 @@ export const GradeShader = {
     uTint: { value: new THREE.Vector3(1, 1, 1) },
     uVig: { value: 0 },
     uPhotoSat: { value: 1 },
+    uCalm: { value: 0 },
   },
   vertexShader: /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
 uniform sampler2D tDiffuse;
-uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat;
+uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat, uCalm;
 uniform vec3 uTint;
 uniform vec3 uShadow, uHigh;
 varying vec2 vUv;
@@ -42,7 +43,7 @@ void main() {
   // Dragon Time begins with a ring of bent light racing outward.
   float ring = uPulse < 1.0 ? smoothstep(0.09, 0.0, abs(r - uPulse * 1.1)) * (1.0 - uPulse) : 0.0;
   vec2 uv = vUv - dir * ring * 0.018;
-  float ca = (uDT * 0.0024 + ring * 0.006) * (0.2 + r * r * 3.0);
+  float ca = (uDT * 0.0024 + ring * 0.006) * (0.2 + r * r * 3.0) * (1.0 - uCalm);
   vec3 col = vec3(texture2D(tDiffuse, uv + dir * ca).r, texture2D(tDiffuse, uv).g, texture2D(tDiffuse, uv - dir * ca).b);
   float l = dot(col, vec3(0.299, 0.587, 0.114));
   // Realm split toning: cool shadows, sun-warmed highlights.
@@ -56,7 +57,7 @@ void main() {
   col += vec3(0.45, 0.7, 1.0) * ring * 0.35;
   // Fury: warm, and the edges of the frame smoulder.
   col = mix(col, col * vec3(1.1, 0.96, 0.86), uFury * 0.7);
-  col += vec3(1.0, 0.42, 0.12) * smoothstep(0.45, 0.95, r) * uFury * (0.22 + 0.08 * sin(uTime * 9.0));
+  col += vec3(1.0, 0.42, 0.12) * smoothstep(0.45, 0.95, r) * uFury * (0.22 + 0.08 * sin(uTime * 9.0) * (1.0 - uCalm));
   // Photo filters.
   float pl = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(vec3(pl), col, uPhotoSat);

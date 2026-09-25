@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Body } from '../world/collision';
 import { DragonRig, defaultPose, HERO_LOOK, type DragonLook } from './dragonRig';
+import { bump } from '../game/feats';
 import { MOVES, SLAM_HIT, FINISHERS, DELAY_FOLLOWUPS, type HitWindow, type MoveDef } from './moves';
 import { BreathController, BREATH_COST, BURST_COST } from './breath';
 import type { Game } from '../game/game';
@@ -1024,6 +1025,8 @@ export class Player {
     g.slowmo(0.25, riposte ? 1.3 : 0.8);
     g.sfx('perfect');
     g.toast('Perfect dodge! Horn to counter', 'good');
+    bump(g.save, 'perfects');
+    g.checkFeats();
     g.style.bonus(60);
     this.dtime = Math.min(this.dtimeMax, this.dtime + 10);
     const b = this.body;

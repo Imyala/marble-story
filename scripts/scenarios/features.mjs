@@ -135,3 +135,41 @@ export async function sapper(h) {
   await waitGame(0.5);
   await h.shot('feature-elite');
 }
+
+/** Feats pay out once; the Bestiary fills as you meet foes; both show in the Journal. */
+export async function journal(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 150; i++) {
+      await h.wait(60);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const r = await h.eval(() => {
+    const g = window.wyrm;
+    const gems0 = g.save.gems;
+    g.save.stats.kills = 49;
+    const e = g.spawnEnemy('grunt', g.player.body.x + 3, g.player.body.y, g.player.body.z, Math.PI, false);
+    g.noticeEnemy(e);
+    const seen = !!g.save.found['seen:grunt'];
+    g.onEnemyKilled(e, null);
+    const paid = g.save.gems - gems0;
+    g.onEnemyKilled(e, null);
+    const again = g.save.gems - gems0;
+    return { seen, paid, again, feat: !!g.save.found['feat:kills1'] };
+  });
+  h.check('meeting a foe adds it to the Bestiary', r.seen, JSON.stringify(r));
+  h.check('a feat pays its reward exactly once', r.feat && r.paid >= 60 && r.again - r.paid < 60, JSON.stringify(r));
+  await h.eval(() => { const m = window.wyrm.menus; m.journalTab = 'bestiary'; m.showJournal(); });
+  await h.wait(300);
+  const beast = await h.eval(() => [...document.querySelectorAll('.entry.beast h4')].map((e) => e.textContent));
+  h.check('the Bestiary lists the Gloomling', beast.includes('Gloomling'), JSON.stringify(beast));
+  await h.shot('journal-bestiary');
+  await h.eval(() => { const m = window.wyrm.menus; m.pop(); m.journalTab = 'feats'; m.showJournal(); });
+  await h.wait(300);
+  const feats = await h.eval(() => [...document.querySelectorAll('.entry.feat')].map((e) => [e.querySelector('h4').textContent, e.classList.contains('done')]));
+  h.check('the Feats page shows progress and the earned feat', feats.length >= 10 && feats.some(([n, d]) => /Gloombane/.test(n) && d), JSON.stringify(feats));
+  await h.shot('journal-feats');
+}

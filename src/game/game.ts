@@ -19,6 +19,7 @@ import {
   eggsFound, SKINS, skinUnlocked, type Options, type SaveData, type Difficulty,
 } from './progress';
 import { findLetter, letterKey } from './letters';
+import { BESTIARY, bump, extra, featKey, newlyDone } from './feats';
 import { Level, Builder, type LevelDef } from '../world/level';
 import type { Wardstone, Collectible, Arena } from '../entities/props';
 import { LEVELS } from '../levels';
@@ -509,7 +510,15 @@ export class Game {
     const want = this.combatHold > 0 ? 1 : 0;
     if (want !== this.audio.combatLevel) this.audio.setCombat(want);
     this.style.update(dt, this.combatHold > 0);
-    if (this.style.bestCombo > this.save.stats.bestCombo) this.save.stats.bestCombo = this.style.bestCombo;
+    if (this.style.bestCombo > this.save.stats.bestCombo) {
+      this.save.stats.bestCombo = this.style.bestCombo;
+      this.checkFeats();
+    }
+    const ex = extra(this.save);
+    if (this.style.rank > (ex.bestRank ?? 0)) {
+      ex.bestRank = this.style.rank;
+      this.checkFeats();
+    }
 
     // Gem chime chain.
     this.gemChainT -= dt;
@@ -679,8 +688,28 @@ export class Game {
     }
   }
 
+  /** Pays out any feat the save has just earned. */
+  checkFeats(): void {
+    for (const f of newlyDone(this.save)) {
+      this.save.found[featKey(f.id)] = true;
+      this.save.gems += f.reward;
+      this.hud.gemBump();
+      this.audio.play('levelUp');
+      this.toast(`Feat: ${f.name}! +${f.reward} spirit gems`, 'good');
+    }
+  }
+
+  /** First time a foe of this kind turns up: a new Bestiary page. */
+  noticeEnemy(e: Enemy): void {
+    const key = `seen:${e.def.id}`;
+    if (this.save.found[key] || !BESTIARY[e.def.id]) return;
+    this.save.found[key] = true;
+    this.toast(`New in the Bestiary: ${e.def.name}`, 'hint');
+  }
+
   onEnemyKilled(e: Enemy, reaction: Reaction | null): void {
     this.save.stats.kills++;
+    if (e.elite) bump(this.save, 'elites');
     const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1) * (e.elite ? 2.5 : 1);
     const g = e.def.gems;
     this.spawnGems(e.x, e.y + e.height * 0.5, e.z, {
@@ -689,6 +718,7 @@ export class Game {
     this.style.bonus(15 * (e.def.styleValue ?? 1));
     this.player.gainFury(5);
     if (this.player.lock === e) this.player.lock = null;
+    this.checkFeats();
   }
 
   triggerReaction(e: Enemy, r: Reaction): void {
@@ -697,6 +727,7 @@ export class Game {
     const y = e.y + e.height * 0.5;
     const z = e.z;
     this.save.stats.reactions++;
+    this.checkFeats();
     this.style.bonus(90);
     this.hud.bigText(info.name, info.color);
     this.player.gainFury(10);
@@ -990,6 +1021,7 @@ export class Game {
       const r = RELICS[c.relicId];
       if (r) this.hud.relic(r.title, r.text);
     }
+    this.checkFeats();
     const mote = c.kind === 'heart' ? 0xff6a7a : c.kind === 'mana' ? 0x6af09a : c.kind === 'egg' ? 0xd8b0ff : c.kind === 'letter' ? 0xffe0c0 : 0xfff0b0;
     this.fx.motes(c.x, c.y + 1, c.z, mote, 30);
     writeSave(s);

@@ -5,6 +5,8 @@ import {
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
 import { LETTERS, letterKey } from '../game/letters';
+import { FEATS, BESTIARY, featKey } from '../game/feats';
+import { ENEMIES } from '../enemies/defs';
 import { HERO_LOOK } from '../player/dragonRig';
 import { ELEMENTS } from '../game/types';
 import { TRIALS, type TrialGround } from '../levels/trials';
@@ -483,7 +485,7 @@ export class Menus {
     this.push(m, () => this.pop());
   }
 
-  private journalTab: 'relics' | 'letters' | 'tips' = 'relics';
+  private journalTab: 'relics' | 'letters' | 'bestiary' | 'feats' | 'tips' = 'relics';
 
   private showJournal(): void {
     const g = this.game;
@@ -491,7 +493,7 @@ export class Menus {
     const p = this.div('panel lore');
     p.innerHTML = '<h2>Journal</h2><div class="sub">Dragon Relics, letters and field notes.</div>';
     const tabs = this.div('tabs');
-    const tab = (id: 'relics' | 'letters' | 'tips', label: string) => {
+    const tab = (id: typeof this.journalTab, label: string) => {
       const b = this.btn(label, () => {
         this.journalTab = id;
         this.pop();
@@ -502,10 +504,48 @@ export class Menus {
     };
     tab('relics', 'Relics');
     tab('letters', 'Letters');
+    tab('bestiary', 'Bestiary');
+    tab('feats', 'Feats');
     tab('tips', 'Field notes');
     p.append(tabs);
     if (this.journalTab === 'tips') {
       for (const [t, d] of TIPS) p.append(this.div('entry', `<h4>${t}</h4><p>${d}</p>`));
+    } else if (this.journalTab === 'bestiary') {
+      const ids = Object.keys(BESTIARY);
+      const seen = ids.filter((id) => g.save.found[`seen:${id}`]).length;
+      p.append(this.div('entry', `<p style="font-style:normal;color:#a99cc9">Foes met: ${seen} / ${ids.length}</p>`));
+      for (const id of ids) {
+        const def = ENEMIES[id];
+        if (!def) continue;
+        if (!g.save.found[`seen:${id}`]) {
+          p.append(this.div('entry missing', '<h4>???</h4><p style="font-style:normal;color:#a99cc9">Not yet met.</p>'));
+          continue;
+        }
+        const b = BESTIARY[id]!;
+        const weak: string[] = [];
+        const strong: string[] = [];
+        for (const [t, v] of Object.entries(def.resist)) {
+          const name = t[0]!.toUpperCase() + t.slice(1);
+          if (v > 1) weak.push(name);
+          else if (v === 0) strong.push(`${name} (immune)`);
+          else if (v < 1) strong.push(name);
+        }
+        const tags = [
+          weak.length ? `<span class="tag weak">Weak: ${weak.join(', ')}</span>` : '',
+          strong.length ? `<span class="tag strong">Resists: ${strong.join(', ')}</span>` : '',
+        ].join('');
+        p.append(this.div('entry beast', `<h4>${def.name}</h4><p>${b.blurb}</p><div class="tags">${tags}</div><div class="tip">${b.tip}</div>`));
+      }
+    } else if (this.journalTab === 'feats') {
+      const done = FEATS.filter((f) => g.save.found[featKey(f.id)]).length;
+      p.append(this.div('entry', `<p style="font-style:normal;color:#a99cc9">Feats earned: ${done} / ${FEATS.length}</p>`));
+      for (const f of FEATS) {
+        const have = !!g.save.found[featKey(f.id)];
+        const n = Math.min(f.goal, f.progress(g.save));
+        const pct = Math.round((n / f.goal) * 100);
+        p.append(this.div(`entry feat${have ? ' done' : ''}`,
+          `<h4>${have ? '&#10022; ' : ''}${f.name}<small>${f.reward} gems</small></h4><p>${f.desc}</p><div class="bar"><i style="width:${pct}%"></i></div><small class="count">${n} / ${f.goal}</small>`));
+      }
     } else if (this.journalTab === 'relics') {
       for (const [id, r] of Object.entries(RELICS)) {
         const have = !!g.save.found[`relic:${id}`];

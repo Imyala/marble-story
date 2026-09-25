@@ -8,6 +8,7 @@ import { makeBox, makeCyl, type Solid } from '../world/collision';
 import { mat } from '../render/materials';
 import { rng } from '../core/rng';
 import type { Sfx } from '../core/audio';
+import { bump } from '../game/feats';
 
 /**
  * Things to smash: crates, barrels, urns, powder kegs, Gloom pods, and
@@ -230,6 +231,8 @@ export class Breakable implements Hittable {
       this.mesh.instanceMatrix.needsUpdate = true;
     }
     const cy = this.y + this.height * 0.5;
+    bump(g.save, d.explodes ? 'kegs' : 'breaks');
+    g.checkFeats();
     g.fx.rocks(this.x, cy, this.z, 10 + Math.round(this.scale * 6), d.debris);
     g.fx.dust(this.x, this.y, this.z, 6);
     g.sfx(d.sfx, this.x, cy, this.z, 0.9 + rng.next() * 0.25);
@@ -354,6 +357,8 @@ export class Chest implements Prop, Hittable {
     this.alive = false;
     this.openT = 0;
     g.save.found[this.id] = true;
+    bump(g.save, 'chests');
+    g.checkFeats();
     g.sfx('chest', this.x, this.y, this.z);
     g.fx.motes(this.x, this.y + 0.8, this.z, 0xffe090, 24);
     g.spawnGems(this.x, this.y + 1, this.z, this.loot, false);

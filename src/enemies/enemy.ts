@@ -227,6 +227,7 @@ export class Enemy implements Hittable {
     const g = this.game;
     if (!this.aggro) this.alertAllies();
     this.aggro = true;
+    g.noticeEnemy(this);
     if (this.def.volatile && !this.packLit && (hit.type === 'fire' || hit.move === 'keg' || hit.move === 'explosion')) {
       this.packLit = true;
       this.model.dropPack?.();
@@ -589,6 +590,7 @@ export class Enemy implements Hittable {
         this.aggro = true;
         this.alertT = 0;
         this.alertAllies();
+        g.noticeEnemy(this);
         g.sfx('enemyAlert', b.x, b.y, b.z);
         g.fx.emit(b.x, b.y + def.height + 0.5, b.z, { count: 6, speed: 2, life: [0.3, 0.5], size: [0.2, 0.3], color: 0xff5050, bright: 2 });
         this.setState('chase');

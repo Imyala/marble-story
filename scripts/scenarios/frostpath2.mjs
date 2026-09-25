@@ -163,7 +163,7 @@ export default async function (h) {
   await until(h, () => { const m = window.wyrm.level.props.find((p) => p.constructor.name === 'MovingPlatform' && Math.abs(p.solid.x - 19) < 0.5); return m.solid.y1 > 11.95; }, null, 12);
   r = await grounded(h);
   h.check('lift carried the dragon up', r.y > 11.8, JSON.stringify(r));
-  await holdGame(h, ['KeyW'], 1.0);
+  await holdGame(h, ['KeyW'], 1.3);
   r = await grounded(h);
   h.check('walked off the lift into the Upper Works', r.grounded && r.z > 199 && r.y > 11.5, JSON.stringify(r));
   await h.shot('fp2-upper');

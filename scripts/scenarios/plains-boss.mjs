@@ -30,8 +30,10 @@ export default async function (h) {
     return { mode: b.mode, hp: Math.round(b.hp), max: Math.round(b.maxHp), phase: b.phase, alive: b.alive, awake: b.awake, x: +b.x.toFixed(1), z: +b.z.toFixed(1), hy: +b.hy.toFixed(1), php: Math.round(g.player.hp), pounds: b.pounds, frozen: +b.status.frozen.toFixed(1) };
   });
   const waitMode = async (modes, maxMs = 20000, heal = true) => {
+    // maxMs of game time (headless frame rates vary), with a generous wall-clock cap.
     const t0 = Date.now();
-    while (Date.now() - t0 < maxMs) {
+    const g0 = await h.eval(() => window.wyrm.time);
+    while (Date.now() - t0 < maxMs * 6 && (await h.eval(() => window.wyrm.time)) - g0 < maxMs / 1000) {
       const b = await boss();
       if (b && modes.includes(b.mode)) return b;
       if (heal) await h.eval(() => { const p = window.wyrm.player; p.hp = Math.max(p.hp, 60); });

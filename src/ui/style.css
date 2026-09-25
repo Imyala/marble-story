@@ -411,7 +411,7 @@
 .lore .entry.quest li.done { color: #a99cc9; }
 .lore .entry.quest ol.chapters li.done { color: var(--gold); }
 .lore .entry.quest .tag.tracked { display: inline-block; margin-top: 8px; background: rgba(245,196,107,.18); color: #ffe08a; border: 1px solid rgba(245,196,107,.5); }
-.lore .entry.quest .btn.track { display: block; margin-top: 8px; }
+.lore .entry.quest .btn.track { display: block; margin-top: 8px; padding: 4px 14px; font-size: 11px; }
 .lore .entry.quest.done h4 { color: #ffe08a; }
 .lore .entry.quest .page { margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: rgba(58,44,30,.55); border: 1px solid rgba(230,200,150,.35); }
 .lore .entry.quest .page b { font: 600 15px var(--serif); color: #f5deb0; }

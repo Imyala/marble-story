@@ -287,7 +287,8 @@ function buildSanctum(b: Builder): void {
       g.say([{ who: 'hesper', text: 'Forty-one nests. One came home. I count that one twice.' }]);
     }
   };
-  const q = placeDragon(b, 'quillon', QUILLON, AT.quillon.x, AT.quillon.z, 'Talk to Quillon', quillon);
+  // Outside the library's south wall, looking out for whoever comes over the old bridge.
+  const q = placeDragon(b, 'quillon', QUILLON, AT.quillon.x, AT.quillon.z, 'Talk to Quillon', quillon, 3, [-37.4, 29]);
   addGlyph(b, Q, 'quillon', q.x, q.y + 2.9, q.z);
   const h = placeDragon(b, 'hesper', HESPER, AT.hesper.x, AT.hesper.z, 'Talk to Keeper Hesper', hesper);
   addGlyph(b, Q, 'hesper', h.x, h.y + 3.0, h.z);
@@ -493,16 +494,17 @@ function clearSpot(b: Builder, x: number, z: number, reach = 4): [number, number
   return [x, b.y(x, z), z];
 }
 
-/** Faces a giver toward where Aster usually comes from: the realm's start. */
-function faceIn(b: Builder, x: number, z: number): number {
-  const [sx, sz] = b.level.def.spawn;
+/** Faces a giver toward `toward`, or else where Aster usually comes from: the realm's start. */
+function faceIn(b: Builder, x: number, z: number, toward?: [number, number]): number {
+  const [sx, sz] = toward ?? b.level.def.spawn;
   return Math.atan2(sx - x, sz - z);
 }
 
-/** A dragon quest giver. */
-function placeDragon(b: Builder, id: string, look: DragonLook, x0: number, z0: number, label: string, talk: () => void, reach = 4): { x: number; y: number; z: number } {
+/** A dragon quest giver, facing the way Aster will come (`toward`, or the realm's start). */
+function placeDragon(b: Builder, id: string, look: DragonLook, x0: number, z0: number, label: string, talk: () => void, reach = 4,
+  toward?: [number, number]): { x: number; y: number; z: number } {
   const [x, y, z] = clearSpot(b, x0, z0, reach);
-  b.npc(id, look, x, z, faceIn(b, x, z), label, talk);
+  b.npc(id, look, x, z, faceIn(b, x, z, toward), label, talk);
   return { x, y, z };
 }
 

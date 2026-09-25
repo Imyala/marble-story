@@ -21,10 +21,19 @@ export async function talkTo(h, label) {
     const g = window.wyrm;
     const t = g.level.interactables.find((i) => i.label === label);
     if (!t) return false;
-    const a = Math.atan2(g.player.x - t.x, g.player.z - t.z);
-    const x = t.x + Math.sin(a) * 2;
-    const z = t.z + Math.cos(a) * 2;
-    g.player.place(x, g.col.groundAt(x, z, t.y + 3, 0.2).y + 0.05, z, Math.atan2(t.x - x, t.z - z));
+    // Stand two paces off, on whichever side has solid, dry ground at about the same height.
+    const a0 = Math.atan2(g.player.x - t.x, g.player.z - t.z);
+    let x = t.x;
+    let z = t.z;
+    let y = t.y;
+    for (let k = 0; k < 16; k++) {
+      const a = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8);
+      const cx = t.x + Math.sin(a) * 2.2;
+      const cz = t.z + Math.cos(a) * 2.2;
+      const cy = g.col.groundAt(cx, cz, t.y + 3, 0.2).y;
+      if (cy > -1e3 && Math.abs(cy - t.y) < 2.6 && !g.isDeepWater(cx, cz, cy)) { x = cx; z = cz; y = cy; break; }
+    }
+    g.player.place(x, y + 0.05, z, Math.atan2(t.x - x, t.z - z));
     g.cam.snapBehind(Math.atan2(t.x - x, t.z - z), 0.3);
     return true;
   }, label);
@@ -356,6 +365,38 @@ export async function look(h) {
   await h.eval(() => { const g = window.wyrm; g.quests.start('frost-hearths'); for (const e of g.enemies) if (e.alive && Math.hypot(e.homeX + 32.2, e.homeZ - 58.2) < 14) { e.alive = false; e.state = 'dead'; e.deadT = 1; } for (const t of g.level.props.filter((p) => p.constructor.name === 'Torch' && p.group === 'quest-hearths').slice(0, 2)) t.light(); });
   await h.skipDialogue(3000);
   await view('quests-look-camp', -33, 58, -2.0, 11, 6);
+}
+
+/** The Journal's Quests tab with quests under way and one done, and the pause menu (stills). */
+export async function journal(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=sanctum&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    const Q = g.quests;
+    for (const id of ['falls-race', 'fen-lanterns', 'sanctum-overdue']) Q.start(id);
+    Q.notify('talk', { id: 'hesper' });
+    Q.pickItem('fen-lanterns', 'jar-a');
+    const s = Q.state('falls-race');
+    s.step = 1;
+    Q.notify('talk', { id: 'brisa' });
+    Q.track('sanctum-overdue');
+    g.save.unlocked.push('falls', 'frostworks');
+    g.pause();
+  });
+  await h.wait(400);
+  await h.shot('quests-pause');
+  await h.eval(() => [...document.querySelectorAll('.menu button')].find((b) => /Journal/.test(b.textContent))?.click());
+  await h.wait(400);
+  const j = await h.eval(() => ({ tab: document.querySelector('.tabs .on')?.textContent, active: [...document.querySelectorAll('.entry.quest:not(.main):not(.done) h4')].map((e) => e.textContent), track: document.querySelectorAll('.entry.quest .btn.track').length }));
+  h.check('the Journal opens on Quests: two under way (one tracked), one done', /Quests/i.test(j.tab ?? '') && j.active.length === 2 && j.track === 2, JSON.stringify(j));
+  await h.shot('quests-journal-active');
+  // Track another from the Journal.
+  await h.eval(() => [...document.querySelectorAll('.entry.quest .btn.track')].at(-1)?.click());
+  await h.wait(300);
+  const t = await h.eval(() => window.wyrm.quests.trackedQuest()?.id ?? 'main');
+  h.check('Track in the Journal switches the tracked quest', t !== 'sanctum-overdue', t);
 }
 
 export default async function (h) {

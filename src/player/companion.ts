@@ -933,7 +933,7 @@ export class Companion {
   }
 
   /** Where she walks when all is calm: behind Aster and off to one side. */
-  private followPoint(dt: number): { x: number; z: number } {
+  private followPoint(dt: number): { x: number; y?: number; z: number } {
     const g = this.game;
     const p = g.player;
     const pb = p.body;
@@ -1009,9 +1009,28 @@ export class Companion {
 
   /** Is she walking on Aster's footsteps (not just heading for them)? */
   private onTrail = false;
+  private trailJ = -1;
+
+  /** On his footsteps, keeps her on the line he walked (a log bridge has no room either side). */
+  private keepToTrail(dt: number): void {
+    const c = this.crumbs;
+    const j = this.trailJ;
+    if (!this.trail || !this.onTrail || j < 0 || j + 1 >= c.length) return;
+    const b = this.body;
+    const a = c[j]!;
+    const n = c[j + 1]!;
+    const sx = n.x - a.x;
+    const sz = n.z - a.z;
+    const len2 = sx * sx + sz * sz;
+    if (len2 < 1e-4) return;
+    const t = clamp(((b.x - a.x) * sx + (b.z - a.z) * sz) / len2, 0, 1);
+    const k = Math.min(1, dt * 6);
+    b.x += (a.x + sx * t - b.x) * k;
+    b.z += (a.z + sz * t - b.z) * k;
+  }
 
   /** A footstep of Aster's a little behind him, reached along the way he went. */
-  private trailPoint(): { x: number; z: number } | null {
+  private trailPoint(): { x: number; y: number; z: number } | null {
     const c = this.crumbs;
     const n = c.length;
     if (n < 2) return null;
@@ -1040,8 +1059,9 @@ export class Companion {
     let walked = on;
     for (let i = Math.max(0, j); walked && i < idx; i++) if (Math.hypot(c[i + 1]!.x - c[i]!.x, c[i + 1]!.z - c[i]!.z) > 1.3) walked = false;
     this.onTrail = walked;
+    this.trailJ = j;
     const q = c[idx]!;
-    return { x: q.x, z: q.z };
+    return { x: q.x, y: q.y, z: q.z };
   }
 
   private updateFollow(dt: number): void {
@@ -1052,7 +1072,13 @@ export class Companion {
     const d = Math.hypot(f.x - b.x, f.z - b.z);
     const hs = Math.hypot(pb.vx, pb.vz);
     const speed = d > 7 ? RUN : d > 2.2 ? Math.max(4, Math.min(RUN, hs + 2 + d * 0.3)) : Math.max(2.2, hs);
+    // Joining his footsteps where they run up onto something (a log, a ledge): hop up to them.
+    if (this.trail && !this.onTrail && f.y !== undefined && b.grounded && f.y > b.y + b.stepUp + 0.1 && f.y < b.y + 2 && d < 3.4) {
+      this.hop(f.x, f.y, f.z);
+      return;
+    }
     this.drive(dt, f.x, f.z, speed, this.trail ? 0.3 : 0.6, pb.y, this.trail && this.onTrail);
+    if (b.grounded) this.keepToTrail(dt);
     this.watchProgress(dt, d);
     // Settling down when nothing is happening: a stretch, then a rest.
     const still = hs < 0.5 && d < 1.4;
@@ -1067,7 +1093,11 @@ export class Companion {
     this.progT += dt;
     if (this.progT < 0.8) return;
     this.progT = 0;
-    if (d > 3.5 && d > this.progD - 0.4) this.stuckT += 0.8;
+    // Held up (standing at an edge, pushing on a wall) counts fast; running flat out
+    // after a fast-moving Aster only counts once it has gone on a long while.
+    const b = this.body;
+    const moving = Math.hypot(b.vx, b.vz) > 2.5;
+    if (d > 3.5 && d > this.progD - 0.4) this.stuckT += moving ? 0.25 : 0.8;
     else this.stuckT = 0;
     this.progD = d;
     if (this.stuckT >= 1.6) this.shadowStep(null);
@@ -1161,7 +1191,7 @@ export class Companion {
     const lower = goalY < b.y - 1.2;
     if (this.safeAt(px, pz, b.y, 0.9, lower ? 6 : 1.9) !== null) return true;
     // A step or a low ledge in the way: hop up onto it.
-    for (const dist of [RADIUS + 1.5, RADIUS + 1.0]) {
+    for (const dist of [RADIUS + 2.0, RADIUS + 2.6, RADIUS + 1.5]) {
       const ux = b.x + fx * dist;
       const uz = b.z + fz * dist;
       const uy = this.safeAt(ux, uz, b.y + 1.0, 0.9, 0.6);

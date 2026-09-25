@@ -40,7 +40,9 @@ void main() {
   float rz = sin(p.y * 2.3 - t * 1.7);
   float dx = 0.021 * cos(p.x * 0.35 + t * 1.3) + 0.17 * cos(p.x * 1.9 + t * 2.0) * rz + 0.06 * cos(p.x * 4.1 + p.y * 1.3 + t * 3.1);
   float dz = 0.025 * cos(p.y * 0.42 - t * 1.1) + 0.2 * rx * cos(p.y * 2.3 - t * 1.7) + 0.06 * cos(p.y * 3.7 - p.x * 1.1 - t * 2.7);
-  vec3 n = normalize(vec3(-dx, 1.0, -dz));
+  // Calmer with distance, so far water does not shimmer into a pattern.
+  float calm = clamp(1.0 - length(cameraPosition.xz - vWorld.xz) / 80.0, 0.2, 1.0) * 0.6;
+  vec3 n = normalize(vec3(-dx * calm, 1.0, -dz * calm));
   float fres = pow(1.0 - max(dot(v, n), 0.0), 3.0);
   vec3 col = mix(uDeep, uShallow, 0.35 + 0.35 * vWave);
   col = mix(col, mix(uGlint, uSky, 0.6), fres * 0.7);

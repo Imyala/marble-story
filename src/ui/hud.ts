@@ -86,6 +86,10 @@ export class Hud {
   private proj = new THREE.Vector3();
   private threats: Enemy[] = [];
   private arrows: HTMLDivElement[] = [];
+  /** The quest tracker under the bars (the tracked quest's current step). */
+  private questBox!: HTMLElement;
+  private questHtml = '';
+  private questT = 0;
 
   constructor(private game: Game, parent: HTMLElement) {
     this.overlay = el('div', 'ui-layer');
@@ -138,6 +142,9 @@ export class Hud {
     bars.append(this.hpBar, this.manaBar, dt, this.powerBox);
     tl.append(emblem, bars);
     r.appendChild(tl);
+    this.questBox = el('div', 'quest-tracker');
+    this.questBox.style.display = 'none';
+    r.appendChild(this.questBox);
 
     const tr = el('div', 'hud-tr');
     this.gemsBox = el('div', 'gems');
@@ -391,9 +398,31 @@ export class Hud {
       }
     }
     this.wardT -= dt;
+    this.updateQuest(dt);
     this.updateThreats();
     const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad && !g.input.usingTouch;
     this.clickHint.style.opacity = needClick ? '1' : '0';
+  }
+
+  /** Redraws the quest tracker a few times a second, and flashes it when the step changes. */
+  private updateQuest(dt: number): void {
+    const g = this.game;
+    this.questBox.classList.toggle('away', g.state === 'dialogue');
+    this.questT -= dt;
+    if (this.questT > 0) return;
+    this.questT = 0.3;
+    const tr = g.options.questTracker !== false && g.level ? g.quests.tracker() : null;
+    const html = tr ? `<b>${tr.main ? '' : '<i></i>'}${tr.title}</b><p>${tr.text}</p>` : '';
+    if (html === this.questHtml) return;
+    const flash = this.questHtml !== '' && html !== '';
+    this.questHtml = html;
+    this.questBox.innerHTML = html;
+    this.questBox.style.display = html ? '' : 'none';
+    if (flash) {
+      this.questBox.classList.remove('flash');
+      void this.questBox.offsetWidth;
+      this.questBox.classList.add('flash');
+    }
   }
 
   private toScreen(x: number, y: number, z: number): [number, number] | null {
@@ -579,9 +608,10 @@ export class Hud {
     this.flickShown = 0;
   }
 
-  letter(title: string, from: string, text: string): void {
+  /** A parchment card; quests reuse it for the pages they pay (with their own heading and hint). */
+  letter(title: string, from: string, text: string, sub = 'Letter found', hint = 'Kept in the Journal.'): void {
     this.relicBox?.remove();
-    this.relicBox = el('div', 'relic-card letter', `<div class="sub">Letter found</div><h2>${title}</h2><p>${text}</p><div class="from">&mdash; ${from}</div><div class="hint">Kept in the Journal.</div>`);
+    this.relicBox = el('div', 'relic-card letter', `<div class="sub">${sub}</div><h2>${title}</h2><p>${text}</p><div class="from">&mdash; ${from}</div><div class="hint">${hint}</div>`);
     this.root.appendChild(this.relicBox);
     this.relicT = 11;
   }

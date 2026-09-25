@@ -338,3 +338,81 @@
 .lvl-explored { height: 5px; margin-top: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
 .lvl-explored i { display: block; height: 100%; background: linear-gradient(90deg, #b07cff, #f5c46b); }
 .lvl-pct { font-size: 11px; color: #cbbfe8; margin-top: 3px; }
+
+/* ---------- World map (src/ui/map.ts) ---------- */
+.map-screen { position: absolute; inset: 0; z-index: 6; pointer-events: auto; display: flex; flex-direction: column; box-sizing: border-box; padding: 14px 16px 8px;
+  background: rgba(8, 4, 18, .82); backdrop-filter: blur(3px); font-family: var(--sans); color: var(--text); user-select: none; }
+.map-frame { flex: 1; min-height: 0; display: flex; gap: 14px; }
+.map-view { position: relative; flex: 1; min-width: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--panel-edge);
+  box-shadow: 0 20px 60px rgba(0,0,0,.6); touch-action: none; cursor: grab; background: #2a1d12; }
+.map-view:active { cursor: grabbing; }
+.map-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.map-cross { position: absolute; left: 50%; top: 50%; width: 18px; height: 18px; margin: -9px 0 0 -9px; border: 1.5px solid rgba(255,244,220,.75);
+  border-radius: 50%; display: none; pointer-events: none; }
+.map-screen.aiming .map-cross { display: block; }
+.map-close { position: absolute; right: 10px; top: 8px; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--panel-edge);
+  background: rgba(18,12,34,.82); color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; }
+.map-close:hover { border-color: var(--gold); color: #fff; }
+.map-pop { position: absolute; max-width: 240px; padding: 10px 12px; border-radius: 10px; background: var(--panel); border: 1px solid var(--gold);
+  box-shadow: 0 8px 24px rgba(0,0,0,.5); font-size: 13px; }
+.map-pop b { display: block; font: 600 15px var(--serif); color: var(--gold); }
+.map-pop p { margin: 4px 0 6px; color: #e8dcff; line-height: 1.4; }
+.map-pop .btn { min-width: 0; width: 100%; margin-top: 2px; }
+.map-side { width: 252px; flex: none; overflow: auto; padding: 16px 18px; box-sizing: border-box; border-radius: 12px; background: var(--panel); border: 1px solid var(--panel-edge); }
+.map-side h2 { margin: 0; font: 400 22px var(--serif); letter-spacing: .08em; color: #fff4dc; }
+.map-side .sub { color: var(--muted); font-size: 13px; margin: 2px 0 6px; }
+.map-side h4 { margin: 14px 0 6px; font: 600 11px var(--sans); letter-spacing: .16em; text-transform: uppercase; color: var(--gold-dim); }
+.map-counts { list-style: none; margin: 0; padding: 0; font-size: 13px; }
+.map-counts li { display: flex; justify-content: space-between; padding: 3px 0; border-bottom: 1px solid rgba(255,255,255,.06); color: var(--muted); }
+.map-counts li b { color: var(--text); }
+.map-counts li.all b { color: var(--gold); }
+.map-note { margin: 6px 0 0; font: italic 12px var(--serif); color: #a99cc9; }
+.map-quest b { font: 600 15px var(--serif); color: #ffe08a; }
+.map-quest p { margin: 3px 0 0; font-size: 13px; line-height: 1.4; }
+.map-wards { display: flex; flex-wrap: wrap; gap: 6px; }
+.map-wards .btn { min-width: 0; }
+.map-legend { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; font-size: 11.5px; color: #d8cdee; }
+.map-leg { display: flex; align-items: center; gap: 6px; }
+.map-leg canvas { flex: none; }
+.map-btns { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+.map-btns .btn { flex: 1; min-width: 0; }
+.map-keys { text-align: center; font-size: 12px; color: var(--muted); padding-top: 6px; }
+@media (max-width: 900px), (max-height: 560px) {
+  .map-screen { padding: 8px 8px 4px; }
+  .map-frame { gap: 8px; }
+  .map-side { width: 206px; padding: 10px 12px; }
+  .map-side h2 { font-size: 18px; }
+  .map-side h4 { margin-top: 10px; }
+  .map-legend { grid-template-columns: 1fr; font-size: 11px; }
+}
+/* Phones held upright: the panel goes under the map. */
+@media (max-width: 720px) and (orientation: portrait) {
+  .map-frame { flex-direction: column; }
+  .map-side { width: auto; max-height: 36vh; }
+  .map-legend { grid-template-columns: 1fr 1fr; }
+}
+
+/* ---------- Quests: the HUD tracker and the Journal ---------- */
+.quest-tracker { position: absolute; left: 24px; top: 100px; max-width: 280px; padding: 6px 12px 7px; border-left: 2px solid var(--gold);
+  background: linear-gradient(90deg, rgba(12,8,24,.62), rgba(12,8,24,0)); transition: opacity .3s; }
+.quest-tracker.away { opacity: 0; }
+.quest-tracker b { display: block; font: 600 13px var(--serif); letter-spacing: .08em; color: #ffe08a; text-shadow: 0 1px 4px #000; }
+.quest-tracker b i { display: inline-block; width: 6px; height: 6px; margin-right: 7px; transform: rotate(45deg); background: var(--gold); vertical-align: 1px; }
+.quest-tracker p { margin: 2px 0 0; font-size: 13px; line-height: 1.35; color: #eee6ff; text-shadow: 0 1px 4px #000; }
+.quest-tracker.flash { animation: questFlash 1.2s ease-out; }
+@keyframes questFlash { 0% { background-color: rgba(245,196,107,.45); transform: translateX(6px); } 100% { background-color: transparent; transform: none; } }
+@media (max-width: 720px) { .quest-tracker { top: 74px; max-width: 220px; } }
+.lore .entry.quest h4 { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.lore .entry.quest h4 small { font: 12px var(--sans); color: #a99cc9; text-align: right; }
+.lore .entry.quest p { font-style: normal; font-size: 14px; }
+.lore .entry.quest .step.now, .lore .entry.quest li.now { color: #fff0c0; font-weight: 600; }
+.lore .entry.quest ul.steps { margin: 8px 0 0; padding-left: 18px; font-size: 13.5px; color: #cfc4ea; line-height: 1.55; }
+.lore .entry.quest ol.chapters { list-style: none; margin: 10px 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: #8a80a8; }
+.lore .entry.quest li.done { color: #a99cc9; }
+.lore .entry.quest ol.chapters li.done { color: var(--gold); }
+.lore .entry.quest .tag.tracked { display: inline-block; margin-top: 8px; background: rgba(245,196,107,.18); color: #ffe08a; border: 1px solid rgba(245,196,107,.5); }
+.lore .entry.quest .btn.track { display: block; margin-top: 8px; }
+.lore .entry.quest.done h4 { color: #ffe08a; }
+.lore .entry.quest .page { margin-top: 8px; padding: 10px 12px; border-radius: 8px; background: rgba(58,44,30,.55); border: 1px solid rgba(230,200,150,.35); }
+.lore .entry.quest .page b { font: 600 15px var(--serif); color: #f5deb0; }
+.lore .entry.quest .page p { color: #f3e6cf; }

@@ -26,6 +26,7 @@ const RULES: Rule[] = [
   [/\bShift\b/g, 'Dodge', 'B'],
   [/\bPress F\b/g, 'Tap Use', 'Press L3'],
   [/\bPress H\b/g, 'Tap Flick', 'Press R3'],
+  [/\bPress M for the map\b/g, 'The map is in the pause menu', 'Press Start, then Map'],
   [/\bPress X\b/g, 'Tap Fury', 'Press Back'],
   [/\bX to release\b/g, 'Fury to release', 'Back to release'],
   [/\bHold C\b/g, 'Hold Time', 'Hold LT'],

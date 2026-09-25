@@ -11,7 +11,9 @@ export type Action =
   | 'jump' | 'horn' | 'tail' | 'breath' | 'burst' | 'fury' | 'dodge'
   | 'dragonTime' | 'interact' | 'lock' | 'pause' | 'elemNext' | 'elemPrev'
   | 'elem1' | 'elem2' | 'elem3' | 'elem4' | 'confirm' | 'back'
-  | 'up' | 'down' | 'left' | 'right' | 'hint';
+  | 'up' | 'down' | 'left' | 'right' | 'hint'
+  // The world map (src/ui/map.ts).
+  | 'map';
 
 const KEY_BINDINGS: Record<string, Action[]> = {
   Space: ['jump', 'confirm'],
@@ -47,6 +49,8 @@ const KEY_BINDINGS: Record<string, Action[]> = {
   KeyU: ['burst'],
   KeyI: ['lock'],
   KeyR: ['elemNext'],
+  // The world map.
+  KeyM: ['map'],
 };
 
 const MOUSE_BINDINGS: Record<number, Action> = { 0: 'horn', 1: 'lock', 2: 'breath' };
@@ -69,6 +73,10 @@ const PAD_BINDINGS: Record<number, Action[]> = {
   13: ['elem3', 'down'],
   14: ['elem4', 'left'],
   15: ['elem2', 'right'],
+  // The world map: the Guide button where the browser passes it on, and a
+  // PlayStation pad's touchpad click. (The pause menu also opens it.)
+  16: ['map'],
+  17: ['map'],
 };
 
 export class Input {

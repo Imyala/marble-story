@@ -111,6 +111,23 @@ export interface SaveData {
   clears?: number;
   /** Fastest time through each realm, in seconds (first finish of a run). */
   bestTimes?: Record<string, number>;
+  /** Side quests by id (see src/game/quests.ts); absent in older saves. */
+  quests?: Record<string, QuestSave>;
+}
+
+/** How far a side quest has come. */
+export interface QuestSave {
+  /** Index of the current step (equal to the step count once finished). */
+  step: number;
+  done?: boolean;
+  /** Progress within the current step, for steps that count ("2 of 3 lanterns"). */
+  n?: number;
+  /** Quest items already picked up, so they are not placed again. */
+  items?: string[];
+  /** A counter's value when the current step began (critters, chests...). */
+  base?: number;
+  /** Shown on the HUD tracker and the map (with none tracked, the main quest is). */
+  tracked?: boolean;
 }
 
 /**
@@ -200,6 +217,8 @@ export function startNewGamePlus(s: SaveData): void {
   s.checkpoint = null;
   // Elements are relearned from the Wardens as the story unfolds; their upgrades wait.
   s.elements = [];
+  // Side quests are part of a run: their givers ask again.
+  delete s.quests;
 }
 
 export function newSave(difficulty: Difficulty = 'normal'): SaveData {
@@ -325,6 +344,8 @@ export interface Options {
   autoCamera: boolean;
   /** Tones down lightning flashes, lens ripples, edge glows and strong hit flashes. */
   reduceFlashing?: boolean;
+  /** Shows the tracked quest's step under the health bars (on unless set to false). */
+  questTracker?: boolean;
 }
 
 /** Phones and tablets start on a lighter setting; everything else on the full look. */

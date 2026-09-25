@@ -215,6 +215,12 @@ function ceiling(b: Builder): (x: number, z: number) => number {
     color: 0xcfe8ff, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false,
   }));
   shaft.position.set(LANDING.x, LANDING.top + 21, LANDING.z + 3);
+  // Daylight through the crack the roots tore in the Sanctum's lawn, far above.
+  const day = glowShared(0xe8f4ff);
+  const top = height(LANDING.x, LANDING.z + 3) + 3;
+  for (const [dx, dz, len, yaw] of [[-3.5, 1.5, 4.5, 1.1], [-0.5, 0.2, 4, 2.0], [2.8, -1.2, 4.6, 1.2], [5.2, -2.6, 3, 1.9]] as [number, number, number, number][]) {
+    b.decor.add(GEO.box(), day, LANDING.x + dx, top, LANDING.z + 3 + dz, 1.6, 0.2, len, 0, yaw, 0, false);
+  }
   b.level.root.add(shaft);
   const inner = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 4.5, 44, 16, 1, true), shaft.material);
   inner.position.copy(shaft.position);
@@ -753,8 +759,11 @@ function aerie(b: Builder): void {
   b.story('runes', r0.x, r0.z, 3.5, () => g.hud.flick('Speed runes! Charge along them (Hold Shift) and keep going: that iron chest won\'t stand a chance.', 6));
   // Urns and rubble round the plaza.
   b.breakables('urn', [[-58, 20], [-59.2, 21.5], [-85, 6], [-86, 7.5], [-101, 18], [-73, 25]]);
-  crystalCluster(b, -88, 22, 1.0, 0xffc070);
-  crystalCluster(b, -66, 26, 0.8, 0x8ff0e0);
+  // Amber crystals the old dragons grew for light, still glowing in the ruins.
+  for (const [x, z, sc] of [[-88, 22, 1.0], [-66, 26, 0.8], [-70, 3, 0.9], [-90, 5, 1.1], [-58, 16, 0.7], [-84, 40, 0.9], [-72, 38, 0.8], [-100, 22, 1.0]] as [number, number, number][]) {
+    crystalCluster(b, x, z, sc, 0xffb860);
+  }
+  for (const [x, z] of [[-83.5, 24.5], [-74.5, 24.5]] as [number, number][]) lanternPost(b, x, z, 0xffc070, Math.PI / 2);
 }
 
 /** Runs `make`, then merges the meshes of any groups it added to the level (a vine wall is a mesh per leaf). */

@@ -82,6 +82,8 @@ export async function views(h) {
   await vista(h, 'lake-camp', [6, 5, -50], [0, 4, 10]);
   await vista(h, 'glowcap', [44, 7, 14], [80, 5, 20]);
   await vista(h, 'aerie', [-50, 8, 2], [-90, 5, 22]);
+  await vista(h, 'fissure-light', [4, 15.5, 84], [0, 40, 96]);
+  await vista(h, 'rootway', [-2, 20, 90], [-10, 8, 62]);
 }
 
 export default async function (h) {

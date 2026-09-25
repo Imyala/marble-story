@@ -181,7 +181,10 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(fogColor, def.fogNear, def.fogFar);
     this.scene.background = fogColor;
     this.fogBase = { color: fogColor.clone(), near: def.fogNear, far: def.fogFar };
+    // A new realm starts dry (the swimmer's camera sets this again each frame it is under).
+    this.look.underwater = 0;
     this.uw = 0;
+    if (this.grade) this.grade.uniforms.uWater!.value = 0;
     this.sun.color.setHex(def.sunColor);
     this.sun.intensity = def.sunIntensity;
     this.hemi.color.setHex(def.hemiSky);

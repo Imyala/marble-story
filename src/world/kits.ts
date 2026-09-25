@@ -257,15 +257,24 @@ export function caveCeiling(b: Builder, x: number, z: number, sizeX: number, siz
       pos.push(px, height(px, pz), pz);
     }
   }
-  const inHole = (px: number, pz: number) => holes.some(([hx, hz, hr]) => Math.hypot(px - hx, pz - hz) < hr);
+  // Holes have ragged edges: the radius wanders with the angle.
+  const inHole = (px: number, pz: number) => holes.some(([hx, hz, hr]) => {
+    const a = Math.atan2(px - hx, pz - hz);
+    return Math.hypot(px - hx, pz - hz) < hr * (0.8 + 0.3 * Math.sin(a * 3 + hx) + 0.15 * Math.sin(a * 7 + hz));
+  });
+  const P = (k: number): [number, number] => [pos[k * 3]!, pos[k * 3 + 2]!];
+  const tri = (a: number, b2: number, c: number) => {
+    const [ax, az] = P(a);
+    const [bx, bz] = P(b2);
+    const [cx, cz] = P(c);
+    if (!inHole((ax + bx + cx) / 3, (az + bz + cz) / 3)) idx.push(a, b2, c);
+  };
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
       const a = j * (nx + 1) + i;
-      const cx = x - sizeX / 2 + (i + 0.5) * cell;
-      const cz = z - sizeZ / 2 + (j + 0.5) * cell;
-      if (inHole(cx, cz)) continue;
       // Wound to face down, toward the cavern.
-      idx.push(a, a + 1, a + nx + 1, a + 1, a + nx + 2, a + nx + 1);
+      tri(a, a + 1, a + nx + 1);
+      tri(a + 1, a + nx + 2, a + nx + 1);
     }
   }
   const geo = new THREE.BufferGeometry();
@@ -290,6 +299,17 @@ export function caveCeiling(b: Builder, x: number, z: number, sizeX: number, siz
     if (r.chance(0.3)) b.decor.add(GEO.strand(), wm, px, height(px, pz) - 0.4, pz, 0.4, 1 + r.next() * 2.5, 0.4, 0, 0, 0, false);
   }
   const sm = mat(o.color ?? ROCK.dark, { rough: 1, flat: true });
+  // A ragged fringe of rock round each opening hides its edge.
+  for (const [hx, hz, hr] of holes) {
+    for (let i = 0; i < 18; i++) {
+      const a = (i / 18) * Math.PI * 2 + r.next() * 0.2;
+      const rr = hr * (0.95 + r.next() * 0.35);
+      const px = hx + Math.sin(a) * rr;
+      const pz = hz + Math.cos(a) * rr;
+      const h = 2.5 + r.next() * 5;
+      b.decor.add(GEO.cone(), sm, px, height(px, pz) + 1.5, pz, 1.4 + r.next(), h + 1.5, 1.4 + r.next(), Math.PI + r.signed() * 0.2, r.next() * 6, r.signed() * 0.2, false);
+    }
+  }
   for (let i = 0; i < (o.stalactites ?? 0); i++) {
     const px = x + r.signed() * sizeX * 0.42;
     const pz = z + r.signed() * sizeZ * 0.42;

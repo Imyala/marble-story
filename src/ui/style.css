@@ -310,3 +310,10 @@
 .b-hint { right: calc(88px + env(safe-area-inset-right)); top: 90px; }
 .b-pause { right: calc(24px + env(safe-area-inset-right)); top: 90px; }
 .touch-on .hud-br { bottom: auto; top: 150px; transform: scale(.8); transform-origin: top right; }
+.ebar { position: absolute; width: 46px; height: 5px; margin-left: -23px; border-radius: 3px; background: rgba(10,6,20,.7); border: 1px solid rgba(0,0,0,.6); overflow: hidden; pointer-events: none; }
+.ebar i { position: absolute; left: 0; top: 0; bottom: 0; }
+.ebar .chip { background: rgba(255,255,255,.75); }
+.ebar .fill { background: linear-gradient(180deg, #ff6a6a, #c02838); }
+.ebar.elite { border-color: rgba(245,196,107,.8); width: 58px; margin-left: -29px; }
+.ebar.elite .fill { background: linear-gradient(180deg, #ffe08a, #d09020); }
+.dmg.big { font-size: 1.25em; }

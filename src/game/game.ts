@@ -715,7 +715,8 @@ export class Game {
   onEnemyDamaged(e: Enemy, dmg: number, hit: Hit | null, reaction: Reaction | null): void {
     if (this.options.damageNumbers && dmg >= 0.5) {
       const col = hit ? typeColor(hit.type) : 0xff9a50;
-      this.hud.number(e.x, e.y + e.height + 0.2, e.z, Math.round(dmg), col, reaction !== null || (hit?.heavy ?? false));
+      const tick = hit?.source === 'breath' || dmg < 4;
+      this.hud.number(e.x, e.y + e.height + 0.2, e.z, Math.round(dmg), col, reaction !== null || (hit?.heavy ?? false), tick ? e : undefined);
     }
   }
 

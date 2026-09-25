@@ -26,6 +26,9 @@ interface DmgNum {
   z: number;
   t: number;
   vy: number;
+  /** What it is stacking on (rapid breath ticks add up into one number). */
+  key?: unknown;
+  sum?: number;
 }
 
 export class Hud {
@@ -61,6 +64,7 @@ export class Hud {
   private fadeBox!: HTMLElement;
   private perfectBox!: HTMLElement;
   private reticle!: HTMLElement;
+  private ebars: { el: HTMLElement; fill: HTMLElement; chip: HTMLElement; chipV: number; who: unknown }[] = [];
   private flickBox!: HTMLElement;
   private flickText!: HTMLElement;
   private deathBox!: HTMLElement;
@@ -175,6 +179,15 @@ export class Hud {
     this.reticle = el('div', 'reticle');
     this.reticle.style.display = 'none';
     r.appendChild(this.reticle);
+    for (let i = 0; i < 8; i++) {
+      const bar = el('div', 'ebar');
+      const chip = el('i', 'chip');
+      const fill = el('i', 'fill');
+      bar.append(chip, fill);
+      bar.style.display = 'none';
+      r.appendChild(bar);
+      this.ebars.push({ el: bar, fill, chip, chipV: 1, who: null });
+    }
 
     this.flickBox = el('div', 'flick hidden');
     this.flickText = el('p');
@@ -276,6 +289,39 @@ export class Hud {
         this.reticle.style.top = `${s[1]}px`;
       } else this.reticle.style.display = 'none';
     } else this.reticle.style.display = 'none';
+
+    // Health bars over foes hit in the last few seconds (and the lock target).
+    {
+      const px = p.x;
+      const pz = p.z;
+      const list = g.enemies
+        .filter((e) => e.alive && !e.isBoss && (e === lock || (e.hp < e.maxHp && g.time - e.hurtAt < 4)) && Math.hypot(e.x - px, e.z - pz) < 32)
+        .sort((a, b) => Math.hypot(a.x - px, a.z - pz) - Math.hypot(b.x - px, b.z - pz))
+        .slice(0, this.ebars.length);
+      this.ebars.forEach((bar, i) => {
+        const e = list[i];
+        const s = e ? this.toScreen(e.x, e.y + e.height + 0.45, e.z) : null;
+        if (!e || !s) {
+          bar.el.style.display = 'none';
+          bar.who = null;
+          return;
+        }
+        const f = Math.max(0, e.hp / e.maxHp);
+        if (bar.who !== e) {
+          bar.who = e;
+          bar.chipV = f;
+          bar.el.classList.toggle('elite', !!e.elite);
+        }
+        // The white chip trails the real value, so each hit reads as a bite.
+        bar.chipV = bar.chipV > f ? Math.max(f, bar.chipV - dt * 0.6) : f;
+        bar.el.style.display = 'block';
+        bar.el.style.left = `${s[0]}px`;
+        bar.el.style.top = `${s[1]}px`;
+        bar.el.style.opacity = String(e === lock ? 1 : Math.min(1, (4 - (g.time - e.hurtAt)) * 2));
+        bar.fill.style.width = `${f * 100}%`;
+        bar.chip.style.width = `${bar.chipV * 100}%`;
+      });
+    }
 
     // Damage numbers.
     for (const n of this.nums) {
@@ -397,13 +443,24 @@ export class Hud {
     setTimeout(() => t.remove(), 4600);
   }
 
-  number(x: number, y: number, z: number, n: number, color: number, crit: boolean): void {
+  number(x: number, y: number, z: number, n: number, color: number, crit: boolean, key?: unknown): void {
+    // Small, fast hits on the same foe add up into one number instead of a swarm.
+    if (key !== undefined && !crit) {
+      const same = this.nums.find((q) => q.key === key && q.t < 0.35);
+      if (same) {
+        same.sum = (same.sum ?? 0) + n;
+        same.e.textContent = String(same.sum);
+        same.t = Math.min(same.t, 0.12);
+        same.e.classList.toggle('big', same.sum >= 20);
+        return;
+      }
+    }
     if (this.nums.length > 30) return;
     const e = el('div', `dmg${crit ? ' crit' : ''}`, String(n));
     e.style.color = `#${color.toString(16).padStart(6, '0')}`;
     e.style.display = 'none';
     this.root.appendChild(e);
-    this.nums.push({ e, x: x + (Math.random() - 0.5) * 0.6, y, z: z + (Math.random() - 0.5) * 0.6, t: 0, vy: 2.5 });
+    this.nums.push({ e, x: x + (Math.random() - 0.5) * 0.6, y, z: z + (Math.random() - 0.5) * 0.6, t: 0, vy: 2.5, key, sum: n });
   }
 
   bossBar(b: Boss | null): void {

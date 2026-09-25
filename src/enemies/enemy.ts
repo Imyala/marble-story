@@ -210,6 +210,8 @@ export class Enemy implements Hittable {
 
   /** Elites: tougher, hit harder, glow gold and drop more. */
   elite = false;
+  /** Game time of the last damage taken, for the floating health bar. */
+  hurtAt = -99;
   eliteDmg = 1;
   private auraT = 0;
 
@@ -306,6 +308,7 @@ export class Enemy implements Hittable {
       g.hud.wardHint();
     }
     this.hp -= dmg;
+    this.hurtAt = this.game.time;
     this.lastDamage = dmg;
     this.lastHitBy = hit.move;
     this.flash = 0.12;

@@ -325,6 +325,15 @@ export class Input {
     this.consumedAt.clear();
   }
 
+  /** Forgets every key and button held (after another layer swallowed their releases). */
+  releaseAll(): void {
+    for (const a of this.held) this.pendingRelease.add(a);
+    this.keysDown.clear();
+    this.mouseDown.clear();
+    this.touchHeld.clear();
+    this.clearBuffers();
+  }
+
   // --- touch (fed by the on-screen controls) ---
 
   touchPress(a: Action): void {

@@ -47,6 +47,7 @@ export class PhotoMode {
     g.menus.hideAll();
     g.hud.show(false);
     g.input.releaseLock();
+    g.input.releaseAll();
     this.prevQuality = g.renderer.quality;
     if (g.renderer.quality !== 'high') g.renderer.setQuality('high');
     const p = g.player.body;
@@ -74,7 +75,7 @@ export class PhotoMode {
     this.overlay?.remove();
     this.overlay = null;
     this.keys.clear();
-    g.input.clearBuffers();
+    g.input.releaseAll();
     g.hud.show(true);
     g.menus.showPause();
   }

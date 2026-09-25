@@ -58,8 +58,9 @@ export default async function (h) {
   await press('jump', false);
   h.check('launcher lifts enemy and player', mid.ey > 2 && mid.py > 2, JSON.stringify(mid));
   await h.tap('KeyJ', 3, 250);
-  await h.shot('combat-air');
+  // Read the combo before the screenshot: on a fast machine the combo's idle timer can run out while the shot is taken.
   const s2 = await h.state();
+  await h.shot('combat-air');
   h.check('air combo keeps hitting', s2.combo >= 4, JSON.stringify(s2));
   await h.wait(1500);
   // Kill it and collect gems.

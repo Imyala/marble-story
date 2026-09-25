@@ -3,7 +3,7 @@ import type { Game } from '../game/game';
 import type { Hit, HitResult, Hittable, Element } from '../game/types';
 import { makeBox, makeCyl, type Solid } from '../world/collision';
 import { mat, matUnique, glow } from '../render/materials';
-import { ellipsoid, spike, taperedTube } from '../render/shapes';
+import { ellipsoid, spike, taperedTube, mergeStatic } from '../render/shapes';
 import { GEM_COLORS, type GemKind } from './gems';
 import { rng } from '../core/rng';
 import { ENEMIES } from '../enemies/defs';
@@ -73,6 +73,8 @@ export class GemCluster implements Prop, Hittable {
       this.mesh.add(cr);
     }
     this.mesh.position.set(x, y, z);
+    // Its pieces never move on their own: one draw per material.
+    mergeStatic(this.mesh);
     game.level!.root.add(this.mesh);
     if (big) {
       this.solid = makeCyl(x, z, this.radius * 0.8, y - 0.5, y + 1.2);
@@ -229,6 +231,7 @@ export class Gate implements Prop, Hittable {
     this.solid = makeBox(x, z, w * 0.5, 0.6, y - 1, y + h, yaw);
     game.col.add(this.solid);
     this.build();
+    if (kind !== 'shadow') mergeStatic(this.root);
     this.root.position.set(x, y, z);
     this.root.rotation.y = yaw;
     game.level!.root.add(this.root);
@@ -841,6 +844,7 @@ export class Collectible implements Prop {
       this.root.add(ring);
     }
     this.root.position.set(x, y + 1.2, z);
+    mergeStatic(this.root);
     game.level!.root.add(this.root);
   }
 

@@ -4,6 +4,7 @@ import type { Prop } from '../entities/props';
 import { rng } from '../core/rng';
 import { lerp } from '../core/math';
 import * as THREE from 'three';
+import { mergeStatic } from '../render/shapes';
 
 /** Floating motes around the player: fireflies, snow, embers, pollen. */
 export class Ambient implements Prop {
@@ -182,6 +183,7 @@ export class Cage {
     glowRing.rotation.x = Math.PI / 2;
     glowRing.position.set(x, y + height * 0.7, z);
     this.root.add(glowRing);
+    mergeStatic(this.root);
     b.level.root.add(this.root);
   }
   shatter(g: Game): void {

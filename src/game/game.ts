@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { WIND } from '../render/materials';
+import { BlobShadows } from '../fx/blobs';
 import { Renderer } from '../render/renderer';
 import { Input } from '../core/input';
 import { audio, THEMES, type Audio, type Sfx } from '../core/audio';
@@ -77,6 +78,7 @@ export class Game {
   readonly input: Input;
   readonly audio: Audio = audio;
   readonly fx: FX;
+  private blobs: BlobShadows;
   readonly cam = new CameraRig();
   readonly hud: Hud;
   readonly menus: Menus;
@@ -126,6 +128,7 @@ export class Game {
     this.camera = this.renderer.camera;
     this.input = new Input(this.renderer.canvas);
     this.fx = new FX(this.camera);
+    this.blobs = new BlobShadows(this.scene);
     this.scene.add(this.fx.root);
     this.options = loadOptions();
     this.save = loadSave() ?? newSave();
@@ -383,6 +386,7 @@ export class Game {
 
     if (this.state !== 'title' && this.state !== 'menu' && this.level) this.cam.update(dt, this);
     this.hud.update(dt);
+    if (this.level) this.blobs.update(this);
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.render(this.realTime);

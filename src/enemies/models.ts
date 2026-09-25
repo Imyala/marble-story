@@ -502,6 +502,10 @@ export class WispModel extends BaseModel {
     this.root.traverse((ob) => {
       if ((ob as THREE.Mesh).isMesh) ob.castShadow = true;
     });
+    this.core.userData.keep = true;
+    for (const t of this.tendrils) t.userData.keep = true;
+    // Joints animate as groups; everything else in each group is one draw per material.
+    mergeStatic(this.root);
   }
 
   update(dt: number, pose: EnemyPose): void {
@@ -602,6 +606,9 @@ export class GolemModel extends BaseModel {
         this.torso.add(c);
       }
     }
+    this.core.userData.keep = true;
+    // Joints animate as groups; everything else in each group is one draw per material.
+    mergeStatic(this.root);
   }
 
   update(dt: number, pose: EnemyPose): void {
@@ -698,6 +705,8 @@ export class CrawlerModel extends BaseModel {
       this.shell.add(leg);
       this.legs.push(leg);
     }
+    // Joints animate as groups; everything else in each group is one draw per material.
+    mergeStatic(this.root);
   }
 
   update(dt: number, pose: EnemyPose): void {
@@ -748,6 +757,10 @@ export class TotemModel extends BaseModel {
       this.root.add(r);
       this.rings.push(r);
     }
+    this.crystal.userData.keep = true;
+    for (const r of this.rings) r.userData.keep = true;
+    // Joints animate as groups; everything else in each group is one draw per material.
+    mergeStatic(this.root);
   }
 
   override setFlash(amount: number, color: number): void {
@@ -812,6 +825,8 @@ export class DummyModel extends BaseModel {
     this.root.traverse((o) => {
       if ((o as THREE.Mesh).isMesh) o.castShadow = true;
     });
+    // Joints animate as groups; everything else in each group is one draw per material.
+    mergeStatic(this.root);
   }
   update(dt: number, pose: EnemyPose): void {
     this.time += dt;

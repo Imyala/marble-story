@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CollisionWorld, Heightfield, makeBox, makeCyl, makeRamp, type Solid, type Surface } from './collision';
 import { Shaper } from './shaper';
 import { buildTerrainMesh, buildTerrainSkirt } from '../render/terrain';
@@ -269,12 +270,13 @@ export class Builder {
       m.rotation.y = o.yaw ?? 0;
       m.castShadow = o.cast ?? true;
       m.receiveShadow = true;
-      this.level.root.add(m);
+      this.addStatic(m);
       if (o.trim !== undefined) {
+        // Sits a hair below the top face so the two never fight for the same pixels.
         const t = new THREE.Mesh(new THREE.BoxGeometry(w + 0.12, 0.14, d + 0.12), mat(o.trim, { rough: 0.6 }));
-        t.position.set(x, y0 + h - 0.07, z);
+        t.position.set(x, y0 + h - 0.1, z);
         t.rotation.y = o.yaw ?? 0;
-        this.level.root.add(t);
+        this.addStatic(t);
       }
     }
     return s;
@@ -292,11 +294,11 @@ export class Builder {
     const m = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.08, top - y0, 8), mat(color, { rough: 0.9, flat: true }));
     m.position.set(x, (y0 + top) / 2, z);
     m.castShadow = m.receiveShadow = true;
-    this.level.root.add(m);
+    this.addStatic(m);
     const cap = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.12, r * 1.12, 0.25, 8), mat(0xc8bda6, { rough: 0.8, flat: true }));
     cap.position.set(x, top - 0.12, z);
     cap.receiveShadow = true;
-    this.level.root.add(cap);
+    this.addStatic(cap);
     return s;
   }
 
@@ -308,12 +310,12 @@ export class Builder {
     const topM = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 0.95, 0.6, 14), mat(grass, { rough: 1, flat: true }));
     topM.position.set(x, top - 0.3, z);
     topM.receiveShadow = true;
-    this.level.root.add(topM);
+    this.addStatic(topM);
     const under = new THREE.Mesh(new THREE.ConeGeometry(r * 0.95, r * 1.8, 10, 2), mat(rock, { rough: 1, flat: true }));
     under.rotation.x = Math.PI;
     under.position.set(x, top - 0.6 - r * 0.9, z);
     under.castShadow = true;
-    this.level.root.add(under);
+    this.addStatic(under);
     return s;
   }
 
@@ -328,7 +330,7 @@ export class Builder {
     m.rotation.y = yaw;
     m.rotation.x = -Math.atan2(rise, len);
     m.castShadow = m.receiveShadow = true;
-    this.level.root.add(m);
+    this.addStatic(m);
     return s;
   }
 
@@ -373,7 +375,7 @@ export class Builder {
       rope.rotation.order = 'YXZ';
       rope.rotation.y = yaw;
       rope.rotation.x = Math.PI / 2 - Math.atan2(by - ay, len);
-      this.level.root.add(rope);
+      this.addStatic(rope);
     }
   }
 
@@ -411,7 +413,7 @@ export class Builder {
     lintel.position.set(x, y0 + h + 0.4, z);
     lintel.rotation.y = yaw;
     lintel.castShadow = true;
-    this.level.root.add(lintel);
+    this.addStatic(lintel);
   }
 
   // --- scenery --------------------------------------------------------------------------
@@ -765,9 +767,59 @@ export class Builder {
     return c;
   }
 
+  /**
+   * Adds a mesh that never moves again. At the end of the build these are
+   * merged by material in 24 m chunks: a walled courtyard becomes a few draws
+   * instead of hundreds, while culling and the camera's see-through fade still
+   * work chunk by chunk. Level code may use it for its own static scenery too.
+   */
+  addStatic(m: THREE.Mesh): THREE.Mesh {
+    m.userData.static = true;
+    this.level.root.add(m);
+    return m;
+  }
+
+  private mergeStatics(): void {
+    const root = this.level.root;
+    const groups = new Map<string, THREE.Mesh[]>();
+    for (const c of root.children) {
+      const m = c as THREE.Mesh;
+      if (!m.isMesh || !m.userData.static || Array.isArray(m.material) || (m as unknown as THREE.InstancedMesh).isInstancedMesh) continue;
+      const key = `${(m.material as THREE.Material).uuid}|${Math.floor(m.position.x / 24)},${Math.floor(m.position.z / 24)}|${m.castShadow ? 1 : 0}`;
+      const list = groups.get(key) ?? [];
+      list.push(m);
+      groups.set(key, list);
+    }
+    for (const list of groups.values()) {
+      if (list.length < 2) continue;
+      const geos: THREE.BufferGeometry[] = [];
+      for (const m of list) {
+        m.updateMatrix();
+        let g = m.geometry.clone();
+        for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
+        if (g.index) g = g.toNonIndexed();
+        g.applyMatrix4(m.matrix);
+        geos.push(g);
+      }
+      const merged = mergeGeometries(geos, false);
+      for (const g of geos) g.dispose();
+      if (!merged) continue;
+      merged.computeBoundingSphere();
+      const out = new THREE.Mesh(merged, list[0]!.material);
+      out.castShadow = list[0]!.castShadow;
+      out.receiveShadow = list.some((m) => m.receiveShadow);
+      for (const m of list) {
+        root.remove(m);
+        m.geometry.dispose();
+      }
+      root.add(out);
+    }
+  }
+
   finish(): void {
     this.decor.build(this.level.root);
     this.breakableSet.build(this.level.root);
+    this.mergeStatics();
   }
 }
 

@@ -945,3 +945,19 @@ export async function slots(h) {
   const s1 = await h.eval(() => ({ lvl: window.wyrm.level.def.id, gems: window.wyrm.save.gems }));
   h.check('a new game in slot 2 leaves slot 1 untouched', s2.lvl === 'fen' && s2.gems === 0 && s2.slot === '2' && s1.lvl === 'falls' && s1.gems === 777, JSON.stringify({ s2, s1 }));
 }
+
+/** Gems a realm places (gem lines and trails) stay until collected; dropped gems fade after a minute. */
+export async function placedgems(h) {
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const r = await h.eval(() => {
+    const g = window.wyrm;
+    const placed = g.gems.filter((q) => q.alive && q.placed).length;
+    g.spawnGems(g.player.x + 30, g.player.y + 1, g.player.z + 30, { blue: 5 }, false);
+    // Jump every gem's clock past the despawn age and let a frame run.
+    for (const q of g.gems) q.age += 70;
+    for (const q of g.gems) q.update(0.016);
+    return { placed, left: g.gems.filter((q) => q.alive && q.placed).length, dropped: g.gems.filter((q) => q.alive && !q.placed).length };
+  });
+  h.check('placed gems outlast the minute; dropped ones still fade', r.placed > 10 && r.left === r.placed && r.dropped === 0, JSON.stringify(r));
+}

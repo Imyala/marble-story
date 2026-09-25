@@ -13,15 +13,10 @@ import { mat, glowShared } from '../render/materials';
 import { ellipsoid, limb, mergeStatic } from '../render/shapes';
 import { clamp01, smoothstep } from '../core/math';
 import { rng } from '../core/rng';
-import { LETTERS } from '../game/letters';
-import { HOLLOW_LETTERS } from './letters/hollow';
 import {
   ROCK, archway, carveRealm, caveCeiling, crystalCluster, cavernWall, dock, dragonStatue, fungalGrove, hollowRoot, lanternPost,
   layoutRealm, nearRoute, rockSlab, routeAt, routeLength, ruinHall, sealedGate, stalagmites, type RealmPlan,
 } from '../world/kits';
-
-// The Hollow Gate's letters join the Journal (Act I's realms are listed in src/game/letters.ts).
-LETTERS.hollow ??= HOLLOW_LETTERS;
 
 /**
  * The Hollow Gate: Act II's hub, a vast glowing cavern under the Warden
@@ -195,8 +190,6 @@ export const hollow: LevelDef = {
   },
 
   onEnter(g, fresh) {
-    // The cavern's own soundscape (Act I's are picked by the game from its list).
-    g.audio.setAmbience('hollow');
     if (!g.save.found['story:hollow:arrive']) {
       g.save.found['story:hollow:arrive'] = true;
       arrive(g);

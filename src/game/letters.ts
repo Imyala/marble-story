@@ -4,6 +4,7 @@ import { FALLS_LETTERS } from '../levels/letters/falls';
 import { FROSTWORKS_LETTERS } from '../levels/letters/frostworks';
 import { PLAINS_LETTERS } from '../levels/letters/plains';
 import { KEEP_LETTERS } from '../levels/letters/keep';
+import { HOLLOW_LETTERS } from '../levels/letters/hollow';
 
 /**
  * Lore letters: notes, diaries and orders left around the realms. Each realm
@@ -25,6 +26,7 @@ export const LETTERS: Record<string, LetterDef[]> = {
   frostworks: FROSTWORKS_LETTERS,
   plains: PLAINS_LETTERS,
   keep: KEEP_LETTERS,
+  hollow: HOLLOW_LETTERS,
 };
 
 export function findLetter(level: string, id: string): LetterDef | undefined {

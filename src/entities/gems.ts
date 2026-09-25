@@ -39,6 +39,8 @@ export class Gem {
   vz: number;
   age = 0;
   alive = true;
+  /** Placed by the realm (gem lines, trails, piles): stays until collected. Dropped gems fade after a minute. */
+  placed = false;
   /** Where and how the gem is drawn; GemBatch draws every gem of a color in one call. */
   readonly mesh = new THREE.Object3D();
   private homing = false;
@@ -113,7 +115,7 @@ export class Gem {
     }
     this.mesh.position.set(this.x, this.y + (this.settled ? Math.sin(this.age * 3 + this.x) * 0.08 : 0), this.z);
     this.mesh.rotation.y += dt * 3;
-    if (this.age > 60 && !this.homing) this.kill();
+    if (!this.placed && this.age > 60 && !this.homing) this.kill();
   }
 
   private collect(): void {

@@ -34,7 +34,13 @@ dragoness, beneath the eclipse.
 | Stormspire Falls | Cliffs, waterfalls and updrafts. Boss: Skrieka, the Last Storm Roc. Learn Lightning |
 | The Frostworks | An ice forge full of lifts and gears. Boss: Forgemaster Grolm. Learn Ice |
 | Stonewild Plains | Grasslands, geysers and standing stones. Boss: Graveljaw, the Burrow Wyrm. Learn Earth |
-| Eclipse Keep | Nyxa's fortress. Every element, the hardest fights, the finale |
+| Eclipse Keep | Nyxa's fortress. Every element, the hardest fights, the finale of Act I |
+| The Hollow Gate | **Act II begins.** After the Keep, the Hollow King's roots split the Sanctum's lawn. Below lies a glowing cavern: a lake to swim and dive in, Burrowfolk to help, dragon ruins, and four sealed gates to Act II's realms |
+
+Once the Keep is done, **Nyxa travels with Aster** as a partner dragon: she
+follows, fights beside you (flanking shields, finishing frozen foes, a rising
+slash after your launchers, a Shadow Veil when you are nearly down), and waits
+where you tell her for puzzles built for two.
 
 ## What's deeper than the original
 
@@ -141,6 +147,18 @@ dragoness, beneath the eclipse.
 - **Par times and save slots.** Each realm is timed against a par on the
   results card, with best times on the Wardgate; three save slots keep
   separate journeys.
+- **A map and a quest log.** Press M for an aerial map of the realm: where
+  you are, Wardstones to fly between, fights won, shrines, what you have found
+  (and only counts of what you haven't). The quest log tracks the main story
+  and side quests from the folk of each realm (lanterns to relight, a race up
+  the rope bridges, goats to lead home, a cake to deliver, a lantern to dive
+  for), with a tracker under the health bars.
+- **Swimming and diving** in Act II's waters, with a breath meter; Act I's
+  deep water still sends you back to shore, so its ice-floe puzzles stand.
+- **Realm kits for building fast:** `src/world/kits.ts` has reusable pieces
+  (cavern walls, fungal groves, ruined halls, the Hollow King's roots, sealed
+  gates, docks, statues) and a realm template that lays out a whole route,
+  its arenas and its secret pockets from a short description.
 - **Accessibility.** A Reduced flashing option softens lightning, lens effects
   and hit flashes; touch and gamepad players see their own buttons named in
   tutorials; screen shake, camera and damage numbers are all adjustable.
@@ -167,6 +185,9 @@ estimate, and the plan to grow it into a complete 50-hour adventure.
 | Change element | 1 to 4, mouse wheel, R | D-pad |
 | Interact | F | L3 |
 | Flick: tap for a secret, hold for the way on | H | R3 |
+| Nyxa: tap to send her in, hold to make her stay | G | L3 (when nothing to use) |
+| Map | M | Guide / touchpad, or Pause → Map |
+| Swim: dive (hold) / rise or leap out | Shift / Space | B / A |
 | Pause | Esc | Start |
 
 On a phone or tablet, touch controls appear on the first touch: a joystick

@@ -105,11 +105,19 @@ dragoness, beneath the eclipse.
   ring every realm; storms roll over Stormspire Falls with rain, forked
   lightning and thunder; a color grade gives each realm its light, Dragon Time
   drains the world to a cold hush with a ripple, and grass parts around your feet.
+- **Getting around big realms.** Wardstones you have awakened can fly you to
+  one another; the Wardgate and the pause menu show how much of each realm you
+  have explored; tap Flick's button for the nearest secret, or hold it and he
+  points the way to the next fight or the boss.
 - **Soundscapes and a photo mode.** Each realm has its own ambience (marsh
   frogs and crickets, the Falls' roar, forge clangs on the Frostworks wind,
   larks over the Plains, crows and chimes at the Keep). Photo Mode, from the
   pause menu, freezes the world for a free camera with five filters and saves
-  the shot as a PNG.
+  the shot as a PNG (with depth of field if you like). Footsteps change with
+  the ground, and Dragon Time and menus muffle the world.
+- **Accessibility.** A Reduced flashing option softens lightning, lens effects
+  and hit flashes; touch and gamepad players see their own buttons named in
+  tutorials; screen shake, camera and damage numbers are all adjustable.
 
 ## Controls
 

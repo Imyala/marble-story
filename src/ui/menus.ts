@@ -186,7 +186,12 @@ export class Menus {
     const t = this.div('title-screen', '<h1>WYRMLING</h1><h2>First Flight</h2>');
     const list = this.div('menu-list');
     const save = loadSave();
-    if (save) list.append(this.btn(`Continue <small style="opacity:.6">&middot; ${LEVEL_INFO[save.level]?.name ?? save.level}</small>`, () => this.game.continueGame()));
+    if (save) {
+      const ex = explored(save, save.level);
+      const eggs = eggsFound(save);
+      const bits = [LEVEL_INFO[save.level]?.name ?? save.level, ex !== null ? `${Math.round(ex * 100)}% explored` : '', eggs ? `${eggs} eggs` : ''].filter(Boolean).join(' &middot; ');
+      list.append(this.btn(`Continue <small style="opacity:.6">&middot; ${bits}</small>`, () => this.game.continueGame()));
+    }
     list.append(
       this.btn('New Game', () => this.showDifficulty()),
       this.btn('Options', () => this.showOptions()),

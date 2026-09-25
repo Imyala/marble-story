@@ -39,7 +39,8 @@ export class Gem {
   vz: number;
   age = 0;
   alive = true;
-  readonly mesh: THREE.Mesh;
+  /** Where and how the gem is drawn; GemBatch draws every gem of a color in one call. */
+  readonly mesh = new THREE.Object3D();
   private homing = false;
   private autoCollect: boolean;
   private game: Game;
@@ -58,11 +59,9 @@ export class Gem {
     this.vz = Math.cos(a) * s;
     this.vy = 4 + rng.next() * 4;
     this.autoCollect = autoCollect;
-    this.mesh = new THREE.Mesh(geom, gemMat(kind));
     const sc = value >= 10 ? 1.7 : value >= 5 ? 1.35 : 1;
     this.mesh.scale.setScalar(sc);
     this.mesh.position.set(x, y, z);
-    game.scene.add(this.mesh);
   }
 
   update(dt: number): void {
@@ -125,7 +124,6 @@ export class Gem {
   kill(): void {
     if (!this.alive) return;
     this.alive = false;
-    this.game.scene.remove(this.mesh);
   }
 }
 
@@ -146,4 +144,37 @@ export function splitValue(total: number): number[] {
     left -= 1;
   }
   return out;
+}
+
+/** Every live gem, drawn as one instanced mesh per color. */
+export class GemBatch {
+  private meshes = new Map<GemKind, THREE.InstancedMesh>();
+  private static CAP = 768;
+
+  constructor(scene: THREE.Scene) {
+    for (const k of Object.keys(GEM_COLORS) as GemKind[]) {
+      const im = new THREE.InstancedMesh(geom, gemMat(k), GemBatch.CAP);
+      im.count = 0;
+      im.frustumCulled = false;
+      scene.add(im);
+      this.meshes.set(k, im);
+    }
+  }
+
+  update(gems: Gem[]): void {
+    const n = new Map<GemKind, number>();
+    for (const gm of gems) {
+      if (!gm.alive || !gm.mesh.visible) continue;
+      const im = this.meshes.get(gm.kind)!;
+      const i = n.get(gm.kind) ?? 0;
+      if (i >= GemBatch.CAP) continue;
+      gm.mesh.updateMatrix();
+      im.setMatrixAt(i, gm.mesh.matrix);
+      n.set(gm.kind, i + 1);
+    }
+    for (const [k, im] of this.meshes) {
+      im.count = n.get(k) ?? 0;
+      if (im.count) im.instanceMatrix.needsUpdate = true;
+    }
+  }
 }

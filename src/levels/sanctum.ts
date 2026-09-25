@@ -546,7 +546,8 @@ function bakeRig(b: Builder, root: THREE.Object3D): void {
     mesh.castShadow = true;
     mesh.receiveShadow = true;
     // Chunked by where it stands: the geometry is in world space, so place the mesh's origin there.
-    const c = one.boundingSphere!.center;
+    // A copy: translate() recomputes the bounding sphere in place.
+    const c = one.boundingSphere!.center.clone();
     one.translate(-c.x, 0, -c.z);
     mesh.position.set(c.x, 0, c.z);
     b.addStatic(mesh);

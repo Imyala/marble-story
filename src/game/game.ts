@@ -10,7 +10,7 @@ import { Player } from '../player/player';
 import { Enemy } from '../enemies/enemy';
 import { ENEMIES, TOTEM_WARD } from '../enemies/defs';
 import { Projectile, Shockwave, type ProjectileSpec } from '../entities/projectile';
-import { Gem, splitValue, type GemKind, GEM_COLORS } from '../entities/gems';
+import { Gem, GemBatch, splitValue, type GemKind, GEM_COLORS } from '../entities/gems';
 import { StyleMeter } from '../combat/style';
 import { REACTION_INFO, type Reaction } from '../combat/status';
 import { makeHit, type DamageType, type Hit, type Hittable, type Element } from './types';
@@ -88,6 +88,7 @@ export class Game {
   readonly hud: Hud;
   readonly menus: Menus;
   readonly weather: Weather;
+  private gemBatch: GemBatch;
   readonly touch: TouchControls;
   readonly dialogue: Dialogue;
   save: SaveData;
@@ -140,6 +141,7 @@ export class Game {
     this.fx = new FX(this.camera);
     this.blobs = new BlobShadows(this.scene);
     this.weather = new Weather(this);
+    this.gemBatch = new GemBatch(this.scene);
     this.scene.add(this.fx.root);
     this.options = loadOptions();
     this.save = loadSave() ?? newSave();
@@ -417,6 +419,7 @@ export class Game {
     this.hud.update(dt);
     this.touch.update();
     if (this.level) this.blobs.update(this);
+    this.gemBatch.update(this.gems);
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;

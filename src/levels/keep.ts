@@ -10,7 +10,7 @@ import type { Line } from '../ui/dialogue';
 import type { DragonLook } from '../player/dragonRig';
 import { GEO } from '../render/decor';
 import { mat, glow } from '../render/materials';
-import { makeCyl } from '../world/collision';
+import { makeCyl, makeBox, type Solid, type Surface } from '../world/collision';
 import { rng } from '../core/rng';
 
 /**
@@ -45,6 +45,49 @@ const LINK = (() => {
   g.scale(1.6, 1, 1);
   return g;
 })();
+
+const glowCache = new Map<number, THREE.MeshBasicMaterial>();
+/**
+ * One shared glow material per color. Instanced scenery batches by material,
+ * so a fresh glow() per call would cost a draw call per spire tip and window.
+ */
+function glowC(color: number): THREE.MeshBasicMaterial {
+  let m = glowCache.get(color);
+  if (!m) {
+    m = glow(color);
+    glowCache.set(color, m);
+  }
+  return m;
+}
+
+const sigilCache = new Map<number, THREE.MeshBasicMaterial>();
+/** Double-sided flat glow for floor sigils, shared per color so the rings merge. */
+function sigilMat(color: number): THREE.MeshBasicMaterial {
+  let m = sigilCache.get(color);
+  if (!m) {
+    m = new THREE.MeshBasicMaterial({ color, side: THREE.DoubleSide });
+    sigilCache.set(color, m);
+  }
+  return m;
+}
+
+/** decor.glowCrystal with a shared material (the engine's makes a new one each call). */
+function glowShards(b: Builder, x: number, y: number, z: number, scale: number, color: number): void {
+  const r = b.decor.rng;
+  const m = glowC(color);
+  for (let i = 0; i < 3; i++) {
+    b.decor.add(GEO.octa(), m, x + r.signed() * 0.3 * scale, y + 0.3 * scale, z + r.signed() * 0.3 * scale,
+      0.15 * scale, (0.4 + r.next() * 0.4) * scale, 0.15 * scale, r.signed() * 0.4, r.next() * 6, r.signed() * 0.4, false);
+  }
+}
+
+/** decor.lantern with a shared flame material. */
+function lantern(b: Builder, x: number, y: number, z: number, color = 0xffc070): void {
+  const post = mat(0x3a2e24, { rough: 0.9 });
+  b.decor.add(GEO.cyl6(), post, x, y, z, 0.07, 2.2, 0.07);
+  b.decor.add(GEO.box(), post, x + 0.25, y + 2.15, z, 0.55, 0.06, 0.06);
+  b.decor.add(GEO.blobLow(), glowC(color), x + 0.45, y + 1.9, z, 0.14, 0.2, 0.14, 0, 0, 0, false);
+}
 
 export const keep: LevelDef = {
   id: 'keep',
@@ -83,6 +126,18 @@ export const keep: LevelDef = {
       s.island(0, -229, 11, 20, 2, 0.2);
       s.path([[0, -239, 20], [0, -245, 20]], 7, 1);
       s.island(AX, AZ, AR, 20, 2, 0.1);
+      // The Moonlit Hatchery on the west rocks, past two stepping islets.
+      s.island(-33, -115.5, 4, 8.2, 2, 0.15);
+      s.island(-40.8, -110.8, 2.6, 9.3, 2, 0.1);
+      s.island(-60, -103, 9, 10.5, 2, 0.2);
+      // The Quartermaster's storehouse on the east rock.
+      s.island(44, -104, 9, 9, 2, 0.2);
+      // Nyxa's nest off the Hall of Umbra.
+      s.island(-28, -158, 3.8, 9, 2, 0.15);
+      // The Moonwatch, a lookout rock below the Eclipse Terrace.
+      s.island(-24, -221, 3, 13, 2, 0.15);
+      // A ledge under the broken bridge.
+      s.island(6.8, -21, 2.2, -3, 1.5, 0.1);
     },
   },
 
@@ -311,7 +366,8 @@ export const keep: LevelDef = {
     b.collectible('relic2', 'relic', -12.1, -99.25, undefined, 'keep2');
 
     // The court itself.
-    for (const [x, z] of [[-17.5, -93], [-19.5, -114], [19, -108], [-8, -93], [8, -92.5]] as const) crystals(b, x, b.y(x, z), z, 1 + Math.abs(jitter(x + z)) * 0.4);
+    // The two by the side arches stand aside for the new causeway and barge.
+    for (const [x, z] of [[-17.5, -93], [-19.4, -118.6], [19.4, -112.6], [-8, -93], [8, -92.5]] as const) crystals(b, x, b.y(x, z), z, 1 + Math.abs(jitter(x + z)) * 0.4);
     for (const [x, z] of [[-6, -95], [6, -95], [-6, -120], [-15, -120], [0, -104]] as const) brazier(b, flames, x, b.y(x, z), z);
     for (const sx of [-1, 1]) {
       gothicArch(b, sx * 9, -93, 0, 4.5, 4.5);
@@ -424,6 +480,9 @@ export const keep: LevelDef = {
     });
     if (b.level.props.length > before) bossTrigger = b.level.props[b.level.props.length - 1] ?? null;
     if (g.save.levelsDone.keep) b.portal(0, -272, 0, 'sanctum', 'Return to the Sanctum', 0xc9a2ff);
+
+    // New corners: the hatchery, the storehouse, Nyxa's nest, the Moonwatch and other finds.
+    newCorners(b, flames, later);
   },
 
   onEnter(g, fresh) {
@@ -438,6 +497,410 @@ export const keep: LevelDef = {
     }
   },
 };
+
+// --- new corners: the hatchery, the storehouse, Nyxa's nest and other finds -------------------------------
+
+const staticGeo = new Map<THREE.BufferGeometry, THREE.BufferGeometry>();
+/**
+ * Like decor.add, but a static mesh: the level merges these per material in
+ * 24 m chunks, so a far corner's props cost nothing while out of view (an
+ * instanced batch spans the whole level and is always drawn). Each shared
+ * shape is cloned once, because merging disposes the source geometry.
+ */
+function sadd(b: Builder, geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number,
+  sx: number, sy: number, sz: number, rx = 0, ry = 0, rz = 0, cast = true): void {
+  let g = staticGeo.get(geo);
+  if (!g) {
+    g = geo.clone();
+    staticGeo.set(geo, g);
+  }
+  const mesh = new THREE.Mesh(g, m);
+  mesh.position.set(x, y, z);
+  mesh.scale.set(sx, sy, sz);
+  mesh.rotation.set(rx, ry, rz);
+  mesh.castShadow = cast;
+  mesh.receiveShadow = true;
+  b.addStatic(mesh);
+}
+
+const KWOOD = 0x5a4632;
+const KWOOD_DARK = 0x3a2e24;
+
+/** An instanced box with a matching collider; y0 is its base. */
+function block(b: Builder, x: number, y0: number, z: number, w: number, h: number, d: number, color: number, yaw = 0, surface: Surface = 'stone'): Solid {
+  sadd(b, GEO.box(), mat(color, { rough: 0.85, flat: true }), x, y0 + h / 2, z, w, h, d, 0, yaw, 0);
+  const s = makeBox(x, z, w / 2, d / 2, y0, y0 + h, yaw);
+  s.surface = surface;
+  b.col.add(s);
+  return s;
+}
+
+/** A bolted cargo box that is part of the scenery, not a breakable. */
+function cargo(b: Builder, x: number, y0: number, z: number, w: number, h: number, d: number, yaw = 0): void {
+  block(b, x, y0, z, w, h, d, 0x6a5238, yaw, 'wood');
+  const band = mat(0x2a2432, { rough: 0.5, metal: 0.5 });
+  for (const t of [-0.3, 0.3]) {
+    sadd(b, GEO.box(), band, x + Math.sin(yaw) * t * d, y0 + h / 2, z + Math.cos(yaw) * t * d, w + 0.04, h + 0.04, 0.08, 0, yaw, 0, false);
+  }
+}
+
+/** A big nest of dark twigs lined with something soft. */
+function twigNest(b: Builder, x: number, y: number, z: number, r: number, lining = 0x6a4a8a): void {
+  const twig = mat(0x3a2e3a, { rough: 1 });
+  const n = Math.round(r * 9);
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    // Lying along the ring's tangent, a little crossed.
+    const t = a + Math.PI + (i % 2 ? 0.35 : -0.35);
+    const len = r * 1.3;
+    const px = x + Math.sin(a) * r + Math.cos(t) * len * 0.5;
+    const pz = z + Math.cos(a) * r - Math.sin(t) * len * 0.5;
+    sadd(b, GEO.cyl6(), twig, px, y + 0.12 + (i % 2) * 0.1, pz, 0.06, len, 0.06, 0, t, Math.PI / 2, false);
+  }
+  sadd(b, GEO.blobLow(), mat(lining, { rough: 1, flat: true }), x, y + 0.05, z, r * 0.9, 0.18, r * 0.9, 0, 0.4, 0, false);
+}
+
+/** Shell halves of a hatched egg. */
+function shells(b: Builder, x: number, y: number, z: number, color: number): void {
+  const m = mat(color, { rough: 0.4 });
+  sadd(b, GEO.cap(), m, x - 0.18, y + 0.18, z, 0.3, 0.36, 0.3, 0.5, 0, 0.3, false);
+  sadd(b, GEO.cap(), m, x + 0.24, y + 0.12, z + 0.16, 0.28, 0.32, 0.28, Math.PI - 0.6, 0.5, 0, false);
+}
+
+function candle(b: Builder, x: number, y: number, z: number, h = 0.3): void {
+  sadd(b, GEO.cyl(), mat(0xe8dcc8, { rough: 0.8 }), x, y, z, 0.05, h, 0.05, 0, 0, 0, false);
+  sadd(b, GEO.blobLow(), glowC(0xffc070), x, y + h + 0.06, z, 0.04, 0.08, 0.04, 0, 0, 0, false);
+}
+
+/** A long table with benches, goblets and candles. */
+function feastTable(b: Builder, x: number, y: number, z: number, len: number, yaw = 0): void {
+  const wood = KWOOD;
+  block(b, x, y, z, 1.2, 0.85, len, wood, yaw, 'wood');
+  for (const s of [-1, 1]) {
+    const bx = x + Math.cos(yaw) * s * 1.05;
+    const bz = z - Math.sin(yaw) * s * 1.05;
+    block(b, bx, y, bz, 0.42, 0.45, len * 0.9, KWOOD_DARK, yaw, 'wood');
+  }
+  const cup = mat(0x8a8098, { rough: 0.35, metal: 0.7 });
+  for (let i = 0; i < Math.floor(len / 1.1); i++) {
+    const t = -len / 2 + 0.6 + i * 1.1;
+    const px = x + Math.sin(yaw) * t;
+    const pz = z + Math.cos(yaw) * t;
+    const side = i % 2 ? 0.32 : -0.32;
+    sadd(b, GEO.cyl(), cup, px + Math.cos(yaw) * side, y + 0.85, pz - Math.sin(yaw) * side, 0.07, 0.2, 0.07, 0, 0, 0, false);
+    if (i % 3 === 1) candle(b, px, y + 0.85, pz, 0.35);
+  }
+}
+
+/** A rack of Gloom spears. */
+function spearRack(b: Builder, x: number, y: number, z: number, yaw: number): void {
+  const wood = mat(KWOOD_DARK, { rough: 0.95 });
+  const iron = mat(0x6a6484, { rough: 0.45, metal: 0.6 });
+  const lx = Math.cos(yaw);
+  const lz = -Math.sin(yaw);
+  for (const s of [-0.9, 0.9]) sadd(b, GEO.box(), wood, x + lx * s, y + 0.8, z + lz * s, 0.12, 1.6, 0.12, 0, yaw, 0);
+  sadd(b, GEO.box(), wood, x, y + 1.3, z, 2.0, 0.1, 0.1, 0, yaw, 0);
+  for (let i = 0; i < 5; i++) {
+    const s = -0.7 + i * 0.35;
+    sadd(b, GEO.cyl6(), wood, x + lx * s, y, z + lz * s, 0.03, 2.1, 0.03, 0.08, 0, 0, false);
+    sadd(b, GEO.cone(), iron, x + lx * s + Math.sin(0.08) * 0, y + 2.1, z + lz * s, 0.07, 0.3, 0.07, 0.08, 0, 0, false);
+  }
+  const s = makeBox(x, z, 1.0, 0.2, y, y + 1.6, yaw);
+  b.col.add(s);
+}
+
+/** A stone dragon keeping watch over the hatchery. */
+function mooncallerStatue(b: Builder, x: number, y: number, z: number, yaw: number): void {
+  const st = mat(OBS3, { rough: 0.8, flat: true });
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  sadd(b, GEO.cyl6(), mat(OBS2, { flat: true }), x, y - 0.3, z, 1.8, 1.1, 1.8, 0, 0.3, 0);
+  sadd(b, GEO.blob(), st, x, y + 1.7, z, 0.9, 1.1, 1.3, 0, yaw, 0);
+  sadd(b, GEO.cyl6(), st, x + fx * 0.6, y + 2.4, z + fz * 0.6, 0.32, 1.6, 0.32, 0.5 * Math.cos(yaw), 0, -0.5 * Math.sin(yaw));
+  sadd(b, GEO.blob(), st, x + fx * 1.3, y + 3.9, z + fz * 1.3, 0.42, 0.34, 0.62, 0, yaw, 0);
+  for (const s of [-1, 1]) {
+    const lx = Math.cos(yaw) * s;
+    const lz = -Math.sin(yaw) * s;
+    sadd(b, GEO.box(), st, x + lx * 1.3, y + 2.6, z + lz * 1.3, 0.12, 1.8, 1.6, 0, yaw, s * 0.6);
+    sadd(b, GEO.cone(), st, x + fx * 1.0 + lx * 0.22, y + 4.1, z + fz * 1.0 + lz * 0.22, 0.08, 0.5, 0.08, -0.6 * Math.cos(yaw), 0, 0.6 * Math.sin(yaw));
+    sadd(b, GEO.blobLow(), glowC(0x8ad8ff), x + fx * 1.62 + lx * 0.18, y + 3.95, z + fz * 1.62 + lz * 0.18, 0.06, 0.05, 0.06, 0, 0, 0, false);
+  }
+  b.col.add(makeCyl(x, z, 1.6, y - 1, y + 3.2));
+}
+
+/** Everything new in the Keep. Built last, so the stair's movers and the seal props keep their order. */
+function newCorners(b: Builder, flames: Flames, later: Deferred): void {
+  bridgeLedge(b);
+  landingFinds(b);
+  bastionArmory(b);
+  courtFinds(b);
+  hatchery(b, flames, later);
+  storehouse(b, flames);
+  hallFinds(b);
+  terraceFinds(b);
+  nyxaNest(b);
+  moonwatch(b);
+}
+
+/** Flick did say not to look down: a ledge under the broken bridge, and warm air back up. */
+function bridgeLedge(b: Builder): void {
+  const g = b.game;
+  const y = -3;
+  b.egg('ledge', 7.1, -21.2, y);
+  b.updraft(6.4, -20.6, 1.7, y, 11, 34);
+  crystals(b, 7.9, y, -22.2, 0.7);
+  for (const [x, z, gy] of [[2.6, -18.8, 3.4], [4, -19.6, 1.6], [5.4, -20.4, -0.2]] as const) b.gems(x, z, 'blue', 1, 0, gy);
+  b.story('ledge', 6.8, -21, 2.4, () => g.hud.flick('Oh. So THIS is what I saw when I looked down. Fine. Looking down was fine. Glide up on that wind!', 7));
+}
+
+function landingFinds(b: Builder): void {
+  b.breakables('crate', [[-5.6, -2.9], [-5.6, -2.9]]);
+  b.breakable(5.8, -1.1, 'barrel');
+  b.breakables('pod', [[8.4, 2.6], [8.9, 4.0]]);
+  // Powder the gate guards were keeping on the far span; a fireball makes them regret it.
+  b.breakables('keg', [[1.15, -35.4], [1.15, -38.6]]);
+  b.enemy('sapper', -0.6, -42.6, Math.PI);
+}
+
+/** The bastion's armory, a lean-to against the east rampart, crates stacked across its mouth. */
+function bastionArmory(b: Builder): void {
+  const bz = -58;
+  const y = b.y(10.5, bz + 4);
+  const z0 = bz + 4;
+  block(b, 10.8, y - 0.5, z0 - 2.3, 2.8, 3.2, 0.4, OBS2);
+  block(b, 10.8, y - 0.5, z0 + 2.3, 2.8, 3.2, 0.4, OBS2);
+  block(b, 10.9, y + 2.5, z0, 3.2, 0.3, 5.1, OBS3);
+  sadd(b, GEO.box(), mat(TRIM, { rough: 0.6, flat: true }), 9.35, y + 2.7, z0, 0.14, 0.14, 5.1, 0, 0, 0, false);
+  // Two high, so the only way to the egg is through them (placed with explicit heights under the roof).
+  for (const dz of [-1.2, 0, 1.2]) {
+    b.breakable(9.75, z0 + dz, 'crate', { y });
+    b.breakable(9.75, z0 + dz, 'crate', { y: b.col.groundAt(9.75, z0 + dz, y + 1.9, 0.05).y });
+  }
+  b.egg('armory', 11, z0, y);
+  spearRack(b, 4.5, b.y(4.5, bz + 10.4), bz + 10.4, 0.35);
+  spearRack(b, -4.5, b.y(-4.5, bz + 10.4), bz + 10.4, -0.35);
+  b.breakables('barrel', [[-9.8, bz + 6.6], [-10.6, bz + 5.6]]);
+  b.breakable(-9.4, bz + 5.2, 'crate');
+}
+
+function courtFinds(b: Builder): void {
+  const cy = b.y(0, -110);
+  // Supplies stacked along the walls, clear of the seals and the paths between them.
+  b.breakables('crate', [[-12.4, -124.2], [-12.4, -124.2], [-11.2, -124.6]]);
+  b.breakable(-13.6, -123.2, 'barrel');
+  b.breakables('urn', [[-19.6, -98.8], [-20.2, -100.2], [2.5, -125.4], [-2.5, -125.4]]);
+  b.breakables('pod', [[-10.5, -121.2], [-11.3, -120.2]]);
+  hollowStatue(b, -8, cy, -124.6);
+  hollowStatue(b, 5.4, cy, -90.8);
+  // Rubble and fallen drums in the open south half.
+  const rub = mat(OBS2, { rough: 1, flat: true });
+  for (const [rx, rz, n] of [[-9.5, -99.5, 5], [11.5, -91.4, 4], [-3.5, -91.2, 3], [13.4, -119.4, 3]] as const) {
+    for (let i = 0; i < n; i++) {
+      const a = i * 2.3 + rx;
+      const px = rx + Math.sin(a) * (0.4 + i * 0.25);
+      const pz = rz + Math.cos(a) * (0.4 + i * 0.25);
+      sadd(b, GEO.rock(), rub, px, cy, pz, 0.35 + (i % 3) * 0.15, 0.25 + (i % 2) * 0.15, 0.35, i, a, 0);
+    }
+  }
+  for (const [dx, dz, yaw] of [[-12.4, -95.2, 0.6], [12.8, -88.9, -0.4]] as const) {
+    sadd(b, GEO.cyl6(), mat(OBS2, { rough: 0.85, flat: true }), dx - Math.sin(yaw) * 0.7, cy + 0.55, dz - Math.cos(yaw) * 0.7, 0.55, 1.4, 0.55, 0, yaw + Math.PI / 2, Math.PI / 2);
+    b.col.add(makeBox(dx, dz, 0.55, 0.7, cy - 0.5, cy + 1.05, yaw));
+  }
+  // A Gloom supply cart, parked and forgotten.
+  cargo(b, -17.6, cy, -121.4, 1.4, 1.0, 2.4, 0.3);
+  b.breakable(-16.6, -123.4, 'basket');
+}
+
+/**
+ * The Moonlit Hatchery on the west rocks, where the Gloom keep the eggs they
+ * steal. Its keepers come out to fight; beating them unseals the ledger's strongbox.
+ */
+function hatchery(b: Builder, flames: Flames, later: Deferred): void {
+  const g = b.game;
+  const cy = b.y(-20, -114.5);
+  // The causeway out of the court's west arch, then stepping rocks and a crumbling stone.
+  causeway(b, -21.4, -114.6, cy, -29.4, -115.2, 8.2, 3);
+  b.gemLine([[-19.5, -114.6], [-29, -115.2]], 'blue', 1.6);
+  b.gems(-37.4, -113.2, 'blue', 1, 0, 9.4);
+  b.gems(-40.8, -110.8, 'blue', 1, 0, 10);
+  b.crumble(-47.4, 10.1, -108.1, 2.4, 2.4);
+  b.gems(-47.4, -108.1, 'blue', 1, 0, 10.4);
+  b.story('hatchery', -33, -115.5, 3.5, () => g.hud.flick('Nests out on those rocks... and something is glowing in them. Careful, that last stone looks crumbly!', 7));
+  crystals(b, -34.6, b.y(-34.6, -113.4), -113.4, 0.8);
+  lantern(b, -31.2, b.y(-31.2, -117.6), -117.6, 0xd0a0ff);
+
+  const hx = -60;
+  const hz = -103;
+  const hy = 10.5;
+  // Nests in a ring round a moon-pool; one still has its egg.
+  sadd(b, GEO.cyl(), mat(OBS2, { rough: 0.8, flat: true }), hx, hy - 0.2, hz, 1.9, 0.45, 1.9, 0, 0, 0);
+  sadd(b, GEO.cyl(), glowC(0x9a6ae8), hx, hy + 0.2, hz, 1.55, 0.04, 1.55, 0, 0, 0, false);
+  glowShards(b, hx, hy + 0.2, hz, 1.2, 0xd0a0ff);
+  lantern(b, -55.4, hy, -108.4, 0xd0a0ff);
+  lantern(b, -64.8, hy, -97.6, 0xd0a0ff);
+  b.col.add(makeCyl(hx, hz, 1.9, hy - 1, hy + 0.25));
+  const lilac = [0xd8c0f0, 0xc8b0e0, 0xe0d0f8];
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2 + Math.PI / 6;
+    const nx = hx + Math.sin(a) * 5.2;
+    const nz = hz + Math.cos(a) * 5.2;
+    twigNest(b, nx, hy, nz, 0.9);
+    if (i !== 3) shells(b, nx, hy, nz, lilac[i % 3]!);
+  }
+  const ea = (3 / 6) * Math.PI * 2 + Math.PI / 6;
+  b.egg('hatchery', hx + Math.sin(ea) * 5.2, hz + Math.cos(ea) * 5.2, hy);
+  mooncallerStatue(b, hx - 7, hy, hz, Math.PI / 2);
+  for (const [x, z] of [[-66.5, -98.5], [-66.5, -107.5]] as const) brazier(b, flames, x, b.y(x, z), z);
+  crystals(b, -63.5, hy, -110.5, 1.1);
+  crystals(b, -53.8, hy, -109.6, 0.9);
+  crystals(b, -64.4, hy, -95.6, 0.8);
+  b.breakables('pod', [[-61.6, -110.6], [-60.3, -111.2], [-58.8, -110.8], [-61, -109.4], [-56.4, -96.2], [-55.2, -97.4]]);
+  // The quartermaster's lectern by the way in.
+  lectern(b, -53.6, hy, -99.2);
+  b.letter('ledger', -54.4, -100.4);
+  // The strongbox, sealed in shadow until the keepers are beaten.
+  block(b, hx - 1.9, hy - 1, hz + 7.9, 0.6, 3.6, 2.8, OBS2);
+  block(b, hx + 1.9, hy - 1, hz + 7.9, 0.6, 3.6, 2.8, OBS2);
+  block(b, hx, hy - 1, hz + 9.1, 4.4, 3.6, 0.6, OBS2);
+  block(b, hx, hy + 2.6, hz + 7.9, 4.6, 0.4, 3.2, OBS3);
+  b.gate(hx, hz + 6.6, 3.2, 2.6, 0, 'shadow', 'hatchery-open', hy);
+  b.chest('hatchery', hx, hz + 8.1, Math.PI, { blue: 30, purple: 3, red: 2 }, hy);
+  const keepers = b.arena('hatchery', hx, hz, 8.5, [
+    [{ type: 'grunt', x: hx + 3, z: hz + 2.5 }, { type: 'grunt', x: hx - 3, z: hz + 2.5, delay: 0.3 }, { type: 'wisp', x: hx, z: hz - 3, delay: 0.5 }],
+    [{ type: 'knight', x: hx, z: hz + 3 }, { type: 'slinger', x: hx - 3.2, z: hz - 2.8, delay: 0.4 }],
+  ], 30);
+  keepers.onStart = () => g.hud.flick('The egg-keepers! Knock them out of their nests, Aster!', 5);
+  keepers.onClear = () => {
+    b.level.emit('hatchery-open');
+    g.hud.flick('The shadow seal on that little vault is gone. Strongbox!', 5);
+  };
+  if (keepers.state === 'cleared') later.emit('hatchery-open');
+}
+
+/**
+ * The Quartermaster's storehouse on the east rock, reached on a supply barge.
+ * Gloom guards and their powder by the landing, the cook's strongbox behind
+ * a barricade, and the quiet roof she wrote about.
+ */
+function storehouse(b: Builder, flames: Flames): void {
+  const g = b.game;
+  const cyE = b.y(21, -108);
+  b.mover([[23.4, cyE, -108], [34.2, 9, -106]], 3, 3, 2.4, OBS3, 0, '', 1.5);
+  b.story('barge', 20.5, -108, 3, () => g.hud.flick('A floating barge! It goes back and forth to that storehouse. Hop on when it comes by.', 6));
+  const sy = 9;
+  const wx = 46.5;
+  const wz = -101;
+  // The warehouse: dark walls, a barricaded door, a flat roof to sit on.
+  block(b, wx, sy - 0.4, wz - 2.3, 7, 3.6, 0.4, OBS2);
+  block(b, wx, sy - 0.4, wz + 2.3, 7, 3.6, 0.4, OBS2);
+  block(b, wx + 3.3, sy - 0.4, wz, 0.4, 3.6, 4.2, OBS2);
+  block(b, wx - 3.3, sy - 0.4, wz - 1.7, 0.4, 3.6, 1.2, OBS2);
+  block(b, wx - 3.3, sy - 0.4, wz + 1.7, 0.4, 3.6, 1.2, OBS2);
+  block(b, wx - 3.3, sy + 2.5, wz, 0.4, 0.7, 2.2, OBS2);
+  block(b, wx, sy + 3.2, wz, 7.4, 0.3, 5, OBS3);
+  const trim = mat(TRIM, { rough: 0.6, flat: true });
+  for (const [dx, dz, w, d] of [[0, -2.45, 7.4, 0.2], [0, 2.45, 7.4, 0.2], [3.65, 0, 0.2, 5], [-3.65, 0, 0.2, 5]] as const) {
+    sadd(b, GEO.box(), trim, wx + dx, sy + 3.62, wz + dz, w, 0.25, d, 0, 0, 0, false);
+  }
+  for (let i = 0; i < 6; i++) sadd(b, GEO.box(), mat(OBS2, { flat: true }), wx - 3 + i * 1.2, sy + 3.75, wz - 2.45, 0.5, 0.35, 0.3, 0, 0, 0);
+  banner(b, wx + 2.3, sy + 0.1, wz - 2.55, Math.PI);
+  b.gate(wx - 3.3, wz, 2.2, 2.5, Math.PI / 2, 'wood', '', sy);
+  b.chest('pantry', wx + 2.2, wz, -Math.PI / 2, { blue: 30, green: 2, red: 2 }, sy);
+  cargo(b, wx + 0.6, sy, wz + 1.5, 1.2, 1.1, 1.2, 0.1);
+  cargo(b, wx - 0.8, sy, wz + 1.4, 1.0, 0.9, 1.0, -0.2);
+  b.breakables('basket', [[wx + 1.2, wz - 1.4], [wx - 0.2, wz - 1.5]], { y: sy });
+  b.letter('cook', wx - 4.6, wz + 1.4);
+  // Cargo stacked high enough to climb onto the roof, where the cook keeps her good pot.
+  cargo(b, wx - 1.4, sy, wz - 4.6, 1.6, 1.2, 1.6, 0.1);
+  cargo(b, wx + 0.5, sy, wz - 3.3, 1.6, 2.4, 1.6, -0.05);
+  const ry = sy + 3.5;
+  sadd(b, GEO.cyl(), mat(0x3a3440, { rough: 0.4, metal: 0.6 }), wx + 1.8, ry, wz + 1.2, 0.45, 0.5, 0.45);
+  sadd(b, GEO.cyl(), mat(0xe0a030, { rough: 0.3, emissive: 0x6a4010, emissiveIntensity: 0.4 }), wx + 1.0, ry, wz + 1.6, 0.16, 0.3, 0.16, 0, 0, 0, false);
+  sadd(b, GEO.box(), mat(KWOOD, { rough: 0.9 }), wx + 1.6, ry + 0.22, wz + 0.2, 0.5, 0.45, 0.5, 0, 0.4, 0);
+  b.egg('roof', wx - 1.2, wz + 1, ry);
+  lantern(b, wx - 2.4, ry, wz - 1.6, 0xffc070);
+  // The landing: guards, and the powder they should not be keeping by the barge.
+  b.breakables('keg', [[39.6, -109.6], [40.5, -110.3], [39.6, -109.6], [38.5, -110.6]]);
+  b.enemy('grunt', 41.8, -107.2, -Math.PI / 2);
+  b.enemy('grunt', 38.6, -107.8, -Math.PI / 2);
+  b.enemy('slinger', wx + 1.5, wz - 0.8, -Math.PI / 2, ry);
+  // Stores round the yard.
+  b.breakables('crate', [[41.2, -97.8], [41.2, -97.8], [42.4, -97], [49.8, -107.8], [49.8, -107.8]]);
+  b.breakables('barrel', [[40.2, -99.4], [51, -103.2]]);
+  b.breakables('basket', [[38.4, -102.8], [38, -104.1], [39.2, -103.8]]);
+  // A little pier for the sky barges.
+  b.bridge(51.6, -106.4, sy, 58.4, -106.4, sy, 2.6);
+  for (const s of [-1, 1]) obPillar(b, 58.2, -106.4 + s * 1.4, 0.18, sy - 1.5, sy + 1.6);
+  chain(b, 58.2, sy + 1.5, -107.8, 58.2, sy + 1.5, -105, 0.4);
+  b.breakables('crate', [[56.2, -106.9], [55, -105.9]], { y: sy });
+  b.breakable(57.3, -105.8, 'barrel', { y: sy });
+  b.enemy('sapper', 54.2, -106.4, -Math.PI / 2, sy);
+  for (const [x, z] of [[38.6, -99], [49.8, -110.6]] as const) brazier(b, flames, x, b.y(x, z), z);
+  crystals(b, 47.5, sy, -111.2, 0.9);
+  b.crystal(37.6, -100.5, 'blue', 12);
+  b.gemLine([[36, -106], [40.5, -104], [43, -104.8]], 'blue', 1.6);
+}
+
+function terraceFinds(b: Builder): void {
+  b.breakables('pod', [[8.8, -229], [-8.6, -230.6], [5.5, -237.6]]);
+}
+
+function hallFinds(b: Builder): void {
+  const hy = b.y(0, -152.5);
+  // The long tables along the walls, laid for knights who never sit down.
+  feastTable(b, -11.8, hy, -150.3, 7);
+  b.breakables('urn', [[-12.6, -160.6], [-11.4, -161.4], [11.6, -144.4], [12.4, -145.4]]);
+  b.breakables('pod', [[-11, -144.2], [11.2, -160.6]]);
+}
+
+/** Nyxa's nest: a quiet rock off the hall, reached over two stones. */
+function nyxaNest(b: Builder): void {
+  const g = b.game;
+  b.islet(-18.8, 8.4, -155.8, 1.3, OBS3, OBS);
+  b.islet(-22.4, 8.9, -157.3, 1.2, OBS3, OBS);
+  b.gems(-18.8, -155.8, 'blue', 1, 0, 8.4);
+  b.gems(-22.4, -157.3, 'blue', 1, 0, 8.9);
+  const nx = -28.4;
+  const nz = -158.4;
+  const y = 9;
+  twigNest(b, nx, y, nz, 1.6, 0x8a5ab0);
+  shells(b, nx - 0.5, y + 0.1, nz + 0.3, 0xd8c0f0);
+  shells(b, nx + 0.6, y + 0.1, nz - 0.4, 0xb89ae8);
+  for (let i = 0; i < 5; i++) {
+    const a = -1.2 + i * 0.6;
+    candle(b, nx + Math.sin(a) * 2.5, y, nz + Math.cos(a) * 2.5, 0.2 + (i % 3) * 0.12);
+  }
+  for (const [x, z, c] of [[-26.2, -160.6, 0xb8a0d0], [-30.2, -156.4, 0x9a80c0], [-25.8, -156.2, 0xc8b0e0]] as const) b.decor.flower(x, y, z, c);
+  crystals(b, -30.8, y, -160.2, 0.7);
+  b.letter('nyxa-diary', nx, nz, y);
+  b.breakable(-26.4, -159.8, 'basket');
+  b.story('nest', -24, -157.6, 2.5, () => g.hud.flick('This is somebody\'s nest. Candles, shells... Aster, I think Nyxa comes here to look at the moons.', 7));
+}
+
+/** The Moonwatch: a lookout rock below the terrace. A glide down, a warm wind back up. */
+function moonwatch(b: Builder): void {
+  const g = b.game;
+  const x = -24;
+  const z = -221;
+  const y = 13;
+  b.egg('moonwatch', x - 0.6, z - 0.8, y);
+  b.letter('deserter', x + 1.2, z + 0.6, y);
+  // The captain's telescope, still pointed at the moons.
+  const brass = mat(0xc8a050, { rough: 0.3, metal: 0.8 });
+  const dark = mat(KWOOD_DARK, { rough: 0.9 });
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    sadd(b, GEO.cyl6(), dark, x + 1.8 + Math.sin(a) * 0.35, y, z - 1.2 + Math.cos(a) * 0.35, 0.04, 1.3, 0.04, Math.cos(a) * 0.25, 0, -Math.sin(a) * 0.25);
+  }
+  sadd(b, GEO.cyl(), brass, x + 1.8, y + 1.25, z - 1.2, 0.12, 1.4, 0.12, -0.9, -0.6, 0);
+  b.col.add(makeCyl(x + 1.8, z - 1.2, 0.35, y, y + 1.4));
+  for (const [px, pz, h] of [[x - 2.2, z + 1.4, 1.8], [x - 1.2, z - 2.4, 1.1], [x + 2.4, z + 1.6, 1.4]] as const) obPillar(b, px, pz, 0.35, y - 0.4, y + h);
+  b.updraft(x + 1, z + 1.8, 1.4, y, 27, 36);
+  for (const [gx, gz, gy] of [[-9, -222, 23], [-13, -221.8, 22.8], [-17, -221.5, 22.2], [-20.5, -221.2, 21.4]] as const) b.gems(gx, gz, 'blue', 1, 0, gy);
+  lantern(b, x - 2.4, y, z - 0.6, 0xd0a0ff);
+  crystals(b, x + 0.4, y, z + 2.2, 0.7);
+  b.story('moonwatch', x, z, 3, () => g.hud.flick('Someone sat up here counting moons. There are only two. They must have been VERY thorough.', 7));
+}
 
 // --- the ending -------------------------------------------------------------------------------------
 
@@ -569,7 +1032,7 @@ function crystals(b: Builder, x: number, y: number, z: number, s = 1): void {
     const h = (i === 0 ? 1.5 : 0.6 + r.next() * 0.7) * s;
     b.decor.add(GEO.octa(), crystalMat(), x + Math.sin(a) * d, y + h * 0.3, z + Math.cos(a) * d, 0.3 * s, h, 0.3 * s, Math.cos(a) * 0.4, r.next() * 3, Math.sin(a) * 0.4);
   }
-  b.decor.glowCrystal(x, y, z, 0.8 * s, MAGENTA);
+  glowShards(b, x, y, z, 0.8 * s, MAGENTA);
 }
 
 /** A stone pillar in keep colors, with a collider. */
@@ -618,8 +1081,8 @@ function spire(b: Builder, x: number, y: number, z: number, h: number, r: number
   const turn = jitter(x * 1.3 + z) * 3;
   b.decor.add(GEO.cyl6(), mat(OBS, { rough: 0.8, flat: true }), x, y - 1, z, r, h * 0.45 + 1, r, 0, turn, 0);
   b.decor.add(GEO.cone(), mat(OBS2, { rough: 0.7, flat: true }), x, y + h * 0.45, z, r * 1.15, h * 0.55, r * 1.15, 0, turn, 0);
-  b.decor.add(GEO.cyl6(), glow(VIOLET), x, y + h * 0.3, z, r * 1.03, 0.22, r * 1.03, 0, turn, 0, false);
-  b.decor.add(GEO.octa(), glow(MAGENTA), x, y + h + 0.3, z, 0.22 * r + 0.1, 0.5 * r + 0.2, 0.22 * r + 0.1, 0, 0, 0, false);
+  b.decor.add(GEO.cyl6(), glowC(VIOLET), x, y + h * 0.3, z, r * 1.03, 0.22, r * 1.03, 0, turn, 0, false);
+  b.decor.add(GEO.octa(), glowC(MAGENTA), x, y + h + 0.3, z, 0.22 * r + 0.1, 0.5 * r + 0.2, 0.22 * r + 0.1, 0, 0, 0, false);
   if (collide) b.col.add(makeCyl(x, z, r, y - 1, y + h));
 }
 
@@ -628,10 +1091,10 @@ function tower(b: Builder, x: number, z: number, y0: number, r: number, h: numbe
   b.decor.add(GEO.cyl6(), mat(OBS, { rough: 0.85, flat: true }), x, y0, z, r, h, r);
   b.decor.add(GEO.cyl6(), mat(OBS2, { rough: 0.8, flat: true }), x, y0 + h, z, r * 1.15, 0.5, r * 1.15, 0, 0.5, 0);
   b.decor.add(GEO.cone(), mat(0x3a2e52, { rough: 0.7, flat: true }), x, y0 + h + 0.5, z, r * 1.1, r * 2.6, r * 1.1, 0, 0.5, 0);
-  b.decor.add(GEO.octa(), glow(MAGENTA), x, y0 + h + 0.7 + r * 2.6, z, 0.2, 0.45, 0.2, 0, 0, 0, false);
+  b.decor.add(GEO.octa(), glowC(MAGENTA), x, y0 + h + 0.7 + r * 2.6, z, 0.2, 0.45, 0.2, 0, 0, 0, false);
   for (let i = 0; i < 6; i++) {
     const a = (i / 6) * Math.PI * 2 + 0.26;
-    b.decor.add(GEO.box(), glow(i % 2 ? VIOLET : ROSE), x + Math.sin(a) * r, y0 + h * 0.72, z + Math.cos(a) * r, 0.3, 0.8, 0.1, 0, a, 0, false);
+    b.decor.add(GEO.box(), glowC(i % 2 ? VIOLET : ROSE), x + Math.sin(a) * r, y0 + h * 0.72, z + Math.cos(a) * r, 0.3, 0.8, 0.1, 0, a, 0, false);
   }
   b.col.add(makeCyl(x, z, r, y0, y0 + h));
 }
@@ -656,7 +1119,7 @@ function causeway(b: Builder, ax: number, az: number, ay: number, bx: number, bz
   const yaw = Math.atan2(bx - ax, bz - az);
   b.ramp((ax + bx) / 2, (az + bz) / 2, w, len, yaw, ay, by, OBS2, 0.8);
   // A glowing seam down each edge so the path reads at night.
-  const seam = glow(0x7a3ac0);
+  const seam = glowC(0x7a3ac0);
   for (const side of [-1, 1]) {
     const ox = Math.cos(yaw) * side * (w / 2 - 0.08);
     const oz = -Math.sin(yaw) * side * (w / 2 - 0.08);
@@ -670,7 +1133,7 @@ function causeway(b: Builder, ax: number, az: number, ay: number, bx: number, bz
       const z = az + (bz - az) * t + oz;
       const y = ay + (by - ay) * t;
       b.decor.add(GEO.cyl6(), mat(OBS, { rough: 0.8, flat: true }), x, y - 0.1, z, 0.13, 1.3, 0.13);
-      b.decor.add(GEO.octa(), glow(i % 2 ? VIOLET : MAGENTA), x, y + 1.35, z, 0.11, 0.18, 0.11, 0, 0, 0, false);
+      b.decor.add(GEO.octa(), glowC(i % 2 ? VIOLET : MAGENTA), x, y + 1.35, z, 0.11, 0.18, 0.11, 0, 0, 0, false);
       if (i > 0) chain(b, px, py + 1.05, pz, x, y + 1.05, z, 0.3);
       px = x;
       py = y;
@@ -703,7 +1166,7 @@ function chain(b: Builder, ax: number, ay: number, az: number, bx: number, by: n
 function brazier(b: Builder, flames: Flames, x: number, y: number, z: number, color = MAGENTA): void {
   b.decor.add(GEO.cyl6(), mat(OBS2, { rough: 0.8, flat: true }), x, y, z, 0.22, 1.1, 0.22);
   b.decor.add(GEO.cyl(), mat(0x4a3e5c, { rough: 0.5, metal: 0.4 }), x, y + 1.0, z, 0.5, 0.32, 0.5);
-  b.decor.add(GEO.blobLow(), glow(color), x, y + 1.45, z, 0.3, 0.42, 0.3, 0, 0, 0, false);
+  b.decor.add(GEO.blobLow(), glowC(color), x, y + 1.45, z, 0.3, 0.42, 0.3, 0, 0, 0, false);
   b.col.add(makeCyl(x, z, 0.35, y, y + 1.3));
   flames.add(x, y + 1.5, z, color);
 }
@@ -715,8 +1178,8 @@ function banner(b: Builder, x: number, y: number, z: number, yaw: number): void 
   b.decor.add(GEO.box(), cloth, x, y + 2.2, z, 1.4, 3.6, 0.05, 0, yaw, 0);
   const fx = Math.sin(yaw) * 0.04;
   const fz = Math.cos(yaw) * 0.04;
-  b.decor.add(GEO.octa(), glow(ROSE), x + fx, y + 2.8, z + fz, 0.34, 0.34, 0.04, 0, yaw, 0, false);
-  b.decor.add(GEO.box(), glow(0x2a0a20), x + fx * 1.5, y + 2.8, z + fz * 1.5, 0.3, 0.3, 0.02, 0, yaw, Math.PI / 4, false);
+  b.decor.add(GEO.octa(), glowC(ROSE), x + fx, y + 2.8, z + fz, 0.34, 0.34, 0.04, 0, yaw, 0, false);
+  b.decor.add(GEO.box(), glowC(0x2a0a20), x + fx * 1.5, y + 2.8, z + fz * 1.5, 0.3, 0.3, 0.02, 0, yaw, Math.PI / 4, false);
 }
 
 /** Two pillars and a pointed arch. */
@@ -738,24 +1201,23 @@ function pointedTop(b: Builder, x: number, z: number, yaw: number, w: number, y:
     const lx = side * w * 0.25;
     b.decor.add(GEO.box(), m, x + Math.cos(yaw) * lx, y + rise / 2, z - Math.sin(yaw) * lx, 0.45, len, 0.55, 0, yaw, side * lean);
   }
-  b.decor.add(GEO.octa(), glow(MAGENTA), x, y + rise + 0.1, z, 0.2, 0.3, 0.2, 0, yaw, 0, false);
+  b.decor.add(GEO.octa(), glowC(MAGENTA), x, y + rise + 0.1, z, 0.2, 0.3, 0.2, 0, yaw, 0, false);
 }
 
 /** A great round window of violet light. */
 function roseWindow(b: Builder, x: number, y: number, z: number): void {
-  const root = b.level.root;
   for (const [r, t, c] of [[2.4, 0.16, MAGENTA], [1.5, 0.1, VIOLET], [0.5, 0.12, ROSE]] as const) {
-    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, t, 6, 36), glow(c));
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(r, t, 6, 36), glowC(c));
     ring.position.set(x, y, z);
-    root.add(ring);
+    b.addStatic(ring);
   }
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2;
-    b.decor.add(GEO.box(), glow(VIOLET), x + Math.sin(a) * 1.45, y + Math.cos(a) * 1.45, z, 0.1, 1.9, 0.1, 0, 0, -a, false);
+    b.decor.add(GEO.box(), glowC(VIOLET), x + Math.sin(a) * 1.45, y + Math.cos(a) * 1.45, z, 0.1, 1.9, 0.1, 0, 0, -a, false);
   }
   const back = new THREE.Mesh(new THREE.CircleGeometry(2.5, 32), new THREE.MeshBasicMaterial({ color: 0x3a1060 }));
   back.position.set(x, y, z - 0.05);
-  root.add(back);
+  b.addStatic(back);
 }
 
 /** The broken nest where the shadow once kept an egg. */
@@ -763,7 +1225,8 @@ function nest(b: Builder, x: number, y: number, z: number): void {
   const twig = mat(0x3a2e3a, { rough: 1 });
   for (let i = 0; i < 10; i++) {
     const a = (i / 10) * Math.PI * 2;
-    b.decor.add(GEO.cyl6(), twig, x + Math.sin(a) * 0.7, y + 0.1, z + Math.cos(a) * 0.7, 0.06, 1.1, 0.06, Math.PI / 2, a, 0.3);
+    const t = a + Math.PI + (i % 2 ? 0.3 : -0.3);
+    b.decor.add(GEO.cyl6(), twig, x + Math.sin(a) * 0.7 + Math.cos(t) * 0.55, y + 0.1, z + Math.cos(a) * 0.7 - Math.sin(t) * 0.55, 0.06, 1.1, 0.06, 0, t, Math.PI / 2);
   }
   const shell = mat(0x7a6a8a, { rough: 0.4 });
   b.decor.add(GEO.cap(), shell, x - 0.2, y + 0.15, z, 0.42, 0.5, 0.42, 0.4, 0, 0.3);
@@ -778,9 +1241,9 @@ function hollowStatue(b: Builder, x: number, y: number, z: number): void {
   b.decor.add(GEO.blob(), stone, x, y + 3.5, z, 0.5, 0.6, 0.5);
   for (let i = 0; i < 5; i++) {
     const a = -0.9 + i * 0.45;
-    b.decor.add(GEO.cone(), glow(VIOLET), x + Math.sin(a) * 0.4, y + 3.9, z + Math.cos(a) * 0.4 - 0.4, 0.07, 0.55, 0.07, Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3, false);
+    b.decor.add(GEO.cone(), glowC(VIOLET), x + Math.sin(a) * 0.4, y + 3.9, z + Math.cos(a) * 0.4 - 0.4, 0.07, 0.55, 0.07, Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3, false);
   }
-  for (const sx of [-1, 1]) b.decor.add(GEO.blobLow(), glow(ROSE), x + 0.45, y + 3.55, z + sx * 0.16, 0.05, 0.06, 0.05, 0, 0, 0, false);
+  for (const sx of [-1, 1]) b.decor.add(GEO.blobLow(), glowC(ROSE), x + 0.45, y + 3.55, z + sx * 0.16, 0.05, 0.06, 0.05, 0, 0, 0, false);
   b.col.add(makeCyl(x, z, 0.9, y, y + 4));
 }
 
@@ -792,7 +1255,7 @@ function lectern(b: Builder, x: number, y: number, z: number): void {
   const page = mat(0xe8dcc0, { rough: 0.9 });
   b.decor.add(GEO.box(), page, x - 0.2, y + 1.14, z + 0.05, 0.42, 0.03, 0.56, 0.35, 0.8, 0);
   b.decor.add(GEO.box(), page, x + 0.22, y + 1.14, z - 0.1, 0.42, 0.03, 0.56, 0.35, 0.4, 0);
-  b.decor.lantern(x + 1.2, y, z + 0.6, 0xffd890);
+  lantern(b, x + 1.2, y, z + 0.6, 0xffd890);
 }
 
 /** The throne platform: sigils, spires, chains and the eclipse overhead. */
@@ -800,17 +1263,17 @@ function throneArena(b: Builder, flames: Flames, y: number): void {
   const root = b.level.root;
   // Floor sigils. The inner ring marks where the shadow cannot reach.
   const sig = (r: number, t: number, c: number) => {
-    const ring = new THREE.Mesh(new THREE.RingGeometry(r - t, r, 64, 1), new THREE.MeshBasicMaterial({ color: c, side: THREE.DoubleSide }));
+    const ring = new THREE.Mesh(new THREE.RingGeometry(r - t, r, 64, 1), sigilMat(c));
     ring.rotation.x = -Math.PI / 2;
     ring.position.set(AX, y + 0.04, AZ);
-    root.add(ring);
+    b.addStatic(ring);
   };
   sig(3.2, 0.18, MAGENTA);
   sig(8.5, 0.12, VIOLET);
   sig(AR - 5.5, 0.22, ROSE);
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
-    b.decor.add(GEO.box(), glow(0x6a2ab0), AX + Math.sin(a) * 5.9, y + 0.05, AZ + Math.cos(a) * 5.9, 0.1, 0.02, 5.1, 0, a, 0, false);
+    b.decor.add(GEO.box(), glowC(0x6a2ab0), AX + Math.sin(a) * 5.9, y + 0.05, AZ + Math.cos(a) * 5.9, 0.1, 0.02, 5.1, 0, a, 0, false);
   }
   // Spires on rocks around the rim, chained to the throne.
   const ring = AR + 5;
@@ -835,14 +1298,14 @@ function throneArena(b: Builder, flames: Flames, y: number): void {
     brazier(b, flames, AX + sx * 4.5, y, tz + 1.5, ROSE);
     banner(b, AX + sx * 3.2, y, tz - 2.4, 0);
   }
-  b.decor.add(GEO.octa(), glow(ROSE), AX, y + 5.2, tz - 1.55, 0.5, 0.7, 0.1, 0, 0, 0, false);
+  b.decor.add(GEO.octa(), glowC(ROSE), AX, y + 5.2, tz - 1.55, 0.5, 0.7, 0.1, 0, 0, 0, false);
   // The eclipse: a black sun burning in a violet ring.
   const ex = AX;
   const ey = y + 32;
   const ez = AZ - 12;
   const sun = new THREE.Mesh(new THREE.SphereGeometry(6, 24, 16), new THREE.MeshBasicMaterial({ color: 0x06030c }));
   sun.position.set(ex, ey, ez);
-  root.add(sun);
+  b.addStatic(sun);
   for (const [r, t, c] of [[6.4, 0.35, MAGENTA], [7.2, 0.18, ROSE], [8.4, 0.08, VIOLET]] as const) {
     const corona = new THREE.Mesh(new THREE.TorusGeometry(r, t, 8, 64), glow(c, 0.9, true));
     corona.position.set(ex, ey, ez);

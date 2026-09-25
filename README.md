@@ -104,6 +104,11 @@ dragoness, beneath the eclipse.
   ring every realm; storms roll over Stormspire Falls with rain, forked
   lightning and thunder; a color grade gives each realm its light, Dragon Time
   drains the world to a cold hush with a ripple, and grass parts around your feet.
+- **Soundscapes and a photo mode.** Each realm has its own ambience (marsh
+  frogs and crickets, the Falls' roar, forge clangs on the Frostworks wind,
+  larks over the Plains, crows and chimes at the Keep). Photo Mode, from the
+  pause menu, freezes the world for a free camera with five filters and saves
+  the shot as a PNG.
 
 ## Controls
 

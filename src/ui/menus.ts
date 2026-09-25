@@ -280,6 +280,7 @@ export class Menus {
       this.btn('Moves', () => this.showMoves()),
       this.btn('Journal', () => this.showJournal()),
       this.btn('Scales', () => this.showSkins()),
+      this.btn('Photo Mode', () => g.photo.enter()),
       this.btn('Options', () => this.showOptions()),
       this.btn('Controls', () => this.showControls()),
     );

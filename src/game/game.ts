@@ -29,6 +29,7 @@ import { BACKDROPS } from '../render/backdrop';
 import { Weather, WEATHER } from '../fx/weather';
 import { EggThief } from '../entities/thief';
 import { TouchControls } from '../ui/touch';
+import { PhotoMode } from '../ui/photo';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
 import { RELICS } from './story';
@@ -90,6 +91,7 @@ export class Game {
   readonly weather: Weather;
   private gemBatch: GemBatch;
   readonly touch: TouchControls;
+  readonly photo: PhotoMode;
   readonly dialogue: Dialogue;
   save: SaveData;
   options: Options;
@@ -150,6 +152,7 @@ export class Game {
     this.flick = new Flick(this);
     this.hud = new Hud(this, root);
     this.touch = new TouchControls(this, root);
+    this.photo = new PhotoMode(this);
     this.dialogue = new Dialogue(this, root);
     this.menus = new Menus(this, root);
     this.applyOptions();
@@ -387,7 +390,8 @@ export class Game {
         this.titleCamera(dt);
         break;
       case 'pause':
-        this.menus.update(dt);
+        if (this.photo.active) this.photo.update(dt);
+        else this.menus.update(dt);
         break;
       case 'play':
         if (this.input.take('pause', 0.2)) {
@@ -417,7 +421,7 @@ export class Game {
     }
 
     if (this.state === 'play' && this.input.take('hint', 0.1)) this.hud.flick(this.flick.seek(), 4, true);
-    if (this.state !== 'title' && this.state !== 'menu' && this.level) this.cam.update(dt, this);
+    if (this.state !== 'title' && this.state !== 'menu' && this.level && !this.photo.active) this.cam.update(dt, this);
     this.hud.update(dt);
     this.touch.update();
     if (this.level) this.blobs.update(this);

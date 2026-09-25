@@ -116,6 +116,17 @@ export class Renderer {
     return this.gl.domElement.height;
   }
 
+  /** Photo-mode filter; null restores the normal look. */
+  setPhotoFilter(f: { sat: number; contrast: number; lift: number; tint: [number, number, number]; vig: number } | null): void {
+    if (!this.grade) return;
+    const u = this.grade.uniforms;
+    u.uPhotoSat!.value = f?.sat ?? 1;
+    u.uContrast!.value = f?.contrast ?? 1;
+    u.uLift!.value = f?.lift ?? 0;
+    u.uVig!.value = f?.vig ?? 0;
+    (u.uTint!.value as THREE.Vector3).set(...(f?.tint ?? [1, 1, 1]));
+  }
+
   /** True when the post chain draws Dragon Time itself (no CSS filter needed). */
   get grading(): boolean {
     return !!this.grade;

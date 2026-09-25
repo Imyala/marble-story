@@ -512,3 +512,32 @@ export async function ambience(h) {
     h.check(`${lvl} plays its soundscape`, r.kind === lvl, JSON.stringify(r));
   }
 }
+
+/** Photo mode: enter from pause, orbit, filter, capture a PNG, and back out with the quality restored. */
+export async function photo(h) {
+  await h.go('?level=sanctum&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => { const g = window.wyrm; g.player.place(0, 0.3, -8, 0); g.pause(); });
+  await h.wait(300);
+  await h.eval(() => [...document.querySelectorAll('button')].find((b) => /Photo Mode/i.test(b.textContent)).click());
+  await h.wait(600);
+  const a = await h.eval(() => ({ on: window.wyrm.photo.active, q: window.wyrm.renderer.quality, yaw: window.wyrm.photo.yaw }));
+  h.check('photo mode opens at high quality', a.on && a.q === 'high', JSON.stringify(a));
+  await h.page.mouse.move(480, 300);
+  await h.page.mouse.down();
+  await h.page.mouse.move(640, 260, { steps: 6 });
+  await h.page.mouse.up();
+  await h.page.keyboard.press('Digit3');
+  await h.wait(600);
+  const b = await h.eval(() => ({ yaw: window.wyrm.photo.yaw, filter: document.querySelector('.photo-filter')?.textContent }));
+  h.check('dragging orbits and 3 picks the Dusk filter', Math.abs(b.yaw - a.yaw) > 0.3 && /Dusk/.test(b.filter), JSON.stringify({ a, b }));
+  await h.shot('photo-mode');
+  const dl = h.page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
+  await h.page.keyboard.press('Enter');
+  const file = await dl;
+  h.check('capture saves a PNG', !!file && /\.png$/.test(file.suggestedFilename()), file ? file.suggestedFilename() : 'no download');
+  await h.page.keyboard.press('Escape');
+  await h.wait(600);
+  const c = await h.eval(() => ({ on: window.wyrm.photo.active, q: window.wyrm.renderer.quality, state: window.wyrm.state, pauseMenu: !!document.querySelector('.menu h2') }));
+  h.check('Esc returns to the pause menu at the old quality', !c.on && c.q === 'low' && c.state === 'pause' && c.pauseMenu, JSON.stringify(c));
+}

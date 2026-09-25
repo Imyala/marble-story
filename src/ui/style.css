@@ -317,3 +317,14 @@
 .ebar.elite { border-color: rgba(245,196,107,.8); width: 58px; margin-left: -29px; }
 .ebar.elite .fill { background: linear-gradient(180deg, #ffe08a, #d09020); }
 .dmg.big { font-size: 1.25em; }
+/* --- photo mode --- */
+.photo-layer { position: absolute; inset: 0; pointer-events: auto; touch-action: none; cursor: grab; font-family: var(--sans); color: var(--text); z-index: 5; }
+.photo-layer:active { cursor: grabbing; }
+.photo-bar { position: absolute; left: 50%; top: 14px; transform: translateX(-50%); display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; justify-content: center;
+  padding: 8px 16px; border-radius: 12px; background: rgba(12,8,24,.55); font-size: 13px; max-width: calc(100vw - 32px); }
+.photo-bar b { font: 600 15px var(--serif); color: var(--gold); letter-spacing: .08em; }
+.photo-keys { color: #cbbfe8; }
+.photo-btns { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.photo-btns .btn { min-width: 0; }
+.photo-flash { position: absolute; inset: 0; background: #fff; opacity: .8; animation: photoFlash .4s ease-out forwards; pointer-events: none; }
+@keyframes photoFlash { to { opacity: 0; } }

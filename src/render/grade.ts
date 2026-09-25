@@ -18,13 +18,20 @@ export const GradeShader = {
     uDT: { value: 0 },
     uPulse: { value: 1 },
     uFury: { value: 0 },
+    // Photo-mode filters (identity by default).
+    uContrast: { value: 1 },
+    uLift: { value: 0 },
+    uTint: { value: new THREE.Vector3(1, 1, 1) },
+    uVig: { value: 0 },
+    uPhotoSat: { value: 1 },
   },
   vertexShader: /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
 uniform sampler2D tDiffuse;
-uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury;
+uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat;
+uniform vec3 uTint;
 uniform vec3 uShadow, uHigh;
 varying vec2 vUv;
 void main() {
@@ -50,6 +57,12 @@ void main() {
   // Fury: warm, and the edges of the frame smoulder.
   col = mix(col, col * vec3(1.1, 0.96, 0.86), uFury * 0.7);
   col += vec3(1.0, 0.42, 0.12) * smoothstep(0.45, 0.95, r) * uFury * (0.22 + 0.08 * sin(uTime * 9.0));
+  // Photo filters.
+  float pl = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(vec3(pl), col, uPhotoSat);
+  col = (col - 0.5) * uContrast + 0.5 + uLift;
+  col *= uTint;
+  col *= 1.0 - uVig * smoothstep(0.35, 1.0, r);
   gl_FragColor = vec4(clamp(col, 0.0, 1.0), 1.0);
 }`,
 };

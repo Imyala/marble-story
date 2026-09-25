@@ -37,7 +37,7 @@ const AT = {
   jarA: { level: 'fen', x: 7.4, z: 57.4, label: 'A lantern-flame' },
   jarB: { level: 'fen', x: 31.5, z: 132.8, label: 'A lantern-flame' },
   snig: { level: 'fen', x: 24.5, z: 97.5, label: 'Snig' },
-  quillon: { level: 'sanctum', x: -39.6, z: 30.4, label: 'Quillon' },
+  quillon: { level: 'sanctum', x: -45, z: 26.4, label: 'Quillon' },
   hesper: { level: 'sanctum', x: -40.2, z: -3.2, label: 'Keeper Hesper' },
   page: { level: 'sanctum', x: 34.6, z: -36.0, label: 'The lost page' },
   brisa: { level: 'falls', x: 17.4, z: 0.8, label: 'Old Brisa' },
@@ -51,9 +51,13 @@ const AT = {
   nest: { level: 'keep', x: -27.6, z: -158.2, label: 'Nyxa\'s nest' },
 } satisfies Record<string, QuestSpot>;
 
-/** The Windstair Run: [x, z, yaw] of each gate, from Brisa's bridge to the Windward Bank. */
+/**
+ * The Windstair Run: [x, z, yaw] of each gate, from Brisa's bridge to the
+ * Windward Bank, each on the way a runner goes (on the rope bridges, facing
+ * along them, so aiming at the next gate never leads off an edge).
+ */
 const RACE: [number, number, number][] = [
-  [13.6, -2.6, -Math.PI / 2], [1.2, 3.6, -0.63], [1.5, 18, 0.49], [4.8, 27.1, -0.1], [0.5, 34, -0.73], [-4.1, 41.4, -0.17], [-0.7, 50.3, 0.57],
+  [13.6, -2.6, -Math.PI / 2], [-1.6, 12.2, 0.49], [1.5, 18, 0.49], [4.8, 27.1, -0.1], [0.5, 34, -0.73], [-4.1, 41.4, -0.17], [-0.7, 50.3, 0.57],
 ];
 /** Seconds to beat (Brisa's record). */
 const RACE_LIMIT = 15;
@@ -249,9 +253,10 @@ function buildSanctum(b: Builder): void {
         { who: 'quillon', text: 'But THIS survived. The Hatchery Roll: every egg ever laid in the Sanctum, in the Keeper\'s own claw. It belongs with Keeper Hesper, in the hatchery over the west bridge.' },
         { who: 'flick', text: 'Is it overdue?' },
         { who: 'quillon', text: 'It is TWELVE YEARS overdue. Take it to her, please. And while you are there, ask her about the Book of Lullabies. She will know.' },
+        { who: 'quillon', text: 'Oh, and mind the Gloom in the stacks. I call them shelf-mites. They eat the index cards.' },
       ], () => g.quests.start(Q));
     } else if (s < 3) {
-      g.say([{ who: 'quillon', text: 'Hesper will be in the hatchery, counting the nests. She always counts the nests.' }]);
+      g.say([{ who: 'quillon', text: 'Hesper will be in the hatchery, over the west bridge from the courtyard, counting the nests. She always counts the nests.' }]);
     } else if (s === 3) {
       g.say([
         { who: 'quillon', text: 'The Book of Lullabies! Two hundred and... never mind the number. The fine is waived. The fine is EMOTIONALLY waived.' },
@@ -474,6 +479,9 @@ function clearSpot(b: Builder, x: number, z: number, reach = 4): [number, number
       const pz = z + Math.cos(a) * r;
       const y = col.groundAt(px, pz, 1e4, 0.4).y;
       if (y < -1e3 || y < lv.waterLevel + 0.3) continue;
+      // On the ground or a low floor, not up on a table, a roof or a rock.
+      const t = col.terrainAt(px, pz);
+      if (t > -1e3 && y - t > 0.8) continue;
       if ([[1.2, 0], [-1.2, 0], [0, 1.2], [0, -1.2]].some(([dx, dz]) => Math.abs(col.groundAt(px + dx!, pz + dz!, y + 1, 0.3).y - y) > 0.45)) continue;
       if (b.game.inHazard(px, y + 0.1, pz)) continue;
       if (lv.interactables.some((it) => Math.hypot(it.x - px, it.z - pz) < 3)) continue;

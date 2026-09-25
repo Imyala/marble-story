@@ -128,6 +128,14 @@ export async function fen(h) {
   const j = await h.eval(() => ({ main: document.querySelector('.entry.quest.main h4')?.textContent, done: [...document.querySelectorAll('.entry.quest.done h4')].map((e) => e.textContent), page: document.querySelector('.entry.quest.done .page b')?.textContent, hint: document.querySelector('.entry.missing h4')?.textContent }));
   h.check('the Journal lists the main quest, the finished quest and its page', /Main quest/.test(j.main ?? '') && j.done.some((t) => /Old Wick/.test(t)) && /Lamplighters/.test(j.page ?? ''), JSON.stringify(j));
   await h.shot('quests-journal');
+  // A Legend Run starts the side quests over; the feat count stays.
+  const ng = await h.eval(async () => {
+    const { startNewGamePlus } = await import('/src/game/progress.ts');
+    const s = JSON.parse(JSON.stringify(window.wyrm.save));
+    startNewGamePlus(s);
+    return { quests: s.quests ?? null, count: s.stats.quests };
+  });
+  h.check('New Game+ resets the side quests but keeps the count toward Helping Paw', ng.quests === null && ng.count === 1, JSON.stringify(ng));
 }
 
 /**
@@ -255,6 +263,101 @@ export async function realms(h) {
   h.check('five side quests earn the Helping Paw feat', !feat0 && k2.feat && k2.quests === 5, JSON.stringify({ feat0, k2 }));
 }
 
+/**
+ * The Windstair Run can really be run: a bot that only steers toward the next
+ * gate and holds forward (no teleports) beats Brisa's time.
+ */
+export async function race(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=falls&seed=5&quality=low&maxdt=0.05', 2500);
+  await h.skipDialogue(8000);
+  await talkTo(h, 'Talk to Old Brisa');
+  await h.skipDialogue(8000);
+  // The slingers on the rock pillars would be dealt with first by most players.
+  await h.eval(() => { const g = window.wyrm; g.player.invuln = true; for (const e of g.enemies) if (e.alive && e.def.id === 'slinger' && e.z < 50) e.die(null); });
+  // Start a few paces before the first gate, on Brisa's bridge.
+  await h.eval(() => { const g = window.wyrm; g.player.place(16.5, g.col.groundAt(16.5, -2.6, 1e4, 0.2).y + 0.05, -2.6, -Math.PI / 2); g.cam.snapBehind(-Math.PI / 2, 0.3); window.__course = g.level.props.find((p) => p.constructor.name === 'RaceCourse'); });
+  await waitGame(h, 0.3);
+  const trail = [];
+  let result = null;
+  // The way a player runs it: over the landing, then along each rope bridge.
+  await h.eval(() => { window.__route = [[8.3, -2.5], [-2.5, 10.6], [-2, 11.5], [1.5, 18], [5, 24.5], [4.8, 27.1], [4.5, 29.5], [0.5, 34], [-3.5, 38.5], [-4.1, 41.4], [-4.5, 44.5], [-0.7, 50.3], [0.2, 52]]; window.__wp = 0; });
+  for (let i = 0; i < 600; i++) {
+    const s = await h.eval(() => {
+      const g = window.wyrm;
+      const c = window.__course;
+      const b = g.player.body;
+      const R = window.__route;
+      while (window.__wp < R.length - 1 && Math.hypot(R[window.__wp][0] - b.x, R[window.__wp][1] - b.z) < 1.3) window.__wp++;
+      const [tx, tz] = R[window.__wp];
+      const yaw = Math.atan2(tx - b.x, tz - b.z);
+      g.cam.yaw = yaw;
+      g.input.forceMove = { x: 0, y: 1 };
+      return { next: c.next, t: +c.t.toFixed(2), x: +b.x.toFixed(1), z: +b.z.toFixed(1), y: +b.y.toFixed(1), step: g.quests.step('falls-race'), done: g.quests.isDone('falls-race') };
+    });
+    if (i % 10 === 0) trail.push(s);
+    if (s.step === 1) { result = s; break; }
+    if (s.y < -5) { result = { fell: true, ...s }; break; }
+    await h.wait(30);
+  }
+  await h.eval(() => { window.wyrm.input.forceMove = null; });
+  h.check('running the gates for real beats Brisa\'s record', result?.step === 1, JSON.stringify({ result, trail: trail.slice(-6) }));
+  await h.shot('quests-race-done');
+}
+
+/** Screenshots of the quest things in the world, for looking at (W=960 H=540 reads well). */
+export async function look(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  /** A still of (x, z) from `back` metres off along `yaw`, `up` metres high; Aster stands aside. */
+  const view = async (name, x, z, yaw, back = 5, up = 2.2) => {
+    await h.eval(([x, z, yaw, back, up]) => {
+      const g = window.wyrm;
+      const gy = g.col.groundAt(x, z, 1e4, 0.2).y;
+      const cx = x - Math.sin(yaw) * back;
+      const cz = z - Math.cos(yaw) * back;
+      // Aster waits to one side of the camera, on dry ground (or else by the subject).
+      let px = cx + Math.cos(yaw) * 2.5;
+      let pz = cz - Math.sin(yaw) * 2.5;
+      let py = g.col.groundAt(px, pz, 1e4, 0.2).y;
+      if (py < -1e3 || g.isDeepWater(px, pz, py)) [px, py, pz] = [x + Math.cos(yaw) * 1.8, gy, z - Math.sin(yaw) * 1.8];
+      g.player.invuln = true;
+      g.player.place(px, py + 0.05, pz, yaw);
+      const v = g.camera.position.clone();
+      g.cam.setShot(v.clone().set(cx, gy + up, cz), v.clone().set(x, gy + 1.2, z));
+      g.hud.clearFlick();
+      g.hud.show(false);
+    }, [x, z, yaw, back, up]);
+    await waitGame(h, 1.6);
+    await h.shot(name);
+    await h.eval(() => { const g = window.wyrm; g.cam.clearShot(); g.hud.show(true); });
+  };
+  // Where a giver stands, and the way Aster comes at them (from the realm's start).
+  const at = (label) => h.eval((label) => { const g = window.wyrm; const t = g.level.interactables.find((i) => i.label === label); const [sx, sz] = g.level.def.spawn; return [t.x, t.z, Math.atan2(t.x - sx, t.z - sz)]; }, label);
+  await h.go('?level=fen&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  let [x, z, yaw] = await at('Talk to Old Wick');
+  await view('quests-look-wick', x, z, yaw, 4, 2.2);
+  await h.eval(() => window.wyrm.quests.start('fen-lanterns'));
+  await h.skipDialogue(3000);
+  await view('quests-look-flame', 7.4, 57.4, 2.2, 4, 1.8);
+  for (const [lvl, label] of [['sanctum', 'Talk to Quillon'], ['sanctum', 'Talk to Keeper Hesper'], ['falls', 'Talk to Old Brisa'], ['frostworks', 'Talk to Maud'], ['plains', 'Talk to Tamsin'], ['keep', 'Talk to Old Brine']]) {
+    await h.eval((l) => { const g = window.wyrm; if (g.level.def.id !== l) g.loadLevel(l, {}); }, lvl);
+    await h.skipDialogue(8000);
+    [x, z, yaw] = await at(label);
+    await view(`quests-look-${label.split(' ').pop().toLowerCase()}`, x, z, yaw, 5.5, 2.6);
+  }
+  await h.eval(() => window.wyrm.loadLevel('plains', {}));
+  await h.skipDialogue(8000);
+  await h.eval(() => window.wyrm.quests.start('plains-goats'));
+  await h.skipDialogue(3000);
+  await view('quests-look-goat', -40, 66, -2.4, 5, 1.8);
+  await h.eval(() => window.wyrm.loadLevel('frostworks', {}));
+  await h.skipDialogue(8000);
+  await h.eval(() => { const g = window.wyrm; g.quests.start('frost-hearths'); for (const e of g.enemies) if (e.alive && Math.hypot(e.homeX + 32.2, e.homeZ - 58.2) < 14) { e.alive = false; e.state = 'dead'; e.deadT = 1; } for (const t of g.level.props.filter((p) => p.constructor.name === 'Torch' && p.group === 'quest-hearths').slice(0, 2)) t.light(); });
+  await h.skipDialogue(3000);
+  await view('quests-look-camp', -33, 58, -2.0, 11, 6);
+}
+
 export default async function (h) {
   await h.page.addInitScript(() => localStorage.clear());
   await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
@@ -269,9 +372,13 @@ export default async function (h) {
       const g = window.wyrm;
       const t = g.level.interactables.find((i) => /^Talk to /.test(i.label) && (i.label.toLowerCase().includes(id) || i.label.includes('Old ' + id[0].toUpperCase() + id.slice(1))));
       const all = g.level.interactables.filter((i) => /^Talk to /.test(i.label)).map((i) => [i.label, +i.x.toFixed(1), +i.y.toFixed(1), +i.z.toFixed(1)]);
-      return { found: !!t, label: t?.label, all, water: g.waterLevel };
+      // A dragon's talker sits on top of its own collider; measure the dragon itself.
+      const npc = g.level.npcs.find((n) => n.id === id);
+      const who = npc ?? t;
+      const lift = who ? +(who.y - g.col.terrainAt(who.x, who.z)).toFixed(2) : null;
+      return { found: !!t, label: t?.label, all, lift, water: g.waterLevel };
     }, GIVERS[lvl]);
-    h.check(`${lvl}: the quest giver stands in the realm`, info.found, JSON.stringify(info));
+    h.check(`${lvl}: the quest giver stands in the realm, on the ground`, info.found && info.lift < 0.9, JSON.stringify(info));
     if (!info.found) continue;
     await talkTo(h, info.label);
     await h.shot(`quests-giver-${lvl}`);

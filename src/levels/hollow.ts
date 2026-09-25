@@ -588,7 +588,6 @@ class Burrowfolk implements Prop {
     this.root.scale.setScalar(look.scale);
     this.root.position.set(x, y, z);
     this.root.rotation.y = yaw;
-    if (look.old) this.root.rotation.x = 0;
     game.level!.root.add(this.root);
   }
 
@@ -627,7 +626,6 @@ function folk(b: Builder, id: string, x: number, z: number, yaw: number, look: F
     talk();
   });
   b.level.interactables.push(t);
-  b.level.props.push(t);
 }
 
 /** A round earthen hut with a lit doorway, facing `yaw`. */

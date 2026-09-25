@@ -291,6 +291,7 @@ export class Player {
     this.visYaw = yaw;
     this.lastSafe.set(x, y, z);
     this.swimUnder = false;
+    this.afloat = false;
     this.air = AIR_MAX;
     this.syncRig(0);
   }
@@ -1864,6 +1865,7 @@ export class Player {
   private die(): void {
     const g = this.game;
     this.alive = false;
+    this.afloat = false;
     this.clearPower();
     this.setState('dead');
     g.sfx('death');
@@ -2193,13 +2195,11 @@ export class Player {
   }
 
   private bubbles(n: number): void {
-    const b = this.body;
     const m = this.mouth(new THREE.Vector3());
     this.game.fx.emit(m.x, Math.min(m.y, this.game.waterLevel - 0.1), m.z, {
       count: n, speed: 0.9, dir: [0, 1, 0], spread: 0.6, life: [0.7, 1.4], size: [0.08, 0.2], sizeEnd: 1.3,
       color: 0xd8f6ff, alpha: 0.8, additive: false, drag: 1.5, gravity: -5, jitter: 0.15,
     });
-    void b;
   }
 
   /** A wake behind a paddling dragon, and bubbles from a diving one. */

@@ -240,7 +240,6 @@ export interface CeilingOpts {
 export function caveCeiling(b: Builder, x: number, z: number, sizeX: number, sizeZ: number, y: number, o: CeilingOpts = {}): (px: number, pz: number) => number {
   const rise = o.rise ?? 20;
   const holes = o.holes ?? [];
-  const R = Math.max(sizeX, sizeZ) * 0.5;
   const height = (px: number, pz: number): number => {
     const d = Math.hypot((px - x) / (sizeX * 0.5), (pz - z) / (sizeZ * 0.5));
     return y + rise * Math.max(0, 1 - d * d) + fbm(px * 0.035, pz * 0.035, 3, 21) * 5 + fbm(px * 0.12, pz * 0.12, 2, 5) * 1.2;
@@ -317,7 +316,6 @@ export function caveCeiling(b: Builder, x: number, z: number, sizeX: number, siz
     const h = 3 + r.next() * 9;
     b.decor.add(GEO.cone(), sm, px, height(px, pz) + 1, pz, h * 0.16, h + 1, h * 0.16, Math.PI, r.next() * 6, 0, false);
   }
-  void R;
   return height;
 }
 

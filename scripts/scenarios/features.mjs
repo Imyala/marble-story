@@ -541,3 +541,32 @@ export async function photo(h) {
   const c = await h.eval(() => ({ on: window.wyrm.photo.active, q: window.wyrm.renderer.quality, state: window.wyrm.state, pauseMenu: !!document.querySelector('.menu h2') }));
   h.check('Esc returns to the pause menu at the old quality', !c.on && c.q === 'low' && c.state === 'pause' && c.pauseMenu, JSON.stringify(c));
 }
+
+/** Fly between awakened Wardstones in a realm; the pause menu and Wardgate show how much is explored. */
+export async function wardflight(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const ids = await h.eval(() => [...window.wyrm.level.wardstones.keys()]);
+  h.check('the Fen has at least two Wardstones', ids.length >= 2, JSON.stringify(ids));
+  // Awaken the first two by walking up to them.
+  for (const id of ids.slice(0, 2)) {
+    await h.eval((id) => { const g = window.wyrm; const w = g.level.wardstones.get(id); g.player.place(w.x + 1.5, w.y + 0.1, w.z, 0); }, id);
+    await h.wait(1000);
+  }
+  await h.eval((id) => { const g = window.wyrm; g.openWardstone(g.level.wardstones.get(id)); }, ids[1]);
+  await h.wait(300);
+  const btn = await h.eval(() => !![...document.querySelectorAll('button')].find((b) => /Fly to a Wardstone/.test(b.textContent)));
+  h.check('the Wardstone offers a flight', btn);
+  await h.eval(() => [...document.querySelectorAll('button')].find((b) => /Fly to a Wardstone/.test(b.textContent)).click());
+  await h.wait(300);
+  await h.shot('ward-flight');
+  await h.eval(() => { const lists = document.querySelectorAll('.menu-list'); lists[lists.length - 1].querySelector('button').click(); });
+  await h.wait(1800);
+  const r = await h.eval((id) => { const g = window.wyrm; const w = g.level.wardstones.get(id); return { state: g.state, d: Math.hypot(g.player.x - w.x, g.player.z - w.z), cp: g.save.checkpoint }; }, ids[0]);
+  h.check('flying lands Aster by the other stone and plays on', r.state === 'play' && r.d < 4 && r.cp === ids[0], JSON.stringify(r));
+  await h.eval(() => window.wyrm.pause());
+  await h.wait(300);
+  const sub = await h.eval(() => document.querySelector('.panel .sub')?.textContent ?? '');
+  h.check('the pause menu shows how much is explored', /\d+% explored/.test(sub), sub);
+}

@@ -28,6 +28,7 @@ import { Menus } from '../ui/menus';
 import { BACKDROPS } from '../render/backdrop';
 import { Weather, WEATHER } from '../fx/weather';
 import { EggThief } from '../entities/thief';
+import { Chest } from '../entities/breakables';
 import { TouchControls } from '../ui/touch';
 import { PhotoMode } from '../ui/photo';
 import { Dialogue, type Line } from '../ui/dialogue';
@@ -306,6 +307,9 @@ export class Game {
     this.audio.stopAllLoops();
     this.prewarm();
     if (!opts.title) {
+      // Note what this realm holds, for the "% explored" on the Wardgate.
+      const chestIds = level.props.filter((p): p is Chest => p instanceof Chest).map((c) => c.id);
+      (this.save.realmIds ??= {})[id] = [...new Set([...level.secrets.map((q) => q.id), ...chestIds])];
       const v = this.visit;
       if (v.id !== id) {
         Object.assign(v, { id, t0: this.save.stats.playTime, kills0: this.save.stats.kills, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: this.save.stats.deaths, shown: false });
@@ -1050,11 +1054,42 @@ export class Game {
   }
 
   activateCheckpoint(w: Wardstone): void {
+    // Remembered for fast travel between the realm's Wardstones.
+    this.save.found[`ward:${this.level!.def.id}:${w.id}`] = true;
     this.save.checkpoint = w.id;
     this.save.level = this.level!.def.id;
     this.player.heal(this.player.maxHp);
     this.player.mana = this.player.maxMana;
     writeSave(this.save);
+  }
+
+  /** Wardstones in this realm already awakened, other than `from`. */
+  wardstonesVisited(from: Wardstone | null): Wardstone[] {
+    const level = this.level;
+    if (!level) return [];
+    return [...level.wardstones.values()].filter((w) => w !== from && this.save.found[`ward:${level.def.id}:${w.id}`]);
+  }
+
+  /** Flies Aster to another awakened Wardstone in the same realm. */
+  flyToWardstone(w: Wardstone): void {
+    this.menus.hideAll();
+    this.audio.play('uiConfirm');
+    this.fadeTo(() => {
+      const x = w.x + Math.sin(w.yaw) * 2.5;
+      const z = w.z + Math.cos(w.yaw) * 2.5;
+      const y = this.col.groundAt(x, z, 1e4, 0.2).y;
+      this.player.place(x, y + 0.1, z, w.yaw);
+      this.player.iframes = 1.5;
+      this.cam.snapBehind(w.yaw, 0.32);
+      for (const o of this.level!.wardstones.values()) if (o.active && o !== w) o.active = false;
+      w.setActive(false);
+      this.activateCheckpoint(w);
+      this.fx.motes(x, y + 1, z, 0xc9a2ff, 24);
+      // The fade lands in whatever state this leaves.
+      this.state = 'play';
+      this.input.wantPointerLock = true;
+      this.input.clearBuffers();
+    });
   }
 
   openWardstone(w: Wardstone): void {

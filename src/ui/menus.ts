@@ -1,6 +1,6 @@
 import type { Game } from '../game/game';
 import {
-  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, type UpgradeTree, type Difficulty,
+  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, explored, type UpgradeTree, type Difficulty,
 } from '../game/progress';
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
@@ -263,7 +263,9 @@ export class Menus {
     const sec = count(['heart', 'mana', 'relic']);
     const eggs = count(['egg']);
     const letters = count(['letter']);
+    const ex = g.level ? explored(g.save, g.level.def.id) : null;
     const bits = [
+      ex !== null ? `${Math.round(ex * 100)}% explored` : '',
       sec.total ? `secrets ${sec.have}/${sec.total}` : '',
       eggs.total ? `eggs ${eggs.have}/${eggs.total}` : '',
       letters.total ? `letters ${letters.have}/${letters.total}` : '',
@@ -308,6 +310,8 @@ export class Menus {
       this.btn('Abilities', () => this.showUpgrades()),
       this.btn('Journal', () => this.showJournal()),
     );
+    const others = g.wardstonesVisited(w);
+    if (others.length > 0) list.append(this.btn('Fly to a Wardstone', () => this.showWardFlight(w)));
     if (g.level?.def.id !== 'sanctum' && g.save.unlocked.includes('sanctum')) {
       list.append(this.btn('Travel to the Sanctum', () => {
         this.hideAll();
@@ -318,7 +322,25 @@ export class Menus {
     p.append(list);
     m.append(p);
     this.push(m, () => g.resume());
-    void w;
+  }
+
+  /** The other awakened Wardstones of this realm, nearest first. */
+  private showWardFlight(from: Wardstone): void {
+    const g = this.game;
+    const m = this.div('menu dim');
+    const p = this.div('panel');
+    p.style.minWidth = '360px';
+    p.innerHTML = '<h2>Fly to a Wardstone</h2><div class="sub">Stones you have awakened in this realm.</div>';
+    const list = this.div('menu-list');
+    const name = (id: string) => id.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+    for (const w of g.wardstonesVisited(from).sort((a, b) => Math.hypot(a.x - from.x, a.z - from.z) - Math.hypot(b.x - from.x, b.z - from.z))) {
+      const d = Math.round(Math.hypot(w.x - from.x, w.z - from.z));
+      list.append(this.btn(`${name(w.id)} <small style="opacity:.7">${d} m</small>`, () => g.flyToWardstone(w)));
+    }
+    list.append(this.btn('Back', () => this.pop()));
+    p.append(list);
+    m.append(p);
+    this.push(m, () => this.pop());
   }
 
   showTravel(): void {
@@ -331,6 +353,12 @@ export class Menus {
     const p = this.div('panel', '<h2>The Wardgate</h2><div class="sub">Choose a realm. Realms you have finished can be revisited for secrets you could not reach before.</div>');
     const grid = this.div('levels');
     const medalOf = (lvl: string) => [3, 2, 1].find((n) => g.save.found[`medal:${lvl}:${n}`]) ?? 0;
+    const exploredBar = (lvl: string) => {
+      const e = explored(g.save, lvl);
+      if (e === null) return '';
+      const pct = Math.round(e * 100);
+      return `<div class="lvl-explored"><i style="width:${pct}%"></i></div><p class="lvl-pct">${pct}% explored</p>`;
+    };
     for (const id of ['fen', 'falls', 'frostworks', 'plains', 'keep']) {
       const info = LEVEL_INFO[id]!;
       const unlocked = g.save.unlocked.includes(id);
@@ -339,7 +367,7 @@ export class Menus {
       b.dataset.f = '1';
       b.disabled = !unlocked;
       const found = Object.keys(g.save.found).filter((k) => k.startsWith(`${id}:`) && /:(heart|mana|relic)\d+$/.test(k)).length;
-      b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>${medalOf(id) ? `<p class="lvl-medal m${medalOf(id)}">${['', 'Bronze', 'Silver', 'Gold'][medalOf(id)]} Dragon Medal</p>` : ''}`;
+      b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>${exploredBar(id)}${medalOf(id) ? `<p class="lvl-medal m${medalOf(id)}">${['', 'Bronze', 'Silver', 'Gold'][medalOf(id)]} Dragon Medal</p>` : ''}`;
       b.addEventListener('click', () => {
         if (!unlocked) return;
         g.audio.play('uiConfirm');

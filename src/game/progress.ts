@@ -103,6 +103,8 @@ export interface SaveData {
   stats: { kills: number; bestCombo: number; playTime: number; deaths: number; reactions: number };
   /** Aster's chosen scales (see SKINS). */
   skin?: string;
+  /** Every secret and chest id a realm holds, noted when it is visited (for "% explored"). */
+  realmIds?: Record<string, string[]>;
 }
 
 /**
@@ -125,6 +127,13 @@ export const SKINS: SkinDef[] = [
   { id: 'moss', name: 'Mossback', eggs: 20, look: { body: 0x4a8a3a, belly: 0xd0b870, horn: 0x8a6a4a, membrane: 0xa0c060, spikes: 0x8a6a4a, eye: 0xffb030 } },
   { id: 'eclipse', name: 'Eclipse', eggs: 28, look: { body: 0x1a1428, belly: 0xc070ff, horn: 0xe8e0ff, membrane: 0x7a30c0, spikes: 0xe8e0ff, eye: 0xff80e0, glowEyes: true } },
 ];
+
+/** Share of a visited realm's secrets and chests found, 0..1, or null if never visited. */
+export function explored(s: SaveData, lvl: string): number | null {
+  const ids = s.realmIds?.[lvl];
+  if (!ids || ids.length === 0) return null;
+  return ids.filter((id) => s.found[id]).length / ids.length;
+}
 
 export function eggsFound(s: SaveData): number {
   return Object.keys(s.found).filter((k) => k.includes(':egg-')).length;

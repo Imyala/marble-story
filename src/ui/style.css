@@ -328,3 +328,6 @@
 .photo-btns .btn { min-width: 0; }
 .photo-flash { position: absolute; inset: 0; background: #fff; opacity: .8; animation: photoFlash .4s ease-out forwards; pointer-events: none; }
 @keyframes photoFlash { to { opacity: 0; } }
+.lvl-explored { height: 5px; margin-top: 6px; border-radius: 3px; background: rgba(255,255,255,.1); overflow: hidden; }
+.lvl-explored i { display: block; height: 100%; background: linear-gradient(90deg, #b07cff, #f5c46b); }
+.lvl-pct { font-size: 11px; color: #cbbfe8; margin-top: 3px; }

@@ -21,6 +21,10 @@ export const SPEAKERS: Record<string, { name: string; color: string }> = {
   skrieka: { name: 'Skrieka', color: '#7ac8ff' },
   grolm: { name: 'Forgemaster Grolm', color: '#bfe8ff' },
   graveljaw: { name: 'Graveljaw', color: '#c8a878' },
+  // Act II: the Burrowfolk of Lanternhollow, under the Hollow Gate.
+  mossa: { name: 'Elder Mossa', color: '#ffc890' },
+  tallow: { name: 'Tallow the Lampwright', color: '#ffe08a' },
+  pip: { name: 'Pip', color: '#9af0dc' },
 };
 
 export const PROLOGUE = [
@@ -69,6 +73,8 @@ export const LEVEL_INFO: Record<string, LevelInfo> = {
   frostworks: { name: 'The Frostworks', blurb: 'An ice forge hammering out chains for the Hollow King.', collectibles: 7 },
   plains: { name: 'Stonewild Plains', blurb: 'Tall grass over stone older than dragons.', collectibles: 7 },
   keep: { name: 'Eclipse Keep', blurb: 'Nyxa\'s fortress beneath the darkened moons.', collectibles: 5 },
+  // Act II: the Hollow Below.
+  hollow: { name: 'The Hollow Gate', blurb: 'A glowing cavern under the Sanctum, where the Hollow King\'s roots reach up from the deep.', collectibles: 2 },
 };
 
 export const RELICS: Record<string, { title: string; text: string; level: string }> = {
@@ -89,6 +95,8 @@ export const RELICS: Record<string, { title: string; text: string; level: string
   keep1: { level: 'keep', title: 'Nyxa', text: 'She was taken from the Sanctum as an egg on the same Eclipse night. The shadow raised her. The shadow is all she remembers.' },
   keep2: { level: 'keep', title: 'The Hollow King', text: 'He does not sleep, he does not eat, he does not age. He only waits for the moons to align again.' },
   keep3: { level: 'keep', title: 'The Last Page', text: 'If a violet dragon rises again, they will stand where I stood, and choose what I could not. (Torn from a Warden\'s journal.)' },
+  hollow1: { level: 'hollow', title: 'The Hollow Gate', text: 'Before there was a Sanctum in the sky, dragons nested below, by a lake that shone like the moons. The four sealed ways led to the first hatcheries, the mines and the drowned towns. The Wardens went up into the light. Not everyone followed.' },
+  hollow2: { level: 'hollow', title: 'Roots of the King', text: 'The Hollow King does not grow roots. He is the roots. Wherever they reach, light goes quiet, and he listens.' },
 };
 
 export const ENDING = [

@@ -5,6 +5,8 @@ import { frostworks } from './frostworks';
 import { keep } from './keep';
 import { plains } from './plains';
 import { sanctum } from './sanctum';
+// Act II.
+import { hollow } from './hollow';
 
 export const LEVELS: Record<string, LevelDef> = {
   fen,
@@ -13,4 +15,5 @@ export const LEVELS: Record<string, LevelDef> = {
   keep,
   plains,
   sanctum,
+  hollow,
 };

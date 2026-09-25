@@ -202,8 +202,12 @@ export default async function (h) {
     return {
       portals: g.level.interactables.filter((i) => i.constructor.name === 'Portal').length,
       cage: g.level.npcs.some((n) => n.id === 'frostfang'),
-      barrier: g.level.props.some((p) => p.constructor.name === 'Barrier'),
+      // A beaten boss only comes back if Aster asks for a rematch at the standing stone.
+      barrier: g.level.props.some((p) => p.constructor.name === 'Barrier' && p.on),
+      boss: !!g.boss?.alive,
+      rematch: g.level.interactables.some((i) => /Challenge Grolm/.test(i.label)),
     };
   });
-  h.check('revisit has return portals and no boss or cage', rv.portals >= 2 && !rv.cage && !rv.barrier, JSON.stringify(rv));
+  h.check('revisit has return portals and no boss or cage', rv.portals >= 2 && !rv.cage && !rv.barrier && !rv.boss, JSON.stringify(rv));
+  h.check('a standing stone offers a rematch', rv.rematch, JSON.stringify(rv));
 }

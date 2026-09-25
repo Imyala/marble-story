@@ -54,7 +54,10 @@ export default async function (h) {
   await t.walkTo(0, 247.5, 0.6, 6);
   await h.wait(500);
   await h.page.keyboard.press('KeyF');
-  await h.wait(3000);
+  await h.wait(1500);
+  // Finishing the realm this visit shows the results card first.
+  await h.skipDialogue(3000);
+  await h.wait(2000);
   const home = await h.eval(() => window.wyrm.level.def.id);
   h.check('the portal takes you home', home === 'sanctum', home);
 }

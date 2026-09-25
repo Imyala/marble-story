@@ -166,6 +166,7 @@ export default async function (h) {
   }
   b = await boss();
   h.check('a Ground Pound beside the trail shakes it loose', (b?.pounds ?? 0) > 0 && ['pop', 'exposed'].includes(b.mode), JSON.stringify(b));
+  if (!((b?.pounds ?? 0) > 0 && ['pop', 'exposed'].includes(b.mode))) console.log('modes', JSON.stringify(await h.eval(() => window.__modes.slice(-12))), await h.eval(() => window.__pound));
   await h.shot('gj-pound');
   // Freeze it and shatter its plates.
   b = await waitMode(['exposed'], 4000);

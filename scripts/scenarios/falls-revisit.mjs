@@ -19,7 +19,7 @@ export default async function (h) {
     const g = window.wyrm;
     return {
       portals: g.level.props.filter((p) => p.constructor.name === 'Portal').map((p) => [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1), p.target]),
-      barriers: g.level.props.filter((p) => p.constructor.name === 'Barrier').length,
+      barriers: g.level.props.filter((p) => p.constructor.name === 'Barrier' && p.on).length,
       npcs: g.level.npcs.map((n) => n.id),
     };
   });
@@ -35,6 +35,8 @@ export default async function (h) {
   await h.page.keyboard.press('KeyF');
   for (let i = 0; i < 10; i++) {
     await step(h, 0.3);
+    // Finishing the realm this visit shows the results card first.
+    await h.eval(() => document.querySelector('.panel.results button')?.click());
     if (await h.eval(() => window.wyrm.level?.def.id === 'sanctum')) break;
   }
   await step(h, 0.5);

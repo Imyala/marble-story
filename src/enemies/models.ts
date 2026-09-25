@@ -3,6 +3,7 @@ import { mat, matUnique, glow, addRim } from '../render/materials';
 import { ellipsoid, limb, spike, taperedTube, box, mergeStatic } from '../render/shapes';
 import { damp, lerp, smoothstep } from '../core/math';
 import type { EnemyState } from './enemy';
+import { DragonRig, defaultPose, type DragonLook } from '../player/dragonRig';
 
 export interface EnemyPose {
   state: EnemyState;
@@ -883,5 +884,62 @@ export class DummyModel extends BaseModel {
     this.wob = Math.max(0, this.wob - dt * 1.5);
     this.body.rotation.z = Math.sin(this.time * 18) * 0.35 * this.wob;
     this.body.rotation.x = Math.cos(this.time * 14) * 0.2 * this.wob;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shade Drake: a wild dragon of the Gloom, on the same skeleton as Aster.
+// ---------------------------------------------------------------------------
+
+export const DRAKE_LOOK: DragonLook = {
+  body: 0x3a2258, belly: 0x6a3a80, horn: 0xc8c0d8, membrane: 0xb01c44, eye: 0xff3050, spikes: 0xb0a0c8,
+  scale: 1.08, hornStyle: 'blade', tailStyle: 'scythe', slender: 0.75, glowEyes: true,
+};
+
+export class DrakeModel implements EnemyModel {
+  readonly root = new THREE.Group();
+  private rig: DragonRig;
+  private P = defaultPose();
+  private lastYaw = 0;
+
+  constructor(look: DragonLook = DRAKE_LOOK) {
+    this.rig = new DragonRig(look);
+    this.root.add(this.rig.root);
+    this.rig.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+  }
+
+  update(dt: number, pose: EnemyPose): void {
+    const P = this.P;
+    const moving = pose.state === 'chase' || pose.state === 'strafe' || pose.state === 'idle';
+    P.speed = moving ? Math.min(1.3, pose.speed) : 0;
+    P.grounded = !pose.airborne;
+    P.vy = pose.airborne ? -2 : 0;
+    P.dead = pose.dead || pose.state === 'down';
+    P.hurt = pose.state === 'hitstun' ? Math.max(0, 1 - pose.t / 0.4) : 0;
+    const yaw = this.root.rotation.y;
+    const turn = dt > 0 ? (yaw - this.lastYaw) / dt : 0;
+    this.lastYaw = yaw;
+    P.turn = Math.max(-6, Math.min(6, Number.isFinite(turn) ? turn : 0));
+    P.breath = false;
+    P.attack = null;
+    if (pose.attack && (pose.state === 'windup' || pose.state === 'active' || pose.state === 'recover')) {
+      // Windup plays the anticipation, the active phase the strike, recovery the follow-through.
+      const k = pose.state === 'windup' ? pose.windup * 0.3 : pose.state === 'active' ? 0.3 + Math.min(1, pose.t / 0.2) * 0.3 : 0.6 + Math.min(1, pose.t / 0.5) * 0.4;
+      if (pose.attack === 'spit') {
+        P.breath = pose.state === 'active';
+        P.attack = pose.state === 'windup' ? 'roar' : null;
+        P.attackT = k;
+      } else {
+        P.attack = pose.attack;
+        P.attackT = k;
+      }
+    }
+    if (pose.state === 'windup' && pose.attack !== 'spit') P.flapT = pose.windup > 0.8 ? 0 : 1;
+    this.rig.update(dt, P);
+    P.flapT = 1;
+  }
+
+  setFlash(amount: number, color: number): void {
+    this.rig.setFlash(amount, color);
   }
 }

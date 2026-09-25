@@ -320,3 +320,45 @@ export async function grass(h) {
   const u = await h.eval(() => window.wyrm.player.body.y);
   h.check('the scene renders with the push shader', typeof u === 'number');
 }
+
+/** The Shade Drake: a wild Gloom dragon that bites, pounces, lashes and spits. */
+export async function drake(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 300; i++) {
+      await h.wait(60);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=sanctum&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    g.player.place(0, 0.3, -8, 0);
+    g.player.invuln = true;
+    const d = g.spawnEnemy('drake', 0, 0.3, 4, Math.PI, false);
+    d.aggro = true;
+    window.__d = d;
+    window.__atk = new Set();
+    const orig = d.startAttack?.bind(d);
+    g.cam.snapBehind(0, 0.25);
+    g.hud.show(false);
+  });
+  const seen = new Set();
+  for (let i = 0; i < 60; i++) {
+    await waitGame(0.25);
+    const a = await h.eval(() => (window.__d.attack && window.__d.state !== 'chase' ? window.__d.attack.id : null));
+    if (a) seen.add(a);
+    if (i === 12) await h.shot('drake-fight');
+    if (seen.size >= 2 && i > 14) break;
+  }
+  h.check('the drake attacks with several moves', seen.size >= 2, JSON.stringify([...seen]));
+  const r = await h.eval(() => {
+    const d = window.__d;
+    d.hp = 1;
+    d.takeHit({ damage: 10, type: 'physical', dirX: 0, dirZ: 1, knockback: 2, launch: 0, stagger: 10, hitstop: 0, buildup: 0, heavy: false, spike: false, source: 'melee', move: 'horn1', fromPlayer: true, ox: 0, oz: -8 });
+    return { alive: d.alive, seen: !!window.wyrm.save.found['seen:drake'] };
+  });
+  h.check('it can be defeated and joins the Bestiary', !r.alive && r.seen, JSON.stringify(r));
+  await waitGame(1);
+}

@@ -1,5 +1,5 @@
 import type { EnemyDef } from './enemy';
-import { ImpModel, WispModel, GolemModel, CrawlerModel, TotemModel, DummyModel } from './models';
+import { DrakeModel, ImpModel, WispModel, GolemModel, CrawlerModel, TotemModel, DummyModel } from './models';
 
 /**
  * The roster. Each enemy is built to ask a different question of the player:
@@ -160,6 +160,20 @@ export const ENEMIES: Record<string, EnemyDef> = {
         projectile: { speed: 9, radius: 0.35, damage: 7, type: 'shadow', color: 0xb04cff, life: 3, gravity: 0, homing: 0.8 } },
     ],
     build: () => new TotemModel(),
+    styleValue: 1.5,
+  },
+  drake: {
+    id: 'drake', name: 'Shade Drake', hp: 95, radius: 0.7, height: 1.4, speed: 6.4, turnRate: 6, mass: 0.6, poise: 25,
+    resist: { shadow: 0.4, fire: 0.8, lightning: 1.3 }, statusResist: {}, aggroRange: 20,
+    gems: { blue: 12, red: 1, purple: 1 },
+    attacks: [
+      { id: 'bite', pose: 'horn1', range: 2.3, windup: 0.42, active: 0.18, recover: 0.5, cooldown: 1.1, weight: 3, kind: 'melee', damage: 10, knockback: 5, hitRange: 1.8, hitArc: 1.0, lunge: 5 },
+      { id: 'pounce', pose: 'horn3', range: 8, minRange: 3.5, windup: 0.6, active: 0.34, recover: 0.7, cooldown: 3.5, weight: 2, kind: 'melee', damage: 13, knockback: 8, hitRange: 1.6, hitArc: 1.0, lunge: 17 },
+      { id: 'tail', pose: 'tail1', range: 2.6, windup: 0.5, active: 0.22, recover: 0.55, cooldown: 2.5, weight: 1, kind: 'melee', damage: 11, knockback: 7, hitRange: 2.4, hitArc: 2.8 },
+      { id: 'spit', pose: 'spit', range: 15, minRange: 5, windup: 0.75, active: 0.1, recover: 0.6, cooldown: 3, weight: 2, kind: 'projectile', damage: 9, knockback: 4,
+        projectile: { speed: 15, radius: 0.4, damage: 9, type: 'shadow', color: 0xff3060, life: 2.5, gravity: 0, count: 3, spread: 0.18 } },
+    ],
+    build: () => new DrakeModel(),
     styleValue: 1.5,
   },
   dummy: {

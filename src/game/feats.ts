@@ -75,5 +75,6 @@ export const BESTIARY: Record<string, { blurb: string; tip: string }> = {
   stoneGolem: { blurb: 'A cairn that got up and walked. Shrugs off earth and horns alike.', tip: 'Freeze it and Shatter it with a heavy blow.' },
   crawler: { blurb: 'A Shellback: armored on top, soft underneath.', tip: 'Flip it with a heavy hit (Tail or Ground Pound), then strike the belly.' },
   knight: { blurb: 'Nyxa\'s elite guard. Patient, precise, and it punishes button mashing.', tip: 'Break its guard with heavy hits or get behind it; dodge its lunge.' },
+  drake: { blurb: 'A wild dragon swallowed by the Gloom: fast, clever, and far too much like you.', tip: 'It pounces from afar. Dodge sideways, then punish the long recovery. Its wings hate lightning.' },
   totem: { blurb: 'A shard of the Gloom planted in the ground, shielding every foe near it.', tip: 'Smash the totem first and the others lose their ward.' },
 };

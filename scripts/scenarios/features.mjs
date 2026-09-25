@@ -411,3 +411,54 @@ export async function rings(h) {
   const reset = await h.eval(() => ({ running: window.__r.running, next: window.__r.next }));
   h.check('running out of time resets the rings', !reset.running && reset.next === 0, JSON.stringify(reset));
 }
+
+/** Touch controls: appear on first touch; the left thumb moves, the right drags the camera, buttons act. */
+export async function touch(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 300; i++) {
+      await h.wait(40);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  await h.eval(() => {
+    window.__touch = (type, target, id, x, y) => {
+      const t = new Touch({ identifier: id, target, clientX: x, clientY: y });
+      target.dispatchEvent(new TouchEvent(type, { touches: type === 'touchend' ? [] : [t], changedTouches: [t], bubbles: true, cancelable: true }));
+    };
+    window.__touch('touchstart', window, 99, 1, 1);
+    window.__touch('touchend', window, 99, 1, 1);
+  });
+  await waitGame(0.2);
+  const shown = await h.eval(() => ({ on: window.wyrm.input.usingTouch, vis: getComputedStyle(document.querySelector('.touch-layer')).display }));
+  h.check('touch controls appear after the first touch', shown.on && shown.vis !== 'none', JSON.stringify(shown));
+  const z0 = await h.eval(() => [window.wyrm.player.x, window.wyrm.player.z]);
+  await h.eval(() => {
+    const L = document.querySelector('.touch-layer');
+    window.__touch('touchstart', L, 1, 150, 420);
+    window.__touch('touchmove', L, 1, 150, 340);
+  });
+  await waitGame(1);
+  const mv = await h.eval(() => ({ m: window.wyrm.input.touchMove, p: [window.wyrm.player.x, window.wyrm.player.z] }));
+  await h.shot('touch-controls');
+  await h.eval(() => { window.__touch('touchend', document.querySelector('.touch-layer'), 1, 150, 340); });
+  const moved = Math.hypot(mv.p[0] - z0[0], mv.p[1] - z0[1]);
+  h.check('the left thumb moves the dragon', mv.m && mv.m.y > 0.8 && moved > 2, JSON.stringify({ mv, moved }));
+  const yaw0 = await h.eval(() => window.wyrm.cam.yaw);
+  await h.eval(() => {
+    const L = document.querySelector('.touch-layer');
+    window.__touch('touchstart', L, 2, 700, 250);
+    for (let i = 1; i <= 5; i++) window.__touch('touchmove', L, 2, 700 + i * 20, 250);
+  });
+  await waitGame(0.2);
+  const yaw1 = await h.eval(() => window.wyrm.cam.yaw);
+  await h.eval(() => window.__touch('touchend', document.querySelector('.touch-layer'), 2, 800, 250));
+  h.check('dragging on the right turns the camera', Math.abs(yaw1 - yaw0) > 0.05, JSON.stringify({ yaw0, yaw1 }));
+  await h.eval(() => { const b = document.querySelector('.b-jump'); window.__touch('touchstart', b, 3, 0, 0); });
+  await waitGame(0.25);
+  const air = await h.eval(() => ({ g: window.wyrm.player.body.grounded, vy: window.wyrm.player.body.vy, y: window.wyrm.player.y }));
+  await h.eval(() => { const b = document.querySelector('.b-jump'); window.__touch('touchend', b, 3, 0, 0); });
+  h.check('the Jump button jumps', !air.g, JSON.stringify(air));
+}

@@ -319,7 +319,7 @@ export class Hud {
     }
     this.wardT -= dt;
     this.updateThreats();
-    const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad;
+    const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad && !g.input.usingTouch;
     this.clickHint.style.opacity = needClick ? '1' : '0';
   }
 

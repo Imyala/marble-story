@@ -82,6 +82,10 @@ export class Input {
   /** Raw horizontal look this frame (mouse pixels, or a scaled right stick), for flick gestures. */
   flickX = 0;
   usingPad = false;
+  /** Playing with the on-screen touch controls. */
+  usingTouch = false;
+  /** The touch joystick, when a thumb is on it. */
+  touchMove: { x: number; y: number } | null = null;
   mouseSensitivity = 1;
   invertY = false;
   /** Overrides the movement axes; used by automated tests. */
@@ -101,6 +105,9 @@ export class Input {
   private pendingRelease = new Set<Action>();
   private mouseDX = 0;
   private mouseDY = 0;
+  private touchHeld = new Set<Action>();
+  private touchDX = 0;
+  private touchDY = 0;
   private wheelAcc = 0;
   private canvas: HTMLElement;
 
@@ -206,6 +213,10 @@ export class Input {
       mx = pad.lx;
       my = -pad.ly;
     }
+    if (this.touchMove && mx === 0 && my === 0) {
+      mx = this.touchMove.x;
+      my = this.touchMove.y;
+    }
     if (this.forceMove) {
       mx = this.forceMove.x;
       my = this.forceMove.y;
@@ -218,10 +229,12 @@ export class Input {
     this.moveX = mx;
     this.moveY = my;
 
-    this.flickX = this.mouseDX + (pad ? pad.rx * 30 : 0);
+    this.flickX = this.mouseDX + this.touchDX + (pad ? pad.rx * 30 : 0);
     const sens = 0.0024 * this.mouseSensitivity;
-    this.lookX = this.mouseDX * sens;
-    this.lookY = this.mouseDY * sens * (this.invertY ? -1 : 1);
+    this.lookX = (this.mouseDX + this.touchDX * 2.2) * sens;
+    this.lookY = (this.mouseDY + this.touchDY * 2.2) * sens * (this.invertY ? -1 : 1);
+    this.touchDX = 0;
+    this.touchDY = 0;
     if (pad) {
       const ps = 2.6 * dt * this.mouseSensitivity;
       this.lookX += pad.rx * ps;
@@ -237,6 +250,7 @@ export class Input {
     for (const code of this.keysDown) if (KEY_BINDINGS[code]?.includes(a)) return true;
     for (const b of this.mouseDown) if (MOUSE_BINDINGS[b] === a) return true;
     for (const b of this.padDown) if (PAD_BINDINGS[b]?.includes(a)) return true;
+    if (this.touchHeld.has(a)) return true;
     return false;
   }
 
@@ -309,6 +323,25 @@ export class Input {
   clearBuffers(): void {
     this.pressAt.clear();
     this.consumedAt.clear();
+  }
+
+  // --- touch (fed by the on-screen controls) ---
+
+  touchPress(a: Action): void {
+    this.touchHeld.add(a);
+    this.pendingPress.add(a);
+    this.usingTouch = true;
+    this.usingPad = false;
+  }
+
+  touchRelease(a: Action): void {
+    this.touchHeld.delete(a);
+    this.pendingRelease.add(a);
+  }
+
+  touchLook(dx: number, dy: number): void {
+    this.touchDX += dx;
+    this.touchDY += dy;
   }
 
   /** Synthetic input for automated tests and the attract demo. */

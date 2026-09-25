@@ -28,6 +28,7 @@ import { Menus } from '../ui/menus';
 import { BACKDROPS } from '../render/backdrop';
 import { Weather, WEATHER } from '../fx/weather';
 import { EggThief } from '../entities/thief';
+import { TouchControls } from '../ui/touch';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
 import { RELICS } from './story';
@@ -87,6 +88,7 @@ export class Game {
   readonly hud: Hud;
   readonly menus: Menus;
   readonly weather: Weather;
+  readonly touch: TouchControls;
   readonly dialogue: Dialogue;
   save: SaveData;
   options: Options;
@@ -145,6 +147,7 @@ export class Game {
     this.player = new Player(this);
     this.flick = new Flick(this);
     this.hud = new Hud(this, root);
+    this.touch = new TouchControls(this, root);
     this.dialogue = new Dialogue(this, root);
     this.menus = new Menus(this, root);
     this.applyOptions();
@@ -153,7 +156,7 @@ export class Game {
     // Losing the mouse (Esc in the browser) pauses instead of leaving the
     // dragon running around unattended.
     document.addEventListener('pointerlockchange', () => {
-      if (!this.input.locked && this.state === 'play' && this.input.wantPointerLock && !this.input.usingPad) this.pause();
+      if (!this.input.locked && this.state === 'play' && this.input.wantPointerLock && !this.input.usingPad && !this.input.usingTouch) this.pause();
     });
     // Audio can only start after a user gesture.
     const unlock = () => this.audio.unlock();
@@ -412,6 +415,7 @@ export class Game {
     if (this.state === 'play' && this.input.take('hint', 0.1)) this.hud.flick(this.flick.seek(), 4, true);
     if (this.state !== 'title' && this.state !== 'menu' && this.level) this.cam.update(dt, this);
     this.hud.update(dt);
+    this.touch.update();
     if (this.level) this.blobs.update(this);
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);

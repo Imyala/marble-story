@@ -54,7 +54,18 @@ abstract class BaseModel implements EnemyModel {
   }
   dispose(): void {
     for (const m of this.flashMats) m.dispose();
+    disposeSkinned(this.root);
   }
+}
+
+/** Frees the merged, skinned geometry a model owns outright (built by skinify). */
+function disposeSkinned(root: THREE.Object3D): void {
+  root.traverse((o) => {
+    if ((o as THREE.SkinnedMesh).isSkinnedMesh) {
+      (o as THREE.SkinnedMesh).geometry.dispose();
+      (o as THREE.SkinnedMesh).skeleton?.dispose();
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -958,5 +969,9 @@ export class DrakeModel implements EnemyModel {
 
   setFlash(amount: number, color: number): void {
     this.rig.setFlash(amount, color);
+  }
+
+  dispose(): void {
+    disposeSkinned(this.root);
   }
 }

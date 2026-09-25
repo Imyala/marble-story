@@ -2268,6 +2268,8 @@ export class Player {
       this.uwPos.set(px, py, pz);
       cam.position.lerp(this.uwPos, this.uwCam);
       cam.lookAt(b.x, b.y + 1.35 + (fy - b.y - 1.35) * this.uwCam, b.z);
+      // lookAt refreshes the matrices before turning: refresh again, so the HUD projects through this pose.
+      cam.updateMatrixWorld();
     }
     g.renderer.look.underwater = wl > -1e3 && cam.position.y < wl - 0.05 ? 1 : 0;
   }

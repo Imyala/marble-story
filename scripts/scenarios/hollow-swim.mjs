@@ -25,14 +25,27 @@ export async function lake(h) {
   h.check('walking into deep water starts a swim, not a respawn', swam && p.st === 'swim' && safe.fell === 'play', JSON.stringify({ p, safe }));
   h.check('Aster floats at the surface', p.y > -1.1 && p.y < -0.5 && !p.under, JSON.stringify(p));
   await shot(h, 'hollow-swim-surface');
+  // Side-on, paddling: body level, wings folded, legs and tail working.
+  await stick(h, 0, 1);
+  await step(h, 0.8);
+  await face(h, Math.PI / 2, 0.15);
+  await stick(h, -1, 0);
+  await step(h, 0.5);
+  await shot(h, 'hollow-swim-side', false);
+  await stop(h);
+  // Out over the deepest part of the lake, heading west, for the dives.
+  await place(h, -2, 17, -Math.PI / 2, -0.8);
+  await face(h, -Math.PI / 2, 0.3);
+  await step(h, 0.5);
+  p = await pos(h);
 
   // Paddle: a little slower than running, and it turns like running.
-  const z0 = p.z;
+  const x0 = p.x;
   await stick(h, 0, 1);
   await step(h, 1.5);
   p = await pos(h);
   const sp = await h.eval(() => Math.hypot(window.wyrm.player.body.vx, window.wyrm.player.body.vz));
-  h.check('paddling moves across the lake', z0 - p.z > 5 && p.st === 'swim', `${z0} -> ${p.z}`);
+  h.check('paddling moves across the lake', x0 - p.x > 5 && p.st === 'swim', `${x0} -> ${p.x}`);
   h.check('swimming is a bit slower than running', sp > 4.5 && sp < 8.5, sp.toFixed(2));
   await stop(h);
 
@@ -47,16 +60,31 @@ export async function lake(h) {
   h.check('let go, Aster stays under (drifting up only a little)', p.under && p.y < -1.8, JSON.stringify(p));
   h.check('breath drains underwater', p.air < 15 - 2.5, `${p.air}`);
   h.check('the camera follows under the surface, tinted', p.camY < 0 && p.uw === 1, JSON.stringify(p));
+  const meter = await h.eval(() => {
+    window.__draw();
+    const e = document.querySelector('.air-meter');
+    const r = e.getBoundingClientRect();
+    return { shown: e.style.display === 'block' && Number(e.style.opacity) > 0.5, on: r.y > 0 && r.bottom < innerHeight && r.x > 0 && r.right < innerWidth, arc: e.querySelector('.arc').getAttribute('stroke-dashoffset') };
+  });
+  h.check('the breath meter shows beside the diving dragon, part empty', meter.shown && meter.on && Number(meter.arc) > 5, JSON.stringify(meter));
   await shot(h, 'hollow-swim-under');
+  await face(h, 0, 0.1);
+  await stick(h, -1, 0);
+  await step(h, 0.6);
+  await shot(h, 'hollow-swim-under-side');
+  await stop(h);
+  await face(h, -Math.PI / 2, 0.3);
+  await step(h, 0.3);
+  p = await pos(h);
   // Swim forward underwater, looking down: the stroke dives deeper.
-  await face(h, Math.PI, 0.9);
+  await face(h, -Math.PI / 2, 0.9);
   const y0 = p.y;
   await stick(h, 0, 1);
   await step(h, 1.0);
   await stop(h);
   p = await pos(h);
   h.check('tilting the view down steers the swim down', p.y < y0 - 1, `${y0} -> ${p.y}`);
-  await face(h, Math.PI, 0.3);
+  await face(h, -Math.PI / 2, 0.3);
   // Jump rises; back at the top, air comes back.
   await down(h, 'jump');
   for (let i = 0; i < 40; i++) {

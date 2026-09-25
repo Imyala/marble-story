@@ -27,6 +27,7 @@ import { Hud } from '../ui/hud';
 import { Menus } from '../ui/menus';
 import { BACKDROPS } from '../render/backdrop';
 import { Weather, WEATHER } from '../fx/weather';
+import { DragonRig, defaultPose, type DragonPose } from '../player/dragonRig';
 import { EggThief } from '../entities/thief';
 import { Chest } from '../entities/breakables';
 import { TouchControls } from '../ui/touch';
@@ -130,6 +131,9 @@ export class Game {
   private autosaveT = 0;
   activeArena: Arena | null = null;
   private titleT = 0;
+  /** Aster gliding over the Fen behind the title menu. */
+  private titleBeat = -1;
+  private titleDragon: { rig: DragonRig; pose: DragonPose; lastYaw: number } | null = null;
   /** Tallies for the current visit to a realm, for the results card at the end. */
   readonly visit = { id: '', t0: 0, kills0: 0, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: 0, doneAtStart: true, shown: false };
 
@@ -206,6 +210,12 @@ export class Game {
     this.input.wantPointerLock = false;
     this.input.releaseLock();
     this.loadLevel('fen', { title: true });
+    if (!this.titleDragon) {
+      const rig = new DragonRig(this.player.rig.look);
+      rig.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
+      this.scene.add(rig.root);
+      this.titleDragon = { rig, pose: defaultPose(), lastYaw: 0 };
+    }
     this.menus.showTitle();
     this.audio.setMusic(THEMES.title!);
   }
@@ -307,6 +317,10 @@ export class Game {
     this.style.reset();
     this.audio.stopAllLoops();
     this.prewarm();
+    if (!opts.title && this.titleDragon) {
+      this.scene.remove(this.titleDragon.rig.root);
+      this.titleDragon = null;
+    }
     if (!opts.title) {
       // Note what this realm holds, for the "% explored" on the Wardgate.
       const chestIds = level.props.filter((p): p is Chest => p instanceof Chest).map((c) => c.id);
@@ -447,6 +461,35 @@ export class Game {
 
   private titleCamera(dt: number): void {
     this.titleT += dt;
+    // Aster glides a lazy figure-eight over the island, flapping now and then.
+    const td = this.titleDragon;
+    if (td) {
+      const u = this.titleT * 0.22;
+      const x = Math.sin(u) * 18;
+      const z = 12 + Math.sin(u * 2) * 9;
+      const y = 10 + Math.sin(u * 3) * 1.6;
+      const vx = Math.cos(u) * 18;
+      const vz = Math.cos(u * 2) * 18;
+      const yaw = Math.atan2(vx, vz);
+      td.rig.root.position.set(x, y, z);
+      td.rig.root.rotation.y = yaw;
+      const P = td.pose;
+      P.grounded = false;
+      P.glide = true;
+      P.vy = Math.cos(u * 3) * 1.6 * 0.66;
+      let turn = (yaw - td.lastYaw) / Math.max(dt, 1e-3);
+      if (Math.abs(turn) > 20) turn = 0;
+      P.turn = Math.max(-6, Math.min(6, turn));
+      td.lastYaw = yaw;
+      // A wingbeat every few seconds (flapT = 0 starts one; the rig plays it out).
+      const beat = Math.floor(this.titleT / 4.3);
+      if (beat !== this.titleBeat) {
+        this.titleBeat = beat;
+        P.flapT = 0;
+      }
+      td.rig.update(dt, P);
+      P.flapT = 1;
+    }
     const t = this.titleT * 0.05;
     const cx = Math.sin(t) * 26;
     const cz = Math.cos(t) * 26 + 10;

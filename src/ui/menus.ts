@@ -447,7 +447,8 @@ export class Menus {
       const pct = Math.round(e * 100);
       return `<div class="lvl-explored"><i style="width:${pct}%"></i></div><p class="lvl-pct">${pct}% explored</p>`;
     };
-    for (const id of ['fen', 'falls', 'frostworks', 'plains', 'keep']) {
+    // Act II's hub joins the list once Aster has been down the Sanctum's fissure.
+    for (const id of ['fen', 'falls', 'frostworks', 'plains', 'keep', ...(g.save.unlocked.includes('hollow') ? ['hollow'] : [])]) {
       const info = LEVEL_INFO[id]!;
       const unlocked = g.save.unlocked.includes(id);
       const b = document.createElement('button');

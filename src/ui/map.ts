@@ -111,6 +111,8 @@ export class WorldMap {
   private t = 0;
   /** Last aerial render time, for tests and tuning. */
   lastRenderMs = 0;
+  /** ...and where it went: setting up, the render and read-back, tinting, the paper. */
+  lastTimes: Record<string, number> = {};
 
   constructor(private game: Game) {}
 
@@ -257,18 +259,17 @@ export class WorldMap {
     const bg = scene.background;
     scene.background = KEY;
     undo.push(() => (scene.background = bg));
-    // Same light direction, but the shadow frustum moved off where nothing stands:
-    // shadows would only fall near Aster.
-    const sunP = r.sun.position.clone();
-    const sunT = r.sun.target.position.clone();
-    r.sun.position.x += 1e5;
-    r.sun.target.position.x += 1e5;
-    r.sun.target.updateMatrixWorld();
-    undo.push(() => {
-      r.sun.position.copy(sunP);
-      r.sun.target.position.copy(sunT);
-      r.sun.target.updateMatrixWorld();
+    // No shadows: the shadow map only covers the ground round Aster, and skipping
+    // it (a uniform per mesh, not a new shader) makes the shot much cheaper.
+    level.root.traverse((o) => {
+      if ((o as THREE.Mesh).isMesh && o.receiveShadow) {
+        o.receiveShadow = false;
+        undo.push(() => (o.receiveShadow = true));
+      }
     });
+    const autoShadow = gl.shadowMap.autoUpdate;
+    gl.shadowMap.autoUpdate = false;
+    undo.push(() => (gl.shadowMap.autoUpdate = autoShadow));
     // Water follows the camera: centre it on the map for the shot. It is drawn
     // flat, opaque pure blue, so the tint can paint it as a map's water wash.
     if (level.water) {
@@ -295,16 +296,21 @@ export class WorldMap {
     img.height = h;
     const ctx = img.getContext('2d', { willReadFrequently: true })!;
     let data: ImageData;
+    const t1 = performance.now();
     try {
       if (r.grading) data = this.shootTarget(gl, scene, cam, w, h, ctx);
       else data = this.shootCanvas(gl, scene, cam, w, h, ctx);
     } finally {
       for (let i = undo.length - 1; i >= 0; i--) undo[i]!();
     }
+    const t2 = performance.now();
     this.tint(data, level);
+    const t3 = performance.now();
     const o = new THREE.Vector3(0, 0, 0).project(cam);
     this.paper(ctx, w, h, level, data, [((o.x + 1) / 2) * w, ((1 - o.y) / 2) * h], 20 * k);
-    return { level, key, img, cam, w, h, ms: performance.now() - t0 };
+    const t4 = performance.now();
+    this.lastTimes = { stage: t1 - t0, shot: t2 - t1, tint: t3 - t2, paper: t4 - t3 };
+    return { level, key, img, cam, w, h, ms: t4 - t0 };
   }
 
   /** Straight to the canvas, briefly resized to the map (no post chain in use). */

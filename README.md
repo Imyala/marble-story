@@ -62,6 +62,12 @@ dragoness, beneath the eclipse.
 - **Secrets worth coming back for.** Heart and Spirit shards (four raise your
   maximum health or mana) and Dragon Relics with lore, some sealed behind
   elements you learn later.
+- **Things to find and smash.** Crates, barrels, urns, baskets, Gloom pods and
+  powder kegs (fire sets them off, and they chain) spill gems; treasure chests
+  open once per save. Lore letters from the people of each realm are kept in
+  the Journal. Twenty-eight lost dragon eggs are hidden across the realms, and
+  returning them earns Aster new scales to wear. The pause screen counts each
+  realm's secrets, eggs and letters.
 - **Dragon Trials.** Six optional challenge fights on the Sanctum training
   grounds (clear the waves in time, reach a style rank, chain reactions, take
   no hits), unlocking as you learn elements. First clears pay big.
@@ -73,6 +79,10 @@ dragoness, beneath the eclipse.
   through snap gates and spinning blades in Dragon Time, and strike element
   locks in the order their glyphs count out. Linger unsolved and Flick starts
   offering hints.
+- **Movement that flows.** Running follows Aster's facing, so turns carve
+  arcs instead of snapping; attacks keep some momentum, and once a swing's last
+  blow lands you can jump or steer straight out of it. Enemies notice you from
+  a distance, call their friends and circle while they wait their turn.
 - **Platforming with some give.** Grab ledges you just miss, climb vine walls,
   keep a moving platform's momentum when you jump off it, hang at the top of a
   jump, and dive out of a glide for speed, then swoop back up.

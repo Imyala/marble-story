@@ -470,3 +470,33 @@ export async function fenextras(h) {
   const done = await h.eval(() => !!window.wyrm.save.found['fen:rings:ledge']);
   h.check('the ledge ring chain can be flown in one glide', done, JSON.stringify(trail.slice(-8)));
 }
+
+/** Smash the bottom crate of a stack and the ones on top drop onto the ground. */
+export async function stack(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 300; i++) {
+      await h.wait(40);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const r0 = await h.eval(() => {
+    const g = window.wyrm;
+    const set = g.level.props.find((p) => p.items && p.unsupport);
+    // Find a breakable with another resting on top of it.
+    for (const b of set.items) {
+      if (!b.alive) continue;
+      const top = set.items.find((o) => o !== b && o.alive && Math.abs(o.y - (b.y + b.height)) < 0.35 && Math.hypot(o.x - b.x, o.z - b.z) < (o.radius + b.radius) * 0.75);
+      if (top) { window.__pair = [b, top]; return { base: [b.kind, +b.y.toFixed(2)], top: [top.kind, +top.y.toFixed(2)] }; }
+    }
+    return null;
+  });
+  h.check('the level has a stacked pile', !!r0, JSON.stringify(r0));
+  if (!r0) return;
+  await h.eval(() => window.__pair[0].takeHit({ damage: 99, type: 'physical', heavy: true, source: 'melee', move: 'tail3', fromPlayer: true, dirX: 0, dirZ: 1 }));
+  await waitGame(1.2);
+  const r1 = await h.eval(() => { const [b, t] = window.__pair; return { baseAlive: b.alive, topAlive: t.alive, topY: +t.y.toFixed(2), falling: t.falling, baseY: +b.y.toFixed(2) }; });
+  h.check('the one on top falls to where the base stood', !r1.baseAlive && r1.topAlive && !r1.falling && Math.abs(r1.topY - r1.baseY) < 0.4, JSON.stringify({ r0, r1 }));
+}

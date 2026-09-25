@@ -178,8 +178,12 @@ export class Breakable implements Hittable {
   mesh: THREE.InstancedMesh | null = null;
   wobble = 0;
   private hintT = 0;
+  /** The set it belongs to, told when this one breaks so what sat on it can fall. */
+  set: BreakableSet | null = null;
+  falling = false;
+  private vy = 0;
 
-  constructor(private game: Game, readonly kind: BreakKind, readonly x: number, readonly y: number, readonly z: number, readonly yaw: number,
+  constructor(private game: Game, readonly kind: BreakKind, readonly x: number, public y: number, readonly z: number, readonly yaw: number,
     readonly scale: number, private loot: Partial<Record<GemKind, number>> | null) {
     const d = KINDS[kind];
     this.radius = d.radius * scale;
@@ -221,11 +225,22 @@ export class Breakable implements Hittable {
     return 'hit';
   }
 
+  /** Knocked loose: drop onto whatever is below now. */
+  fall(): void {
+    if (!this.alive || this.falling) return;
+    this.falling = true;
+    this.vy = 0;
+    this.solid.enabled = false;
+    // Whatever sits on this one comes down with it.
+    this.set?.unsupport(this);
+  }
+
   private shatter(hit: Hit | null): void {
     const g = this.game;
     const d = KINDS[this.kind];
     this.alive = false;
     this.solid.enabled = false;
+    this.set?.unsupport(this);
     if (this.mesh) {
       this.mesh.setMatrixAt(this.index, tmpM.makeScale(0, 0, 0));
       this.mesh.instanceMatrix.needsUpdate = true;
@@ -256,6 +271,31 @@ export class Breakable implements Hittable {
 
   update(dt: number): void {
     this.hintT -= dt;
+    if (this.falling && this.alive) {
+      const g = this.game;
+      this.vy -= 26 * dt;
+      const ny = this.y + this.vy * dt;
+      const ground = g.col.groundAt(this.x, this.z, this.y + 0.05, 0.05).y;
+      if (ny <= ground) {
+        this.y = Math.max(ground, g.killY);
+        this.falling = false;
+        this.solid.y0 = this.y;
+        this.solid.y1 = this.y + this.height;
+        this.solid.enabled = true;
+        this.wobble = 0.25;
+        g.sfx('land', this.x, this.y, this.z, 0.7, 0.5);
+        g.fx.dust(this.x, this.y, this.z, 4);
+      } else this.y = ny;
+      if (this.y <= g.killY + 0.01) {
+        this.shatter(null);
+        return;
+      }
+      if (this.mesh) {
+        this.mesh.setMatrixAt(this.index, this.matrix(tmpM, this.wobble));
+        this.mesh.instanceMatrix.needsUpdate = true;
+      }
+      return;
+    }
     if (this.wobble <= 0 || !this.mesh || !this.alive) return;
     this.wobble = Math.max(0, this.wobble - dt);
     this.mesh.setMatrixAt(this.index, this.matrix(tmpM, this.wobble));
@@ -270,6 +310,18 @@ export class BreakableSet implements Prop {
 
   add(b: Breakable): void {
     this.items.push(b);
+    b.set = this;
+  }
+
+  /** `b` is gone: whatever rested on it falls (and so on up the stack). */
+  unsupport(b: Breakable): void {
+    const top = b.y + b.height;
+    for (const o of this.items) {
+      if (o === b || !o.alive || o.falling) continue;
+      if (Math.abs(o.y - top) > 0.35) continue;
+      if (Math.hypot(o.x - b.x, o.z - b.z) > (o.radius + b.radius) * 0.75) continue;
+      o.fall();
+    }
   }
 
   build(root: THREE.Object3D): void {
@@ -300,7 +352,7 @@ export class BreakableSet implements Prop {
 
   update(dt: number): void {
     // Only the few that were just struck need their matrices touched.
-    this.wobbling = this.items.filter((b) => b.wobble > 0);
+    this.wobbling = this.items.filter((b) => b.wobble > 0 || b.falling);
     for (const b of this.wobbling) b.update(dt);
   }
 }

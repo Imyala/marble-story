@@ -380,7 +380,7 @@ export const keep: LevelDef = {
     b.crystal(17, -108, 'red', 3);
     b.enemy('brute', 0, -100, Math.PI);
     // One of Nyxa's wild Shade Drakes prowls the Court's west side.
-    b.enemy('drake', -10, -99, Math.PI / 2);
+    b.enemy('drake', -5, -106, Math.PI / 2);
     b.enemy('wisp', -3, -115, Math.PI);
     b.scatter(18, 0, cz, 21, (x, z) => b.rock(x, z, 0.35 + Math.abs(jitter(x * 7 + z)) * 0.4, OBS2, false), (x, z) => Math.abs(x) > 6 && z > -125);
 

@@ -11,7 +11,8 @@ export default async function (h) {
     for (const p of g.level.props) {
       const name = p.constructor.name;
       if (!('x' in p) || !('z' in p) || !('y' in p)) continue;
-      if (['Ambient', 'Flames', 'Janitor', 'Trigger', 'Barrier', 'Arena', 'Updraft'].includes(name)) continue;
+      // A drawbridge's position is its hinge at the edge of the gap it spans.
+      if (['Ambient', 'Flames', 'Janitor', 'Trigger', 'Barrier', 'Arena', 'Updraft', 'Drawbridge'].includes(name)) continue;
       const gy = g.col.groundAt(p.x, p.z, p.y + 0.6, 0.3).y;
       const floating = !(gy > -1e3) || Math.abs(gy - p.y) > 0.6;
       const row = `${name} (${p.x.toFixed(1)}, ${p.y.toFixed(2)}, ${p.z.toFixed(1)}) ground=${gy > -1e3 ? gy.toFixed(2) : 'void'}`;

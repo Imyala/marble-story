@@ -239,9 +239,10 @@ export class Game {
   }
 
   travel(target: string): void {
-    // Finishing a realm for the first time: show how it went before leaving.
+    // Finishing a realm for the first time: show how it went before leaving
+    // (the Keep has its own finale screen).
     const v = this.visit;
-    if (this.level && v.id === this.level.def.id && v.id !== 'sanctum' && !v.doneAtStart && !v.shown && this.save.levelsDone[v.id] && this.state !== 'ending') {
+    if (this.level && v.id === this.level.def.id && v.id !== 'sanctum' && v.id !== 'keep' && !v.doneAtStart && !v.shown && this.save.levelsDone[v.id] && this.state !== 'ending') {
       v.shown = true;
       this.menus.showResults(() => this.travel(target));
       return;

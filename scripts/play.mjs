@@ -54,6 +54,8 @@ const h = {
     while (Date.now() - t0 < maxWait) {
       const st = await page.evaluate(() => window.wyrm.state);
       if (st === 'dialogue') { await page.keyboard.press('Escape'); pressed = true; await page.waitForTimeout(250); continue; }
+      // A realm's results card waits for Continue.
+      if (st === 'pause' && await page.evaluate(() => { const b = document.querySelector('.panel.results button'); b?.click(); return !!b; })) { await page.waitForTimeout(250); continue; }
       if (st === 'transition') { await page.waitForTimeout(200); continue; }
       break;
     }

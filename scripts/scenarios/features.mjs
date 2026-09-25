@@ -173,3 +173,24 @@ export async function journal(h) {
   h.check('the Feats page shows progress and the earned feat', feats.length >= 10 && feats.some(([n, d]) => /Gloombane/.test(n) && d), JSON.stringify(feats));
   await h.shot('journal-feats');
 }
+
+/** The dragon turns its head toward a foe beside it. */
+export async function gaze(h) {
+  await h.go('?level=fen&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    const y = g.col.groundAt(10, -4, 1e4, 0.1).y + 0.05;
+    g.player.place(10, y, -4, 0);
+    g.player.invuln = true;
+    const e = g.spawnEnemy('grunt', 14, y, -2, -Math.PI / 2, false);
+    e.aggro = true; e.def.speed; window.__g = e;
+    e.state = 'idle';
+    g.cam.snapBehind(Math.PI);
+  });
+  await h.wait(2500);
+  const r = await h.eval(() => ({ gaze: window.wyrm.player.pose.gaze, yaw: window.wyrm.player.rig.P?.headYaw }));
+  h.check('the head turns toward the nearby foe', r.gaze != null && r.gaze > 0.5, JSON.stringify(r));
+  await h.shot('feature-gaze');
+}

@@ -67,6 +67,9 @@ export interface DragonPose {
   pull?: boolean;
   dive?: boolean;
   skid?: boolean;
+  /** Where something interesting is, relative to the body (radians); null when nothing. */
+  gaze?: number | null;
+  gazePitch?: number;
 }
 
 export function defaultPose(): DragonPose {
@@ -461,6 +464,11 @@ export class DragonRig {
     let neckPitch = -0.75 + sp * 0.28 + Math.sin(t * 2) * 0.02;
     let headPitch = 0.62 - sp * 0.2;
     let headYaw = Math.sin(t * 0.37) * 0.15 * (1 - sp);
+    // Glance at foes and treasures nearby, the head leading and the neck following.
+    if (pose.gaze != null && !pose.attack && !pose.breath && !pose.dead && !pose.sleep) {
+      headYaw = clampRange(pose.gaze, -1.1, 1.1) * (1 - sp * 0.35);
+      headPitch -= clampRange(pose.gazePitch ?? 0, -0.3, 0.35);
+    }
     let jaw = 0;
     let wingSpread = air ? 0.55 : 0;
     let wingFlap = air ? Math.sin(t * 5) * 0.15 : 0;

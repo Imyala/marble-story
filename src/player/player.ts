@@ -9,7 +9,7 @@ import { ELEMENTS, makeHit, type Element, type Hit, type HitResult, type Hittabl
 import { angleDiff, approachAngle, clamp, dampAngle, yawOf } from '../core/math';
 import { maxHp, maxMana, upgradeLevel } from '../game/progress';
 import type { Enemy } from '../enemies/enemy';
-import type { ClimbWall } from '../entities/props';
+import { Collectible, type ClimbWall } from '../entities/props';
 
 export type PState =
   | 'move' | 'attack' | 'slam' | 'dodge' | 'charge' | 'breath' | 'burst' | 'fury'
@@ -1759,6 +1759,47 @@ export class Player {
 
   // --- presentation ------------------------------------------------------------------------
 
+  private gazeT = 0;
+  private gazeAt: { x: number; y: number; z: number } | null = null;
+
+  /** Picks something to look at: the lock target, a foe closing in, or a treasure close by. */
+  private updateGaze(dt: number): void {
+    const P = this.pose;
+    this.gazeT -= dt;
+    if (this.gazeT <= 0) {
+      this.gazeT = 0.25;
+      const g = this.game;
+      const b = this.body;
+      let best: { x: number; y: number; z: number } | null = null;
+      if (this.lock?.alive) best = { x: this.lock.x, y: this.lock.y + this.lock.height * 0.6, z: this.lock.z };
+      else {
+        let bd = 13;
+        for (const e of g.enemies) {
+          if (!e.alive || !e.aggro) continue;
+          const d = Math.hypot(e.x - b.x, e.z - b.z);
+          if (d < bd) { bd = d; best = { x: e.x, y: e.y + e.height * 0.6, z: e.z }; }
+        }
+        if (!best) {
+          bd = 7;
+          for (const pr of g.level?.props ?? []) {
+            if (!(pr instanceof Collectible) || pr.taken) continue;
+            const d = Math.hypot(pr.x - b.x, pr.z - b.z);
+            if (d < bd && Math.abs(pr.y - b.y) < 4) { bd = d; best = { x: pr.x, y: pr.y + 0.6, z: pr.z }; }
+          }
+        }
+      }
+      this.gazeAt = best;
+    }
+    const t = this.gazeAt;
+    if (!t) { P.gaze = null; return; }
+    const dx = t.x - this.body.x;
+    const dz = t.z - this.body.z;
+    const rel = angleDiff(this.visYaw, Math.atan2(dx, dz));
+    // Beyond a comfortable neck turn, it just faces forward (and the body turns instead).
+    P.gaze = Math.abs(rel) < 1.9 ? rel : null;
+    P.gazePitch = Math.atan2(t.y - (this.body.y + 1.1), Math.hypot(dx, dz) + 0.5);
+  }
+
   syncRig(dt: number): void {
     const b = this.body;
     const r = this.rig.root;
@@ -1790,6 +1831,7 @@ export class Player {
     P.pull = this.state === 'ledge' && !!this.ledge && this.ledge.pulling;
     P.dive = this.gliding && this.diving;
     P.skid = this.skidT > 0;
+    this.updateGaze(dt);
     // Turning in place still steps the feet.
     if (P.speed < 0.15 && Math.abs(P.turn) > 1.2 && b.grounded && this.state === 'move') P.speed = 0.25;
     if (this.state === 'attack' && this.move) {

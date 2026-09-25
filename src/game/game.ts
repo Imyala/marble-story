@@ -480,6 +480,8 @@ export class Game {
       }
     }
     if (this.state !== 'title' && this.state !== 'menu' && this.level && !this.photo.active) this.cam.update(dt, this);
+    // Swimming: the camera follows a diving dragon under the surface, and the view takes the water's tint.
+    if (this.state !== 'title' && this.state !== 'menu' && this.level && !this.photo.active) this.player.swimCamera(dt);
     this.hud.update(dt);
     this.touch.update();
     if (this.level) this.blobs.update(this);

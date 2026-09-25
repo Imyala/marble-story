@@ -42,7 +42,12 @@ export interface LevelDef {
   music: string;
   sky: SkyDef;
   terrain?: TerrainDef;
-  water?: { level: number; deep: number; shallow: number; glint: number; opacity?: number };
+  /**
+   * The realm's water. With `swim`, deep water is swimmable (Aster floats,
+   * paddles and dives; see Player.swimWater); without it, deep water washes
+   * the dragon back to safe ground, which Act I's puzzles rely on.
+   */
+  water?: { level: number; deep: number; shallow: number; glint: number; opacity?: number; swim?: boolean };
   killY: number;
   spawn: [number, number, number];
   build(b: Builder): void;

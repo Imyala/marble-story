@@ -39,6 +39,9 @@ export class TouchControls {
   private lookX = 0;
   private lookY = 0;
   private enabled = false;
+  /** Button labels by action, so they can say what they do in the water. */
+  private labels = new Map<Action, HTMLElement>();
+  private swimLabels = false;
 
   constructor(private game: Game, parent: HTMLElement) {
     this.root = document.createElement('div');
@@ -72,6 +75,7 @@ export class TouchControls {
     const el = document.createElement('div');
     el.className = `touch-btn ${b.cls}`;
     el.innerHTML = `<span>${b.label}</span>`;
+    this.labels.set(b.action, el.firstElementChild as HTMLElement);
     const inp = this.game.input;
     let id: number | null = null;
     el.addEventListener('touchstart', (e) => {
@@ -167,6 +171,15 @@ export class TouchControls {
   update(): void {
     const show = this.enabled && this.game.state === 'play';
     this.root.style.display = show ? '' : 'none';
+    // Swimming: Dodge dives (hold it), Jump leaps out or rises, Horn is a strong stroke.
+    const swim = show && this.game.player.swimming;
+    if (swim !== this.swimLabels) {
+      this.swimLabels = swim;
+      for (const [action, text] of [['dodge', swim ? 'Dive' : 'Dodge'], ['jump', swim ? 'Leap' : 'Jump'], ['horn', swim ? 'Stroke' : 'Horn']] as const) {
+        const l = this.labels.get(action);
+        if (l) l.textContent = text;
+      }
+    }
     if (!show && this.stickId !== null) {
       this.stickId = null;
       this.stick.classList.remove('on');

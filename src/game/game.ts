@@ -27,6 +27,7 @@ import { Hud } from '../ui/hud';
 import { Menus } from '../ui/menus';
 import { BACKDROPS } from '../render/backdrop';
 import { Weather, WEATHER } from '../fx/weather';
+import { EggThief } from '../entities/thief';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
 import { RELICS } from './story';
@@ -722,6 +723,16 @@ export class Game {
       this.audio.play('levelUp');
       this.toast(`Feat: ${f.name}! +${f.reward} spirit gems`, 'good');
     }
+  }
+
+  /** An egg thief guarding egg `fullId` near (x, z), unless that egg is already home. */
+  addEggThief(fullId: string, x: number, z: number, leash = 24): EggThief | null {
+    const level = this.level;
+    if (!level || this.save.found[fullId]) return null;
+    const t = new EggThief(this, fullId, x, z, leash);
+    level.props.push(t);
+    level.hittables.push(t);
+    return t;
   }
 
   /** First time a foe of this kind turns up: a new Bestiary page. */

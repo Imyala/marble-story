@@ -740,6 +740,17 @@ export class Builder {
     this.collectible(`egg-${id}`, 'egg', x, z, y);
   }
 
+  /**
+   * An egg thief with a stolen egg, waiting near (x, z). It bolts when the
+   * dragon comes close and circles within `leash` of home: give it open
+   * ground to run on. Counts as one of the realm's eggs.
+   */
+  eggThief(id: string, x: number, z: number, leash = 24): void {
+    const fullId = `${this.level.def.id}:egg-${id}`;
+    this.level.secrets.push({ kind: 'egg', id: fullId });
+    this.game.addEggThief(fullId, x, z, leash);
+  }
+
   // --- breakables -------------------------------------------------------------------
 
   /**

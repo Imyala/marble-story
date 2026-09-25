@@ -258,3 +258,54 @@ export async function results(h) {
   const after = await h.eval(() => ({ state: window.wyrm.state, level: window.wyrm.level.def.id, medal: Object.keys(window.wyrm.save.found).filter((k) => k.startsWith('medal:')) }));
   h.check('continuing travels on and keeps the medal', (after.state === 'transition' || after.level === 'sanctum') && after.medal.length > 0, JSON.stringify(after));
 }
+
+/** An egg thief bolts when the dragon comes near, runs in bursts, and drops its egg when caught. */
+export async function thief(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 200; i++) {
+      await h.wait(60);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(6000);
+  const hx = Number(process.env.TX ?? 0), hz = Number(process.env.TZ ?? -6);
+  await h.eval(([hx, hz]) => {
+    const g = window.wyrm;
+    for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    window.__t = g.addEggThief('fen:egg-thief', hx, hz, 12);
+    g.player.place(hx, g.col.groundAt(hx, hz + 14, 1e4, 0.1).y + 0.05, hz + 14, Math.PI);
+    g.cam.snapBehind(Math.PI);
+  }, [hx, hz]);
+  await waitGame(0.5);
+  const wait = await h.eval(() => window.__t.mode);
+  await h.eval(([hx, hz]) => { const g = window.wyrm; g.player.place(hx, g.col.groundAt(hx, hz + 7, 1e4, 0.1).y + 0.05, hz + 7, Math.PI); }, [hx, hz]);
+  await waitGame(0.3);
+  const p0 = await h.eval(() => [window.__t.x, window.__t.z, window.__t.mode]);
+  await h.shot('thief-bolts');
+  await waitGame(2);
+  const p1 = await h.eval(() => [window.__t.x, window.__t.z, window.__t.mode, window.__t.y]);
+  const moved = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+  h.check('the thief waits, then bolts when the dragon comes close', wait === 'wait' && (p0[2] === 'flee' || p0[2] === 'rest') && moved > 4, JSON.stringify({ wait, p0, p1, moved }));
+  const home = await h.eval(([hx, hz]) => Math.hypot(window.__t.x - hx, window.__t.z - hz), [hx, hz]);
+  // Run it for a while: it should stay near its den and on the ground.
+  await waitGame(6);
+  const p2 = await h.eval(([hx, hz]) => { const t = window.__t; const g = window.wyrm; return { d: Math.hypot(t.x - hx, t.z - hz), y: t.y, ground: g.col.groundAt(t.x, t.z, t.y + 1, 0.1).y }; }, [hx, hz]);
+  h.check('it stays within its leash and on solid ground', p2.d < 34 && Math.abs(p2.y - p2.ground) < 0.8, JSON.stringify({ home, p2 }));
+  // Catch it with a blow; the egg drops and can be collected.
+  const r = await h.eval(() => {
+    const g = window.wyrm;
+    const t = window.__t;
+    g.player.place(t.x, t.y + 0.05, t.z + 1.4, Math.PI);
+    t.takeHit({});
+    const egg = g.level.props.find((p) => p.id === 'fen:egg-thief' && p.kind === 'egg');
+    return { alive: t.alive, egg: !!egg, ex: egg?.x, ez: egg?.z };
+  });
+  await waitGame(0.2);
+  await h.eval(() => { const g = window.wyrm; const e = g.level.props.find((p) => p.id === 'fen:egg-thief'); g.player.place(e.x, e.y + 0.05, e.z, 0); });
+  await waitGame(0.6);
+  const got = await h.eval(() => !!window.wyrm.save.found['fen:egg-thief']);
+  h.check('catching it drops the egg, which can be collected', !r.alive && r.egg && got, JSON.stringify({ ...r, got }));
+}

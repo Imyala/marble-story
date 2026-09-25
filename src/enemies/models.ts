@@ -69,8 +69,8 @@ export interface ImpOpts {
   weapon: 'club' | 'spear' | 'staff' | 'sword' | 'none';
   offhand: 'shield' | 'orb' | 'none';
   hood?: number;
-  /** Carries a powder keg on its back (Gloom Sappers). */
-  pack?: 'keg';
+  /** Carries a powder keg (Gloom Sappers) or a stolen egg (egg thieves) on its back. */
+  pack?: 'keg' | 'egg';
   armor?: number;
   cracks?: number;
   weaponGlow?: number;
@@ -122,6 +122,29 @@ export class ImpModel extends BaseModel {
       keg.rotation.x = 0.35;
       this.torso.add(keg);
       this.packGroup = keg;
+    }
+    if (o.pack === 'egg') {
+      // A stolen dragon egg in a rope sling, glowing so it can be spotted from afar.
+      const sling = new THREE.Group();
+      const egg = new THREE.Mesh(new THREE.SphereGeometry(0.24, 12, 9), matUnique(0xf0e6d0, { rough: 0.35, emissive: 0xffe6b0, emissiveIntensity: 0.5 }));
+      egg.scale.set(1, 1.35, 1);
+      sling.add(egg);
+      const spots = mat(0x8a4fd8, { rough: 0.4, emissive: 0x5a2aa8, emissiveIntensity: 0.5 });
+      for (let i = 0; i < 6; i++) {
+        const a = i * 2.4;
+        const y = -0.18 + (i / 6) * 0.4;
+        const r = 0.24 * Math.sqrt(Math.max(0.05, 1 - (y / 0.33) ** 2));
+        const sp = new THREE.Mesh(new THREE.SphereGeometry(0.04, 5, 4), spots);
+        sp.position.set(Math.sin(a) * r, y, Math.cos(a) * r);
+        sling.add(sp);
+      }
+      const rope = new THREE.Mesh(new THREE.TorusGeometry(0.26, 0.025, 4, 14), mat(0x8a6a3a, { rough: 0.9 }));
+      rope.rotation.y = Math.PI / 2;
+      sling.add(rope);
+      sling.position.set(0, 0.46, -0.36);
+      sling.rotation.x = 0.3;
+      this.torso.add(sling);
+      this.packGroup = sling;
     }
 
     const tw = 0.34 + bulk * 0.2;

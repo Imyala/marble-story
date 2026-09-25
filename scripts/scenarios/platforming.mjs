@@ -56,14 +56,14 @@ export default async function (h) {
   await h.page.keyboard.up('Space');
   await h.wait(300);
   await h.page.keyboard.down('Space');
-  await h.wait(1200);
+  await h.wait(700);
   const glide = await h.eval(() => ({ gl: window.wyrm.player.gliding, v: Math.hypot(window.wyrm.player.body.vx, window.wyrm.player.body.vz) }));
   await h.page.keyboard.down('ShiftLeft');
-  await h.wait(800);
+  await h.wait(400);
   const dive = await h.eval(() => ({ dv: window.wyrm.player.diving, v: Math.hypot(window.wyrm.player.body.vx, window.wyrm.player.body.vz), vy: window.wyrm.player.body.vy }));
   await h.shot('plat-dive');
   await h.page.keyboard.up('ShiftLeft');
-  await h.wait(300);
+  await h.wait(200);
   const pull = await h.eval(() => ({ vy: window.wyrm.player.body.vy }));
   await h.page.keyboard.up('Space');
   await h.page.keyboard.up('KeyW');

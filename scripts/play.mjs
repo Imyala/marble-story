@@ -19,6 +19,23 @@ const errors = [];
 page.on('pageerror', (e) => { errors.push(e.message); console.log('pageerror:', e.message, e.stack); });
 page.on('console', (m) => { if (m.type() === 'error') { errors.push(m.text()); console.log('console.error:', m.text()); } });
 
+/**
+ * Waits `ms` of game time rather than wall time (headless frames are slow and
+ * vary with machine load), up to 12x as long on the wall clock. WALL=1 keeps
+ * plain wall-clock waits.
+ */
+async function gameWait(ms) {
+  const now = () => page.evaluate(() => window.wyrm?.realTime ?? null).catch(() => null);
+  const t0 = process.env.WALL ? null : await now();
+  if (t0 === null) return page.waitForTimeout(ms);
+  const deadline = Date.now() + ms * 12;
+  for (;;) {
+    await page.waitForTimeout(Math.min(40, ms));
+    const t = await now();
+    if (t === null || (t - t0) * 1000 >= ms || Date.now() > deadline) return;
+  }
+}
+
 const h = {
   base: BASE,
   async go(q, wait = 2000) {
@@ -26,19 +43,22 @@ const h = {
     await page.waitForFunction(() => !!window.wyrm, null, { timeout: 20000 });
     await page.waitForTimeout(wait);
   },
-  wait: (ms) => page.waitForTimeout(ms),
-  async hold(key, ms) { await page.keyboard.down(key); await page.waitForTimeout(ms); await page.keyboard.up(key); },
+  wait: (ms) => gameWait(ms),
+  async hold(key, ms) { await page.keyboard.down(key); await gameWait(ms); await page.keyboard.up(key); },
   async tap(key, n = 1, gap = 120) { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await page.waitForTimeout(gap); } },
   eval: (fn, arg) => page.evaluate(fn, arg),
   /** Presses Esc only while a conversation is open. */
   async skipDialogue(maxWait = 3000) {
     const t0 = Date.now();
+    let pressed = false;
     while (Date.now() - t0 < maxWait) {
       const st = await page.evaluate(() => window.wyrm.state);
-      if (st === 'dialogue') { await page.keyboard.press('Escape'); await page.waitForTimeout(250); continue; }
+      if (st === 'dialogue') { await page.keyboard.press('Escape'); pressed = true; await page.waitForTimeout(250); continue; }
       if (st === 'transition') { await page.waitForTimeout(200); continue; }
       break;
     }
+    // An Esc that landed just after the conversation closed pauses the game: undo that.
+    if (pressed) await page.evaluate(() => { if (window.wyrm.state === 'pause') window.wyrm.resume(); });
   },
   async shot(n) { await page.screenshot({ path: `${OUT}/${n}.png` }); console.log('shot', n); },
   state: () => page.evaluate(() => {

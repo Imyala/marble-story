@@ -115,6 +115,21 @@ dragoness, beneath the eclipse.
   pause menu, freezes the world for a free camera with five filters and saves
   the shot as a PNG (with depth of field if you like). Footsteps change with
   the ground, and Dragon Time and menus muffle the world.
+- **Power-ups, after the classic powerup gates.** Shrines in the Falls,
+  Frostworks, Plains and Keep sleep while their Gloom guards stand and wake
+  when the last one falls. Run through the ring for Superflame (white-hot
+  breath), Supercharge (a faster charge that bowls foes over) or
+  Invincibility (touching foes hurts them). Lanes of speed runes supercharge
+  a charge that runs over them, and iron-bound chests only open to a
+  powered-up dragon.
+- **Critters and a healing firefly.** Sheep, goats, frogs, hares, beetles and
+  moths wander each realm and scatter from Aster. Roast or ram one and it
+  leaves a butterfly that Flick eats to mend you; Flick's glow shows your
+  health, gold to blue to a flickering green.
+- **Skill Points.** Twelve optional challenges, two per realm: bowl over three
+  foes in one supercharged charge, light every rune in the Sanctum's rune ring
+  in one charge, beat each boss without a scratch (a beaten boss waits by a
+  standing stone for a rematch), and more. The Journal keeps the list.
 - **Accessibility.** A Reduced flashing option softens lightning, lens effects
   and hit flashes; touch and gamepad players see their own buttons named in
   tutorials; screen shake, camera and damage numbers are all adjustable.

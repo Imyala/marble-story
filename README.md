@@ -92,6 +92,18 @@ dragoness, beneath the eclipse.
 - **Platforming with some give.** Grab ledges you just miss, climb vine walls,
   keep a moving platform's momentum when you jump off it, hang at the top of a
   jump, and dive out of a glide for speed, then swoop back up.
+- **Egg thieves and flight rings.** Gloomlings run off with dragon eggs and
+  have to be chased down (a Charge catches them); ring chains strung through
+  the air pay out if you fly through all of them before the clock runs out.
+- **Shade Drakes.** Wild dragons of the Gloom, built on Aster's own skeleton:
+  they bite, pounce from range, sweep with their tails and spit shadow fire.
+- **Feats, a Bestiary and Dragon Medals.** Long-term feats pay spirit gems;
+  every foe you meet gets a Journal page with its weaknesses and Flick's advice;
+  finishing a realm shows a results card and a Bronze, Silver or Gold medal.
+- **Worlds that feel bigger.** Distant mountains, crags, mesas and tree lines
+  ring every realm; storms roll over Stormspire Falls with rain, forked
+  lightning and thunder; a color grade gives each realm its light, Dragon Time
+  drains the world to a cold hush with a ripple, and grass parts around your feet.
 
 ## Controls
 
@@ -111,6 +123,9 @@ dragoness, beneath the eclipse.
 | Interact | F | L3 |
 | Flick, find a secret | H | R3 |
 | Pause | Esc | Start |
+
+On a phone or tablet, touch controls appear on the first touch: a joystick
+under the left thumb, drag on the right to look, and buttons for every move.
 
 Click the game to capture the mouse; Esc releases it. Options cover volume,
 camera sensitivity and inversion, screen shake, damage numbers, auto camera,

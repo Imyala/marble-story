@@ -43,16 +43,19 @@ function helpers(h) {
     }
     await h.page.keyboard.up('KeyW');
   };
-  /** Run toward (toX, toZ) and jump once Aster is moving. */
-  const hop = async (fromX, fromZ, toX, toZ, fromY, flap = false) => {
+  /**
+   * Run toward (toX, toZ) and jump once Aster has covered `run` metres (0.9 by
+   * default: "once she is moving"; longer for a run-up to a gap's edge).
+   */
+  const hop = async (fromX, fromZ, toX, toZ, fromY, flap = false, run = 0.9) => {
     const yaw = Math.atan2(toX - fromX, toZ - fromZ);
     await place(fromX, fromZ, yaw, fromY);
     await waitGame(0.2);
     await h.page.keyboard.down('KeyW');
-    for (let i = 0; i < 12; i++) {
-      await waitGame(0.05);
+    for (let i = 0; i < 12 + Math.ceil(run * 8); i++) {
+      await waitGame(0.03);
       const q = await pos();
-      if (Math.hypot(q.x - fromX, q.z - fromZ) > 0.9) break;
+      if (Math.hypot(q.x - fromX, q.z - fromZ) > run) break;
     }
     await h.page.keyboard.down('Space');
     await waitGame(0.3);
@@ -125,8 +128,9 @@ export async function library(h) {
   await start();
   // Over the old bridge: walk the first half, jump the burnt gap, walk on.
   await place(-22.8, 17.6, Math.atan2(-13, 10));
-  await walkTo(-29.3, 22.8, 3, 0.4);
-  let p = await hop((await pos()).x, (await pos()).z, -32.8, 25.5, (await pos()).y);
+  await walkTo(-27.3, 21.2, 3, 0.4);
+  // A proper run-up: take off just short of the gap's edge (about x -30.1), at speed.
+  let p = await hop(-27.3, 21.2, -32.8, 25.5, undefined, false, 3.2);
   h.check('a jump clears the burnt gap in the bridge', p.x < -31 && p.y > 0.3, JSON.stringify(p));
   await walkTo(-38.6, 30.2, 3, 0.5);
   p = await pos();

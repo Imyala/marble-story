@@ -4,14 +4,17 @@
  *   node scripts/play.mjs <scenario>[:<export>] [url]
  */
 import { chromium } from 'playwright';
-import { mkdirSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 
 const name = process.argv[2] ?? 'fen';
 const BASE = process.argv[3] ?? process.env.GAME_URL ?? 'http://localhost:5173/dev.html';
 const OUT = 'scripts/out';
 mkdirSync(OUT, { recursive: true });
+// The dev container ships a Chromium at /opt/pw-browsers; elsewhere (CI) use
+// PW_CHROMIUM, or Playwright's own download.
+const CHROMIUM = process.env.PW_CHROMIUM ?? (existsSync('/opt/pw-browsers/chromium') ? '/opt/pw-browsers/chromium' : undefined);
 const browser = await chromium.launch({
-  executablePath: '/opt/pw-browsers/chromium',
+  executablePath: CHROMIUM,
   args: ['--no-sandbox', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
 });
 const page = await browser.newPage({ viewport: { width: Number(process.env.W ?? 960), height: Number(process.env.H ?? 600) } });

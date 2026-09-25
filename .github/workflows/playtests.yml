@@ -1,0 +1,73 @@
+# Plays the game in headless Chromium through a set of scenarios (see
+# scripts/play.mjs and scripts/scenarios/) on every push to main, so a change
+# that breaks the game (not just the unit tests) shows up here. It runs next to
+# the Pages deploy and does not block it.
+name: Playtests
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: playtests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  scenarios:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - name: Install Chromium for Playwright
+        run: npx playwright install --with-deps chromium
+
+      - name: Start the dev server
+        run: |
+          npx vite --port 5173 --strictPort > vite.log 2>&1 &
+          for i in $(seq 1 60); do
+            curl -sf -o /dev/null http://localhost:5173/dev.html && exit 0
+            sleep 1
+          done
+          echo "::error::The dev server did not start"; cat vite.log; exit 1
+
+      # A broad, stable subset: boot and core loop, combat, content, and each
+      # system with its own scenario. Every scenario exits non-zero on a
+      # failed check or a page error.
+      - name: Play the scenarios
+        run: |
+          failed=""
+          for s in smoke flows combat content trials \
+                   features:critters features:powerups features:skills features:replay \
+                   features:slots features:thief features:journal features:results \
+                   fs-sanctum:library; do
+            echo "::group::$s"
+            if ! timeout 900 node scripts/play.mjs "$s"; then failed="$failed $s"; fi
+            echo "::endgroup::"
+          done
+          if [ -n "$failed" ]; then
+            echo "::error::Failed scenarios:$failed"
+            exit 1
+          fi
+
+      - name: Keep the screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playtest-screenshots
+          path: scripts/out/
+          if-no-files-found: ignore
+          retention-days: 7

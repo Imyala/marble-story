@@ -325,6 +325,8 @@ export interface Options {
   autoCamera: boolean;
   /** Tones down lightning flashes, lens ripples, edge glows and strong hit flashes. */
   reduceFlashing?: boolean;
+  /** Nyxa fights beside Aster once the Keep is done (on unless set false, which sends her home to the Sanctum). */
+  partner?: boolean;
 }
 
 /** Phones and tablets start on a lighter setting; everything else on the full look. */

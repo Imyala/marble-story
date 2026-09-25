@@ -37,6 +37,10 @@ const RULES: Rule[] = [
   [/\(E\)/g, '(Tail)', '(Y)'],
   [/\bPress E\b/g, 'Tap Tail', 'Press Y'],
   [/\bPress ([1-4]) to select it\b/g, 'Tap Element to select it', 'Press the D-pad to select it'],
+  // Nyxa's command (G): on a pad it shares L3 with Use.
+  [/\b([Hh])old G\b/g, '$1old Nyxa', '$1old L3'],
+  [/\b([Tt])ap G\b/g, '$1ap Nyxa', '$1ap L3'],
+  [/\b([Pp])ress G\b/g, 'Tap Nyxa', '$1ress L3'],
 ];
 
 export function forInput(text: string, input: Input): string {

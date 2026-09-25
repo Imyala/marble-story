@@ -224,6 +224,7 @@ export class Hud {
     o.appendChild(this.deathBox);
     this.fadeBox = el('div', 'fade');
     o.appendChild(this.fadeBox);
+    this.buildPartner(r);
   }
 
   show(on: boolean): void {
@@ -391,6 +392,7 @@ export class Hud {
       }
     }
     this.wardT -= dt;
+    this.updatePartner(dt);
     this.updateThreats();
     const needClick = g.state === 'play' && g.input.wantPointerLock && !g.input.locked && !g.input.usingPad && !g.input.usingTouch;
     this.clickHint.style.opacity = needClick ? '1' : '0';
@@ -601,5 +603,69 @@ export class Hud {
 
   death(on: boolean): void {
     this.deathBox.classList.toggle('on', on);
+  }
+
+  // --- Nyxa, the partner: her portrait, the command's cooldown ring, and her speech line ---------------
+
+  private partnerBox!: HTMLElement;
+  private partnerArc!: SVGCircleElement;
+  private partnerKey!: HTMLElement;
+  private partnerTag!: HTMLElement;
+  private partnerLine!: HTMLElement;
+  private partnerText!: HTMLElement;
+  private partnerT = 0;
+
+  private buildPartner(r: HTMLElement): void {
+    this.partnerBox = el('div', 'partner off');
+    const face = el('div', 'partner-face');
+    face.innerHTML = `<svg class="face" viewBox="0 0 36 36"><path d="M14.5 12.5 L4 4.5 L11 13 Z M18.5 11.5 L11.5 2.5 L15.5 12 Z" fill="#dcdcec"/>
+      <path d="M6.5 22 C7.5 15.5 12.5 11 19 11 C23.5 11 27 13 30.5 15.5 C31.6 16.4 31.4 18.2 29.8 18.8 L24.5 20.8 C22.4 24 18.2 26 13.5 26 C10 26 7.4 24.6 6.5 22 Z" fill="#2a1e3c" stroke="#b04c8a" stroke-width="1"/>
+      <path d="M23 21 L28.5 19.5" stroke="#8a2a6a" stroke-width="1" stroke-linecap="round"/><ellipse cx="21" cy="15.6" rx="1.9" ry="1.25" fill="#8ad8ff"/></svg>`;
+    const ring = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    ring.setAttribute('viewBox', '0 0 56 56');
+    ring.classList.add('partner-ring');
+    ring.innerHTML = `<circle cx="28" cy="28" r="25" fill="none" stroke="rgba(0,0,0,.5)" stroke-width="4"/>
+      <circle class="arc" cx="28" cy="28" r="25" fill="none" stroke="#c070ff" stroke-width="4" stroke-linecap="round" stroke-dasharray="157" stroke-dashoffset="0" transform="rotate(-90 28 28)"/>`;
+    this.partnerArc = ring.querySelector('.arc') as SVGCircleElement;
+    face.appendChild(ring);
+    this.partnerKey = el('span', 'partner-key', 'G');
+    this.partnerTag = el('span', 'partner-tag', 'Stay');
+    face.append(this.partnerKey);
+    this.partnerLine = el('div', 'partner-say');
+    this.partnerText = el('span');
+    this.partnerLine.append(el('b', '', 'Nyxa'), this.partnerText);
+    this.partnerBox.append(face, this.partnerTag, this.partnerLine);
+    r.appendChild(this.partnerBox);
+  }
+
+  private updatePartner(dt: number): void {
+    const g = this.game;
+    const n = g.partner;
+    const on = n.present && g.state !== 'title' && g.state !== 'menu';
+    this.partnerBox.classList.toggle('off', !on);
+    if (!on) {
+      this.partnerLine.classList.remove('on');
+      this.partnerT = 0;
+      return;
+    }
+    const k = n.ready;
+    this.partnerArc.setAttribute('stroke-dashoffset', String(157 * (1 - k)));
+    this.partnerBox.classList.toggle('ready', k >= 1);
+    this.partnerBox.classList.toggle('staying', n.staying);
+    this.partnerBox.classList.toggle('shadow', n.hidden && !n.staying);
+    const key = g.input.usingTouch ? '' : g.input.usingPad ? 'L3' : 'G';
+    if (this.partnerKey.textContent !== key) this.partnerKey.textContent = key;
+    this.partnerKey.style.display = key ? '' : 'none';
+    // Her lines wait out conversations (and are dropped rather than queued).
+    if (g.state === 'dialogue') this.partnerT = 0;
+    this.partnerT = Math.max(0, this.partnerT - dt);
+    this.partnerLine.classList.toggle('on', this.partnerT > 0);
+  }
+
+  /** Nyxa says something, in her own small line beside her portrait (not Flick's box). */
+  partnerSay(text: string, seconds = 4.5): void {
+    this.partnerText.textContent = forInput(text, this.game.input);
+    this.partnerT = seconds;
+    this.partnerLine.classList.add('on');
   }
 }

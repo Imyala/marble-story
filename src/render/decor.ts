@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { mat, glow, windy } from './materials';
+import { mat, glowShared, windy } from './materials';
 import { taperedTube } from './shapes';
 import { Rng } from '../core/rng';
 
@@ -251,7 +251,7 @@ export class DecorBatch {
 
   glowCrystal(x: number, y: number, z: number, scale: number, color: number): void {
     const r = this.rng;
-    const m = glow(color);
+    const m = glowShared(color);
     for (let i = 0; i < 3; i++) {
       this.add(GEO.octa(), m, x + r.signed() * 0.3 * scale, y + 0.3 * scale, z + r.signed() * 0.3 * scale,
         0.15 * scale, (0.4 + r.next() * 0.4) * scale, 0.15 * scale, r.signed() * 0.4, r.next() * 6, r.signed() * 0.4, false);
@@ -270,7 +270,7 @@ export class DecorBatch {
     const post = mat(0x3a2e24, { rough: 0.9 });
     this.add(GEO.cyl6(), post, x, y, z, 0.07, 2.2, 0.07);
     this.add(GEO.box(), post, x + 0.25, y + 2.15, z, 0.55, 0.06, 0.06);
-    this.add(GEO.blobLow(), glow(color), x + 0.45, y + 1.9, z, 0.14, 0.2, 0.14, 0, 0, 0, false);
+    this.add(GEO.blobLow(), glowShared(color), x + 0.45, y + 1.9, z, 0.14, 0.2, 0.14, 0, 0, 0, false);
   }
 }
 

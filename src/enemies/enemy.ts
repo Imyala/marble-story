@@ -1018,6 +1018,13 @@ export class Enemy implements Hittable {
     const r = this.model.root;
     r.position.set(b.x, b.y, b.z);
     r.rotation.y = this.yaw;
+    // Past the fog a foe is invisible anyway: skip drawing it (dozens of draw calls each).
+    if (!(this.state === 'spawn' && this.spawnDelay > 0) && !this.isBoss) {
+      const cam = this.game.camera.position;
+      const far = ((this.game.scene.fog as THREE.Fog | null)?.far ?? 300) + 6;
+      r.visible = (b.x - cam.x) ** 2 + (b.z - cam.z) ** 2 < far * far;
+      if (!r.visible) return;
+    }
     const frozen = this.status.frozen > 0;
     const shock = this.status.shock > 0;
     const pose: EnemyPose = {

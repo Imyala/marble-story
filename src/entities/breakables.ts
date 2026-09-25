@@ -273,13 +273,16 @@ export class BreakableSet implements Prop {
   }
 
   build(root: THREE.Object3D): void {
-    const byKind = new Map<BreakKind, Breakable[]>();
+    // One instanced mesh per kind per 32 m cell, so off-screen piles are culled.
+    const byKind = new Map<string, Breakable[]>();
     for (const b of this.items) {
-      const l = byKind.get(b.kind) ?? [];
+      const key = `${b.kind}|${Math.floor(b.x / 32)}|${Math.floor(b.z / 32)}`;
+      const l = byKind.get(key) ?? [];
       l.push(b);
-      byKind.set(b.kind, l);
+      byKind.set(key, l);
     }
-    for (const [kind, list] of byKind) {
+    for (const list of byKind.values()) {
+      const kind = list[0]!.kind;
       const im = new THREE.InstancedMesh(kindGeo(kind), kindMat(kind), list.length);
       im.castShadow = true;
       im.receiveShadow = true;

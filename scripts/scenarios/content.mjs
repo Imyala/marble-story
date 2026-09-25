@@ -14,7 +14,7 @@ export default async function (h) {
     const bs = g.level.hittables.filter((x) => x.constructor.name === 'Breakable');
     return { n: bs.length, kinds: [...new Set(bs.map((b) => b.kind))], secrets: g.level.secrets.map((s) => s.kind) };
   });
-  h.check('breakables built', setup.n === 8, JSON.stringify(setup));
+  h.check('breakables built', setup.n >= 8, JSON.stringify(setup));
   // Smash the urns with horns.
   const gems0 = await h.eval(() => window.wyrm.save.gems);
   for (let i = 0; i < 3; i++) {

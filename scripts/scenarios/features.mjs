@@ -127,8 +127,9 @@ export async function sapper(h) {
   const el = await h.eval(() => {
     const g = window.wyrm;
     const e = g.spawnEnemy('grunt', 4, 0.3, 0, Math.PI, false);
-    const hp = e.maxHp;
-    e.makeElite();
+    // Spawns can roll elite on their own; compare against the plain grunt.
+    const hp = 42;
+    if (!e.elite) e.makeElite();
     return { hp, eliteHp: e.maxHp, elite: e.elite };
   });
   h.check('an elite has more health', el.elite && el.eliteHp > el.hp * 1.5, JSON.stringify(el));

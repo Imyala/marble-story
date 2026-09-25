@@ -150,6 +150,8 @@ export class Dialogue {
     }
     if (inp.take('confirm', 0.2) || inp.take('horn', 0.2) || inp.take('interact', 0.2)) this.advance();
     if (inp.take('back', 0.2)) {
+      // The same Esc press also reads as Pause; eat it so skipping does not pause.
+      inp.consume('pause');
       // Skip: run the remaining actions so story state still advances.
       for (let i = this.idx + 1; i < this.lines.length; i++) this.lines[i]!.action?.();
       this.finish();

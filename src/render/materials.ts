@@ -52,6 +52,18 @@ export function glow(color: number, opacity = 1, additive = false): THREE.MeshBa
   });
 }
 
+const glowCache = new Map<number, THREE.MeshBasicMaterial>();
+
+/** A shared opaque glow material per color, for static scenery (so it batches). Never mutate it. */
+export function glowShared(color: number): THREE.MeshBasicMaterial {
+  let m = glowCache.get(color);
+  if (!m) {
+    m = glow(color);
+    glowCache.set(color, m);
+  }
+  return m;
+}
+
 export const ELEMENT_COLORS = {
   fire: 0xff7a2a,
   lightning: 0xa8e6ff,

@@ -96,7 +96,7 @@ export async function finds(h) {
     for (const p of g.level.props) {
       const n = p.constructor.name;
       if (n === 'Collectible' && (p.kind === 'egg' || p.kind === 'letter')) out.push({ id: p.id, kind: p.kind, x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) });
-      if (n === 'Chest') out.push({ id: p.id, kind: 'chest', x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) });
+      if (n === 'Chest' && !p.iron) out.push({ id: p.id, kind: 'chest', x: +p.x.toFixed(1), y: +p.y.toFixed(1), z: +p.z.toFixed(1) });
     }
     return out;
   });

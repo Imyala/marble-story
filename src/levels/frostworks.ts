@@ -242,6 +242,10 @@ function buildHollow(b: Builder): void {
   b.enemy('grunt', -6, 35, Math.PI);
   b.enemy('grunt', 6, 40, Math.PI);
   b.enemy('frostGolem', 1, 45, Math.PI);
+  // A Superflame shrine at the mouth of the hollow, asleep until the patrol is beaten,
+  // and an iron-bound chest that only white-hot breath will open.
+  b.powerShrine('hollow', 'superflame', 4, 31, Math.PI, 16);
+  b.ironChest('hollow', -4, 46, Math.PI / 2, { blue: 30, red: 4, purple: 1 });
   b.story('golem', 0, 29, 7, () => g.hud.flick('That golem is made of rime. Ice would bounce off it, but fire melts golems. Burn it down!', 7));
   b.crystal(-12, 47, 'red', 4);
   b.crystal(-10, 30, 'blue', 10, true);
@@ -700,9 +704,6 @@ function cuttersCamp(b: Builder): void {
   b.enemy('sapper', -36.8, 55.4, Math.PI / 2);
   // A Rime Drake keeps the cutters' camp.
   b.enemy('frostDrake', -31, 51.5, -Math.PI / 2);
-  // The camp's Superflame shrine, and an iron-bound chest the cutters could never open.
-  b.powerShrine('camp', 'superflame', -33, 60, Math.PI / 2, 14);
-  b.ironChest('camp', -24, 52, -Math.PI / 2, { blue: 30, red: 4, purple: 1 });
   b.breakables('keg', [[-30.2, 58.4], [-34.4, 57.2]]);
   b.pile(-36.6, 61.8, 0.9, 3, ['barrel', 'crate', 'basket']);
   b.pile(-28.8, 63.4, 0.9, 4, ['crate', 'barrel', 'crate', 'urn']);

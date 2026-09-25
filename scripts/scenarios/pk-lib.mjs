@@ -128,7 +128,7 @@ export const census = (h) => h.eval(() => {
   for (const b of bs) kinds[b.kind] = (kinds[b.kind] ?? 0) + 1;
   return {
     breakables: bs.length, kinds,
-    chests: l.hittables.filter((x) => x.constructor.name === 'Chest').length,
+    chests: l.hittables.filter((x) => x.constructor.name === 'Chest' && !x.iron).length,
     letters: l.secrets.filter((s) => s.kind === 'letter').map((s) => s.id),
     eggs: l.secrets.filter((s) => s.kind === 'egg').map((s) => s.id),
     enemies: g.enemies.filter((e) => e.alive).length,

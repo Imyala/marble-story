@@ -1138,8 +1138,8 @@ function farmstead(b: Builder): void {
   b.enemy('grunt', 44, -13.2, -Math.PI / 2);
   b.enemy('grunt', 39.2, -11.8, Math.PI / 2);
   b.enemy('slinger', 36, -8.6, Math.PI / 2);
-  // Their prize: a Supercharge shrine, and an iron-bound strongbox to test it on.
-  b.powerShrine('yard', 'supercharge', 40, -11, -Math.PI / 2, 12);
+  // Their prize: a Supercharge shrine by the barn, and an iron-bound strongbox to test it on.
+  b.powerShrine('yard', 'supercharge', 52, -10, -Math.PI / 2, 17);
   b.ironChest('yard', 42, -8, -Math.PI / 2, { blue: 30, red: 4, purple: 1 });
 
   // Stores around the yard.

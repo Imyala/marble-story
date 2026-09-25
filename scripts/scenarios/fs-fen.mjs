@@ -79,7 +79,7 @@ export async function counts(h) {
     const high = bs.filter((b) => b.y - g.col.terrainAt(b.x, b.z) > 0.35).map((b) => `${b.kind}@${b.x.toFixed(1)},${b.z.toFixed(1)}+${(b.y - g.col.terrainAt(b.x, b.z)).toFixed(1)}`);
     const kinds = {};
     for (const b of bs) kinds[b.kind] = (kinds[b.kind] ?? 0) + 1;
-    return { n: bs.length, kinds, sec, chests: g.level.props.filter((p) => p.constructor.name === 'Chest').length, high, enemies: g.enemies.filter((e) => e.alive).length };
+    return { n: bs.length, kinds, sec, chests: g.level.props.filter((p) => p.constructor.name === 'Chest' && !p.iron).length, high, enemies: g.enemies.filter((e) => e.alive).length };
   });
   console.log(JSON.stringify(c));
   h.check('40 to 80 breakables', c.n >= 40 && c.n <= 80, `${c.n}`);

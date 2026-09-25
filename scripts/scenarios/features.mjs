@@ -305,7 +305,7 @@ export async function thief(h) {
     return { alive: t.alive, egg: !!egg, ex: egg?.x, ez: egg?.z };
   });
   await waitGame(0.2);
-  await h.eval(() => { const g = window.wyrm; const e = g.level.props.find((p) => p.id === 'fen:egg-thief'); g.player.place(e.x, e.y + 0.05, e.z, 0); });
+  await h.eval(() => { const g = window.wyrm; const e = g.level.props.find((p) => p.id === 'fen:egg-thief' && p.kind === 'egg'); g.player.place(e.x, e.y + 0.05, e.z, 0); });
   await waitGame(0.6);
   const got = await h.eval(() => !!window.wyrm.save.found['fen:egg-thief']);
   h.check('catching it drops the egg, which can be collected', !r.alive && r.egg && got, JSON.stringify({ ...r, got }));

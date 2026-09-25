@@ -362,3 +362,52 @@ export async function drake(h) {
   h.check('it can be defeated and joins the Bestiary', !r.alive && r.seen, JSON.stringify(r));
   await waitGame(1);
 }
+
+/** Flight rings: flying through the first starts the clock; the whole chain pays out; timing out resets. */
+export async function rings(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 900; i++) {
+      await h.wait(40);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=sanctum&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    const R = window.wyrmDebug.SkyRings;
+    const pts = [[0, 2.5, -2], [0, 3.5, 8], [4, 3.5, 17], [8, 3, 26]];
+    window.__r = new R(g, 'sanctum:test', pts, { time: 4, bonus: 2, reward: 50 });
+    g.level.props.push(window.__r);
+    g.player.place(0, 0.3, -9, 0);
+    g.player.invuln = true;
+    g.cam.snapBehind(0, 0.2);
+  });
+  await waitGame(0.3);
+  await h.shot('rings-idle');
+  const gems0 = await h.eval(() => window.wyrm.save.gems);
+  // Fly the dragon through each ring in turn.
+  for (const [x, y, z] of [[0, 2.5, -2], [0, 3.5, 8], [4, 3.5, 17]]) {
+    await h.eval(([x, y, z]) => { const g = window.wyrm; g.player.body.x = x; g.player.body.y = y - 0.7; g.player.body.z = z; g.player.body.vy = 0; }, [x, y, z]);
+    await waitGame(0.25);
+  }
+  const mid = await h.eval(() => ({ next: window.__r.next, running: window.__r.running, hud: window.__r.hud.textContent }));
+  await h.shot('rings-running');
+  await h.eval(() => { const g = window.wyrm; g.player.body.x = 8; g.player.body.y = 2.3; g.player.body.z = 26; });
+  await waitGame(0.3);
+  await waitGame(1);
+  const done = await h.eval(() => ({ found: !!window.wyrm.save.found['rings:sanctum:test'], running: window.__r.running, gems: window.wyrm.save.gems }));
+  h.check('the ring chain starts, counts and pays out', mid.running && mid.next === 3 && done.found && !done.running, JSON.stringify({ mid, done, gems0 }));
+  // A second attempt that times out resets.
+  await h.eval(() => { const g = window.wyrm; g.player.body.x = 0; g.player.body.y = 1.8; g.player.body.z = -2; });
+  await waitGame(0.3);
+  await h.eval(() => { const g = window.wyrm; g.player.place(0, 0.3, -9, 0); });
+  for (let k = 0; k < 6; k++) {
+    await waitGame(1);
+    console.log(await h.eval(() => [window.wyrm.time.toFixed(2), window.__r.timeLeft.toFixed(2), window.__r.running, window.wyrm.state]));
+  }
+  const reset = await h.eval(() => ({ running: window.__r.running, next: window.__r.next }));
+  h.check('running out of time resets the rings', !reset.running && reset.next === 0, JSON.stringify(reset));
+}

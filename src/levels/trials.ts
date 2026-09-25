@@ -99,6 +99,10 @@ export class TrialGround implements Prop, Interactable {
     return this.active !== null;
   }
 
+  dispose(): void {
+    this.hud.remove();
+  }
+
   interact(): void {
     if (this.active) return;
     this.game.menus.showTrials(this);

@@ -35,6 +35,7 @@ import { TouchControls } from '../ui/touch';
 import { PhotoMode } from '../ui/photo';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
+import { Companion, isPartnerMove, PARTNER_COLOR } from '../player/companion';
 import { RELICS } from './story';
 import type { Boss } from '../enemies/boss';
 import { rng } from '../core/rng';
@@ -100,6 +101,8 @@ export class Game {
   options: Options;
   player: Player;
   flick: Flick;
+  /** Nyxa, who fights beside Aster once Eclipse Keep is done (see Companion). */
+  readonly partner: Companion;
   level: Level | null = null;
   enemies: Enemy[] = [];
   projectiles: Projectile[] = [];
@@ -161,6 +164,7 @@ export class Game {
     this.director = new CombatDirector(this);
     this.player = new Player(this);
     this.flick = new Flick(this);
+    this.partner = new Companion(this);
     this.hud = new Hud(this, root);
     this.touch = new TouchControls(this, root);
     this.photo = new PhotoMode(this);
@@ -335,6 +339,7 @@ export class Game {
     this.player.hidden = !!opts.title;
     this.flick.reset();
     this.cam.snapBehind(syaw, 0.32);
+    this.partner.reset();
     this.cam.extraDist = 0;
     this.time = 0;
     this.style.reset();
@@ -409,6 +414,7 @@ export class Game {
     this.fx.clear();
     this.hud.bossBar(null);
     this.cam.clearShot();
+    this.partner.clear();
     if (this.level) this.level.dispose(this.scene);
     this.level = null;
   }
@@ -478,6 +484,8 @@ export class Game {
         this.hintHeld = -1;
         this.hud.flick(this.flick.seek(), 4, true);
       }
+      // Nyxa: a tap sends her in, holding makes her stay.
+      this.partner.input(dt);
     }
     if (this.state !== 'title' && this.state !== 'menu' && this.level && !this.photo.active) this.cam.update(dt, this);
     // Swimming: the camera follows a diving dragon under the surface, and the view takes the water's tint.
@@ -615,6 +623,8 @@ export class Game {
       this.rebuildHitList();
       level.update(wdt / steps);
       this.player.update(pdt / steps);
+      // Nyxa keeps Aster's pace, Dragon Time included.
+      this.partner.update(pdt / steps);
       for (const e of this.enemies) e.update(wdt / steps);
       for (const p of this.projectiles) if (p.alive) p.update(wdt / steps);
       for (const s of this.shockwaves) if (s.alive) s.update(wdt / steps);
@@ -820,7 +830,7 @@ export class Game {
 
   onEnemyDamaged(e: Enemy, dmg: number, hit: Hit | null, reaction: Reaction | null): void {
     if (this.options.damageNumbers && dmg >= 0.5) {
-      const col = hit ? typeColor(hit.type) : 0xff9a50;
+      const col = hit ? (isPartnerMove(hit.move) ? PARTNER_COLOR : typeColor(hit.type)) : 0xff9a50;
       const tick = hit?.source === 'breath' || dmg < 4;
       this.hud.number(e.x, e.y + e.height + 0.2, e.z, Math.round(dmg), col, reaction !== null || (hit?.heavy ?? false), tick ? e : undefined);
     }
@@ -907,16 +917,20 @@ export class Game {
   onEnemyKilled(e: Enemy, reaction: Reaction | null): void {
     this.save.stats.kills++;
     if (e.elite) bump(this.save, 'elites');
+    // Nyxa's kills pay gems like any other, but the style meter is Aster's alone.
+    const byPartner = isPartnerMove(e.lastHitBy);
+    if (this.partner.helped(e)) bump(this.save, 'partnerKills');
+    this.partner.onKill(e);
     const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1) * (e.elite ? 2.5 : 1) * ngScale(this.save).gems;
     const g = e.def.gems;
     this.spawnGems(e.x, e.y + e.height * 0.5, e.z, {
       blue: Math.round(g.blue * mul), red: (g.red ?? 0) + (e.elite ? 1 : 0), green: g.green ?? 0, purple: (g.purple ?? 0) + (e.elite ? 1 : 0),
     }, true);
-    this.style.bonus(15 * (e.def.styleValue ?? 1));
+    if (!byPartner) this.style.bonus(15 * (e.def.styleValue ?? 1));
     this.player.gainFury(5);
     if (this.player.lock === e) this.player.lock = null;
     this.checkFeats();
-    if (this.player.power === 'superflame' && e.def.id !== 'dummy' && ++this.visit.sfKills >= 5 && this.level?.def.id === 'falls') this.skill('falls:superflame');
+    if (!byPartner && this.player.power === 'superflame' && e.def.id !== 'dummy' && ++this.visit.sfKills >= 5 && this.level?.def.id === 'falls') this.skill('falls:superflame');
     // The last foe of a fight falls in slow motion.
     const others = this.enemies.some((o) => o !== e && o.alive && o.aggro && Math.hypot(o.x - e.x, o.z - e.z) < 32);
     if (!others && !this.activeArena && !this.boss && e.def.id !== 'dummy' && this.combatHold > 0 && this.encounterKills >= 1) {
@@ -939,8 +953,10 @@ export class Game {
     const z = e.z;
     this.save.stats.reactions++;
     this.checkFeats();
-    if (r === 'shatter' && ++this.visit.shatters >= 4 && this.level?.def.id === 'frostworks') this.skill('frostworks:shatter');
-    this.style.bonus(90);
+    // A reaction Nyxa sets off counts in the journey's tally, but not for Aster's style or Skill Points.
+    const byPartner = isPartnerMove(e.lastHitBy);
+    if (!byPartner && r === 'shatter' && ++this.visit.shatters >= 4 && this.level?.def.id === 'frostworks') this.skill('frostworks:shatter');
+    if (!byPartner) this.style.bonus(90);
     this.hud.bigText(info.name, info.color);
     this.player.gainFury(10);
     if (r === 'shatter') {
@@ -1265,6 +1281,7 @@ export class Game {
       if (r) this.hud.relic(r.title, r.text);
     }
     this.checkFeats();
+    this.partner.onSecret(c.kind);
     const mote = c.kind === 'heart' ? 0xff6a7a : c.kind === 'mana' ? 0x6af09a : c.kind === 'egg' ? 0xd8b0ff : c.kind === 'letter' ? 0xffe0c0 : 0xfff0b0;
     this.fx.motes(c.x, c.y + 1, c.z, mote, 30);
     writeSave(s);

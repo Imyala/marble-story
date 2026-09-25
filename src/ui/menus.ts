@@ -12,6 +12,7 @@ import { HERO_LOOK } from '../player/dragonRig';
 import { ELEMENTS } from '../game/types';
 import { TRIALS, type TrialGround } from '../levels/trials';
 import { RANKS } from '../combat/style';
+import { forInput } from './keys';
 
 type Screen = { el: HTMLElement; focus: HTMLElement[]; idx: number; back: (() => void) | null; grid?: number };
 
@@ -60,6 +61,9 @@ const TIPS = [
   ['Iron-bound Chests', 'Ordinary blows just ring off the iron. A supercharged ram, Superflame breath or Invincibility cracks them open.'],
   ['Critters and Flick', 'Flick\'s glow shows how you are holding up: gold, then blue, then a flickering green. Roast or ram the realm\'s critters and Flick eats the butterflies they leave, mending you a little (or turning them into gems when you are well).'],
 ];
+
+/** The field note on Nyxa, shown once she travels with Aster (after Eclipse Keep). */
+const PARTNER_TIP: [string, string] = ['Nyxa', 'Nyxa fights beside you, about a third as hard as you do, and follows up your work: a rising slash when you launch a foe, a finisher on frozen or stunned ones, and a Shadow Veil when you are nearly down. Tap G to send her at your target with a heavy strike (the ring round her portrait refills in a few seconds). Hold G and she stays where she is, or on a twin plate beside her, until you tap again. Twin plates open only while a dragon stands on each. She never blocks your way: if she falls behind, she steps out of your shadow. Send her home to the Sanctum from Options.'];
 
 export class Menus {
   private layer: HTMLDivElement;
@@ -631,6 +635,7 @@ export class Menus {
     p.append(tabs);
     if (this.journalTab === 'tips') {
       for (const [t, d] of TIPS) p.append(this.div('entry', `<h4>${t}</h4><p>${d}</p>`));
+      if (g.save.levelsDone.keep) p.append(this.div('entry', `<h4>${PARTNER_TIP[0]}</h4><p>${forInput(PARTNER_TIP[1], g.input)}</p>`));
     } else if (this.journalTab === 'bestiary') {
       const ids = Object.keys(BESTIARY);
       const seen = ids.filter((id) => g.save.found[`seen:${id}`]).length;
@@ -847,6 +852,8 @@ export class Menus {
     choice('Damage numbers', [[true, 'On'], [false, 'Off']], () => o.damageNumbers, (v) => (o.damageNumbers = v));
     choice('Flashing effects', [[false, 'Full'], [true, 'Reduced']], () => !!o.reduceFlashing, (v) => (o.reduceFlashing = v));
     choice('Graphics', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], () => o.quality, (v) => (o.quality = v));
+    // Nyxa's place: beside Aster, or at home in the Sanctum (only once she has one).
+    if (g.save.levelsDone.keep) choice('Nyxa fights beside you', [[true, 'On'], [false, 'Sent home']], () => o.partner !== false, (v) => (o.partner = v));
     if (g.state !== 'title') {
       choice('Difficulty', [['story', 'Story'], ['normal', 'Adventurer'], ['hard', 'Legend']] as [Difficulty, string][], () => g.save.difficulty, (v) => {
         g.save.difficulty = v;
@@ -869,6 +876,8 @@ export class Menus {
       ['Burst', 'Q / U', 'LB'], ['Fury', 'X', 'Back'], ['Dodge / hold to charge', 'Shift', 'B'], ['Dragon Time', 'Hold C', 'LT'],
       ['Lock on', 'Tab / middle mouse', 'RB'], ['Change element', '1-4, mouse wheel, R', 'D-pad'], ['Interact', 'F', 'L3'], ['Flick: tap for a secret, hold for the way on!', 'H', 'R3'], ['Pause', 'Esc', 'Start'],
     ];
+    // Nyxa's command, once she travels with Aster.
+    if (this.game.save.levelsDone.keep) rows.splice(rows.length - 1, 0, ['Nyxa: tap to send her in, hold to make her stay', 'G', 'L3 (with nothing to use)']);
     const p = this.div('panel', `<h2>Controls</h2><div class="stats" style="grid-template-columns:auto auto auto;gap:8px 28px">
       <b style="text-align:left;color:#f5c46b">Action</b><b style="text-align:left;color:#f5c46b">Keyboard &amp; mouse</b><b style="text-align:left;color:#f5c46b">Gamepad</b>
       ${rows.map(([a, k, pd]) => `<span>${a}</span><b style="text-align:left">${k}</b><b style="text-align:left">${pd}</b>`).join('')}</div>

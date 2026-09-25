@@ -23,6 +23,7 @@ const BUTTONS: Btn[] = [
   { action: 'elemNext', label: 'Element', cls: 's b-elem' },
   { action: 'interact', label: 'Use', cls: 's b-use' },
   { action: 'hint', label: 'Flick', cls: 's b-hint' },
+  { action: 'partner', label: 'Nyxa', cls: 's b-nyxa' },
   { action: 'pause', label: '&#10074;&#10074;', cls: 's b-pause' },
 ];
 
@@ -42,6 +43,8 @@ export class TouchControls {
   /** Button labels by action, so they can say what they do in the water. */
   private labels = new Map<Action, HTMLElement>();
   private swimLabels = false;
+  /** Nyxa's button shows only while she is along. */
+  private nyxaBtn: HTMLElement | null = null;
 
   constructor(private game: Game, parent: HTMLElement) {
     this.root = document.createElement('div');
@@ -54,6 +57,7 @@ export class TouchControls {
     this.stick.append(this.knob);
     this.root.append(this.stick);
     for (const b of BUTTONS) this.root.append(this.button(b));
+    this.nyxaBtn = this.root.querySelector('.b-nyxa');
     parent.appendChild(this.root);
 
     window.addEventListener('touchstart', () => this.enable(), { once: true, passive: true });
@@ -180,6 +184,7 @@ export class TouchControls {
         if (l) l.textContent = text;
       }
     }
+    if (this.nyxaBtn) this.nyxaBtn.style.display = this.game.partner.present ? '' : 'none';
     if (!show && this.stickId !== null) {
       this.stickId = null;
       this.stick.classList.remove('on');

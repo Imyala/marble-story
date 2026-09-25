@@ -978,7 +978,7 @@ function talkMossa(g: Game): void {
       { who: 'mossa', text: 'Three nights ago the roots came. Black ones, thorned, humming. They grew over the four old gates, and the Hollow went dim.' },
       { who: 'flick', text: 'Four gates? Where do they go?' },
       { who: 'mossa', text: 'The Mycelium Deep. The Drowned City. The Crystal Mine. And the First Hatchery, where the old dragons kept their eggs.' },
-      // QUEST HOOK: Elder Mossa's quest starts here ("The Withering Roots": find what feeds the roots over the four gates, and cut it off).
+      // Act II's main thread goes on from here (src/game/quests.ts, main()): what feeds the roots over the four gates.
       { who: 'mossa', text: 'Something down there is feeding those roots. Find it, and the gates may open again. Until then, our fire is yours.' },
     ], () => {
       g.saveNow();
@@ -990,20 +990,38 @@ function talkMossa(g: Game): void {
 }
 
 function talkTallow(g: Game): void {
-  if (!g.save.found['story:hollow:tallow']) {
+  const Q = 'hollow-oil';
+  if (!g.quests.isStarted(Q)) {
     g.save.found['story:hollow:tallow'] = true;
     g.say([
       { who: 'tallow', text: 'Mind the stock! Every lamp in the Hollow comes off this bench, and every one of them is running on old oil.' },
       { who: 'tallow', text: 'Glowcap oil, see. From the big mushrooms in the Glowcap Wood, east of the lake. Only the Gloom are camped in there now, and they poke anyone who comes near.' },
-      // QUEST HOOK: Tallow's quest starts here ("Lamp Oil": clear the Glowcap Wood's Gloom camp, then bring back glowcap spores).
-      { who: 'tallow', text: 'You look like you could poke back. If the Wood ever goes quiet, I\'ve lamps to fill.' },
-    ], () => g.saveNow());
+      { who: 'tallow', text: 'You look like you could poke back. Clear them out, bring me a sack of fresh spores, and I\'ll fill every lamp from here to the gates.' },
+    ], () => g.quests.start(Q));
     return;
   }
-  g.say([{ who: 'tallow', text: 'Still on the old oil. The lamps flicker whenever the roots groan. Have you noticed? I have noticed.' }]);
+  const s = g.quests.isDone(Q) ? 99 : g.quests.step(Q);
+  if (s === 2) {
+    g.say([
+      { who: 'tallow', text: 'Spores! Fresh ones, still glowing! And the Wood quiet? Oh, you lovely great lump.' },
+      { who: 'tallow', text: 'Here. Gems for you, and a page from my ledger. Don\'t read the bit about the lamp you knocked over.' },
+    ], () => g.quests.notify('talk', { id: 'tallow' }));
+  } else if (s < 2) {
+    g.say([{ who: 'tallow', text: s === 0 ? 'The Gloom are camped in the south of the Glowcap Wood, east of the lake. Poke them for me.' : 'The spores drift down round the giant caps. Some land right on top. Bounce if you must.' }]);
+  } else {
+    g.say([{ who: 'tallow', text: 'Every lamp full, and not one flicker. The roots can groan all they like.' }]);
+  }
 }
 
 function talkPip(g: Game): void {
+  const Q = 'hollow-lantern';
+  if (g.quests.isStarted(Q) && !g.quests.isDone(Q) && g.quests.step(Q) === 1) {
+    g.say([
+      { who: 'pip', text: 'My LANTERN! You dived all the way down there? With the roots looking at you?' },
+      { who: 'pip', text: 'Here, take these. And my swimming rules. You\'ve earned them. Mostly rule four.' },
+    ], () => g.quests.notify('talk', { id: 'pip' }));
+    return;
+  }
   if (!g.save.found['story:hollow:pip']) {
     g.save.found['story:hollow:pip'] = true;
     g.say([
@@ -1011,9 +1029,8 @@ function talkPip(g: Game): void {
       { who: 'aster', text: 'I\'m not going to eat you.' },
       { who: 'pip', text: 'Good. I\'m Pip. I\'m the best swimmer in Lanternhollow, which isn\'t saying much, because nobody else will get wet.' },
       { who: 'pip', text: 'There\'s a cave under the south-west cliff. You swim in where the water goes under the rock. There\'s an egg in there, glowing. Mossa says I made it up.' },
-      // QUEST HOOK: Pip's quest starts here ("The Drowned Lantern": Pip's good lantern sank in the canal by the Drowned City's gate).
       { who: 'pip', text: 'And I dropped my good lantern in the canal by the Drowned City gate. If you ever see it down there... no pressure. Some pressure.' },
-    ], () => g.saveNow());
+    ], () => g.quests.start(Q));
     return;
   }
   const found = !!g.save.found['hollow:egg-grotto'];

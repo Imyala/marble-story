@@ -441,19 +441,25 @@ export class Quests {
       if (n) return out(c.title, c.warden ? `Reach ${c.warden}, the Warden of ${inText(c.level)}` : `Storm ${inText(c.level)} and find Nyxa`, n.spot);
       return out(c.title, c.warden ? `Free ${c.warden}` : `Face ${c.boss}`, null);
     }
-    // After the Keep: Act II's thread.
+    // After the Keep: Act II's thread. The roots split the Sanctum's lawn; the fissure leads down to the Hollow Gate.
     const title = 'The Hollow Below';
     if (s.levelsDone.keep) {
       const hollow = 'hollow';
-      if (here === hollow && !done(hollow)) {
+      const fissure: QuestSpot = { level: 'sanctum', x: 0, z: -25, label: 'The fissure' };
+      if (here === hollow) {
         const n = next(hollow);
-        return out(title, n?.label === 'boss' ? 'Something waits at the heart of the Hollow' : 'Something stirs beneath the Sanctum: follow the roots into the Hollow', n?.spot ?? null);
+        if (n?.label === 'boss') return out(title, 'Something waits at the heart of the Hollow', n.spot);
+        if (!s.found['story:hollow:mossa']) return out(title, 'Follow the lights down to the Burrowfolk\'s camp by the lake', { level: hollow, x: 0, z: -54, label: 'Lanternhollow' });
+        return out(title, 'The Hollow King\'s roots seal the four gates. Help the Hollow\'s folk while you look for a way through', n?.spot ?? null);
       }
-      if (s.unlocked.includes(hollow) && !done(hollow)) {
-        return out(title, `Something stirs beneath the Sanctum: ${here === 'sanctum' ? 'take the Wardgate down' : 'return to the Sanctum and go down'} to ${inText(hollow)}`,
-          here === 'sanctum' ? { level: 'sanctum', x: 0, z: 48, label: 'The Wardgate' } : null);
+      if (!s.unlocked.includes(hollow)) {
+        return here === 'sanctum'
+          ? out(title, 'The ground has split open in the Sanctum. Go down through the fissure', fissure)
+          : out(title, 'Something stirs beneath the Sanctum. Return there', this.nearestWard());
       }
-      return out(title, 'Something stirs beneath the Sanctum. Ask the Wardens what they heard.', here === 'sanctum' ? { level: 'sanctum', x: 4, z: 8, label: 'Emberhold' } : null);
+      return here === 'sanctum'
+        ? out(title, `Go back down through the fissure to ${inText(hollow)}`, fissure)
+        : out(title, `Return to ${inText(hollow)}, through the Sanctum's fissure or the Wardgate`, this.nearestWard());
     }
     return out(title, 'Find where the story goes next', null);
   }

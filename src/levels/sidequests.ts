@@ -47,6 +47,11 @@ const AT = {
   tamsin: { level: 'plains', x: 45.4, z: -6.6, label: 'Tamsin' },
   pen: { level: 'plains', x: 43, z: -1, label: 'The goat pen' },
   brine: { level: 'keep', x: -5.2, z: 0.6, label: 'Old Brine' },
+  // Act II: the Hollow Gate (the givers stand in src/levels/hollow.ts's Lanternhollow).
+  tallow: { level: 'hollow', x: 6.2, z: -50.5, label: 'Tallow' },
+  gloomcamp: { level: 'hollow', x: 80, z: -2, label: 'The Gloom camp' },
+  pip: { level: 'hollow', x: 3.6, z: -39.2, label: 'Pip' },
+  lantern: { level: 'hollow', x: 36.5, z: -38.5, label: 'Pip\'s lantern, under the water' },
   gristle: { level: 'keep', x: 13, z: -112, label: 'Sergeant Gristle' },
   nest: { level: 'keep', x: -27.6, z: -158.2, label: 'Nyxa\'s nest' },
 } satisfies Record<string, QuestSpot>;
@@ -162,6 +167,44 @@ export const SIDE_QUESTS: QuestDef[] = [
   },
 ];
 
+/** Where the Glowcap Wood's spores drift down: at the foot (or on top) of the giant caps. */
+const SPORES: [number, number][] = [[64.5, 28], [72, 25.5], [79.5, 35], [66, 38.5]];
+
+SIDE_QUESTS.push(
+  {
+    id: 'hollow-oil', title: 'Lamp Oil', giver: 'Tallow, lampmaker of Lanternhollow', realm: 'hollow', giverAt: AT.tallow,
+    desc: 'Every lamp in the Hollow runs on glowcap oil, and the Gloom have camped in the Glowcap Wood. Tallow needs the Wood quiet, and a sack of fresh spores.',
+    steps: [
+      { text: 'Drive the Gloom from their camp in the Glowcap Wood ({n}/{goal})', on: { event: 'kill', level: 'hollow', count: 4, test: (d) => nearCamp(d.ref) }, at: [AT.gloomcamp] },
+      { text: 'Gather glowcap spores in the Wood ({n}/{goal})', on: { event: 'item', id: /^spore-\d$/, count: 4 },
+        at: (g) => SPORES.filter((_, i) => !g.quests.hasItem('hollow-oil', `spore-${i}`)).map(([x, z]) => ({ level: 'hollow', x, z, label: 'Glowcap spores' })) },
+      { text: 'Bring the spores back to Tallow in Lanternhollow', on: { event: 'talk', id: 'tallow' }, at: [AT.tallow] },
+    ],
+    reward: {
+      gems: 90,
+      page: { title: 'Tallow\'s Lamp Ledger', from: 'Tallow', text: 'Lamps filled today: forty. Lamps that flickered when the roots groaned: none, for once. Lamps knocked over by a large violet visitor: one. It was an old lamp. I have forgiven him. I have written it down, but I have forgiven him.' },
+    },
+  },
+  {
+    id: 'hollow-lantern', title: 'The Drowned Lantern', giver: 'Pip, the best swimmer in Lanternhollow', realm: 'hollow', giverAt: AT.pip,
+    desc: 'Pip dropped their good lantern in the canal by the Drowned City\'s gate. It is still down there, glowing, and nobody else will get wet.',
+    steps: [
+      { text: 'Dive in the canal by the Drowned City\'s gate and find Pip\'s lantern (Hold Shift to dive)', on: { event: 'item', id: 'pip-lantern' }, at: [AT.lantern] },
+      { text: 'Bring the lantern back to Pip on the dock', on: { event: 'talk', id: 'pip' }, at: [AT.pip] },
+    ],
+    reward: {
+      gems: 80,
+      page: { title: 'Pip\'s Swimming Rules', from: 'Pip', text: 'One: big breath. Two: bigger breath. Three: do not look at the roots under the water, they look back. Four: if a dragon offers to fetch your lantern, say yes, and then say thank you, and then say it again because dragons like that.' },
+    },
+  },
+);
+
+/** A Gloom posted at the Glowcap Wood's camp. */
+function nearCamp(ref: unknown): boolean {
+  const e = ref as { homeX?: number; homeZ?: number } | null;
+  return !!e && e.homeX !== undefined && Math.hypot(e.homeX - AT.gloomcamp.x, (e.homeZ ?? 0) - AT.gloomcamp.z) < 16;
+}
+
 const def = (id: string) => SIDE_QUESTS.find((q) => q.id === id)!;
 
 /** No Gloom left that was posted by the cutters' fire. */
@@ -195,7 +238,22 @@ const BUILD: Record<string, (b: Builder) => void> = {
   frostworks: buildFrost,
   plains: buildPlains,
   keep: buildKeep,
+  hollow: buildHollow,
 };
+
+/** The Hollow Gate: the givers are Lanternhollow's folk (hollow.ts); the quest things are placed here. */
+function buildHollow(b: Builder): void {
+  const g = b.game;
+  const oil = new Stage(g, 'hollow-oil');
+  b.level.props.push(oil);
+  SPORES.forEach(([x, z], i) => oil.item(`spore-${i}`, 'spore', x, z, 'Glowcap spores', (s) => s === 1));
+  oil.sync();
+  const lamp = new Stage(g, 'hollow-lantern');
+  b.level.props.push(lamp);
+  // On the canal bed: Aster has to dive for it.
+  lamp.item('pip-lantern', 'flame', AT.lantern.x, AT.lantern.z, 'Pip\'s lantern', (s) => s === 0);
+  lamp.sync();
+}
 
 /** The quest's current step, -1 before it starts, the step count once done. */
 const stepOf = (g: Game, id: string) => (g.quests.isDone(id) ? def(id).steps.length : g.quests.step(id));
@@ -761,7 +819,7 @@ class Stage implements Prop {
 /** Where a named foe carrying a quest item was last seen alive this visit, by item id. */
 const fell = new Map<string, [number, number, number]>();
 
-type ItemKind = 'flame' | 'page' | 'cake';
+type ItemKind = 'flame' | 'page' | 'cake' | 'spore';
 
 /** A small glowing thing a quest wants found. Not a Collectible: secret counts stay as they are. */
 class QuestItem implements Prop, Removable {
@@ -788,6 +846,13 @@ class QuestItem implements Prop, Removable {
       const edge = new THREE.Mesh(new THREE.PlaneGeometry(0.52, 0.66), glow(0xffd070, 0.6, true));
       edge.position.z = -0.01;
       this.root.add(sheet, edge);
+    } else if (kind === 'spore') {
+      // A puff of glowcap spores, the colour of the Wood's light.
+      for (let i = 0; i < 5; i++) {
+        const s = new THREE.Mesh(new THREE.SphereGeometry(0.09 + (i % 2) * 0.05, 8, 6), glow(i % 2 ? 0x8ff0e0 : 0xc8fff4));
+        s.position.set(Math.sin(i * 1.3) * 0.16, Math.cos(i * 2.1) * 0.12, Math.cos(i * 1.3) * 0.16);
+        this.root.add(s);
+      }
     } else {
       const basket = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.22, 0.22, 12), mat(0x9a6a3a, { rough: 0.9 }));
       const handle = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.025, 5, 16, Math.PI), mat(0x7a5028, { rough: 0.9 }));

@@ -233,3 +233,28 @@ export async function storm(h) {
   await h.shot('storm-strike');
   h.check('the Falls have rain and a lightning strike', r.bolt && r.rain, JSON.stringify(r));
 }
+
+/** Finishing a realm shows a results card with a medal before leaving. */
+export async function results(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=falls&seed=5&quality=high&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    g.visit.hits = 3; g.visit.combo = 24; g.visit.rank = 4; g.visit.gems = 318;
+    g.save.stats.kills += 41;
+    g.save.levelsDone.falls = true;
+    g.travel('sanctum');
+  });
+  await h.wait(2500);
+  const r = await h.eval(() => ({ state: window.wyrm.state, rows: [...document.querySelectorAll('.res-row')].map((e) => e.textContent), medal: document.querySelector('.medal b')?.textContent }));
+  h.check('a results card shows before leaving a finished realm', r.state === 'pause' && r.rows.length === 7 && !!r.medal, JSON.stringify(r));
+  // Headless frames are slow; skip the entrance animations for the screenshot.
+  await h.eval(() => document.getAnimations().forEach((a) => { if (a.effect?.target?.closest?.('.results')) a.finish(); }));
+  await h.wait(300);
+  await h.shot('results');
+  await h.eval(() => [...document.querySelectorAll('.panel.results button')].find((b) => /Continue/i.test(b.textContent)).click());
+  await h.wait(1500);
+  const after = await h.eval(() => ({ state: window.wyrm.state, level: window.wyrm.level.def.id, medal: Object.keys(window.wyrm.save.found).filter((k) => k.startsWith('medal:')) }));
+  h.check('continuing travels on and keeps the medal', (after.state === 'transition' || after.level === 'sanctum') && after.medal.length > 0, JSON.stringify(after));
+}

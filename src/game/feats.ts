@@ -50,6 +50,7 @@ export const FEATS: FeatDef[] = [
   { id: 'kegs', name: 'Powder Monkey', desc: 'Blow up 25 powder kegs.', goal: 25, reward: 90, progress: (s) => extra(s).kegs ?? 0 },
   { id: 'chests', name: 'Treasure Seeker', desc: 'Open 8 treasure chests.', goal: 8, reward: 120, progress: (s) => extra(s).chests ?? 0 },
   { id: 'eggs', name: 'Egg Warden', desc: 'Return 14 lost dragon eggs.', goal: 14, reward: 150, progress: (s) => eggsFound(s) },
+  { id: 'gold', name: 'Golden Wings', desc: 'Earn a Gold Dragon Medal in three realms.', goal: 3, reward: 250, progress: (s) => Object.keys(s.found).filter((k) => /^medal:.*:3$/.test(k)).length },
   { id: 'letters', name: 'Archivist', desc: 'Read 16 lore letters.', goal: 16, reward: 150, progress: (s) => letters(s) },
 ];
 

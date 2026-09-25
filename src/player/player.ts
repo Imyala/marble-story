@@ -1649,6 +1649,7 @@ export class Player {
     }
     const b = this.body;
     this.hp -= hit.damage;
+    g.visit.hits++;
     g.style.hurt();
     g.sfx('hurt');
     g.shake(0.35, 0.25);

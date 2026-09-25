@@ -10,6 +10,7 @@ import { ENEMIES } from '../enemies/defs';
 import { HERO_LOOK } from '../player/dragonRig';
 import { ELEMENTS } from '../game/types';
 import { TRIALS, type TrialGround } from '../levels/trials';
+import { RANKS } from '../combat/style';
 
 type Screen = { el: HTMLElement; focus: HTMLElement[]; idx: number; back: (() => void) | null; grid?: number };
 
@@ -328,6 +329,7 @@ export class Menus {
     const m = this.div('menu dim');
     const p = this.div('panel', '<h2>The Wardgate</h2><div class="sub">Choose a realm. Realms you have finished can be revisited for secrets you could not reach before.</div>');
     const grid = this.div('levels');
+    const medalOf = (lvl: string) => [3, 2, 1].find((n) => g.save.found[`medal:${lvl}:${n}`]) ?? 0;
     for (const id of ['fen', 'falls', 'frostworks', 'plains', 'keep']) {
       const info = LEVEL_INFO[id]!;
       const unlocked = g.save.unlocked.includes(id);
@@ -336,7 +338,7 @@ export class Menus {
       b.dataset.f = '1';
       b.disabled = !unlocked;
       const found = Object.keys(g.save.found).filter((k) => k.startsWith(`${id}:`) && /:(heart|mana|relic)\d+$/.test(k)).length;
-      b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>`;
+      b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>${medalOf(id) ? `<p class="lvl-medal m${medalOf(id)}">${['', 'Bronze', 'Silver', 'Gold'][medalOf(id)]} Dragon Medal</p>` : ''}`;
       b.addEventListener('click', () => {
         if (!unlocked) return;
         g.audio.play('uiConfirm');
@@ -567,6 +569,62 @@ export class Menus {
     p.append(back);
     m.append(p);
     this.push(m, () => this.pop());
+  }
+
+  /** The end of a realm: how the visit went, with a medal for the best runs. */
+  showResults(then: () => void): void {
+    const g = this.game;
+    const v = g.visit;
+    this.hideAll();
+    g.state = 'pause';
+    g.input.wantPointerLock = false;
+    g.input.releaseLock();
+    const list = g.level?.secrets ?? [];
+    const have = list.filter((s) => g.save.found[s.id]).length;
+    const secFrac = list.length ? have / list.length : 1;
+    const secs = Math.max(0, Math.round(g.save.stats.playTime - v.t0));
+    const kills = g.save.stats.kills - v.kills0;
+    const deaths = g.save.stats.deaths - v.deaths0;
+    const rank = RANKS[Math.min(RANKS.length - 1, v.rank)]!;
+    const score = secFrac * 45 + (v.rank / (RANKS.length - 1)) * 30 + Math.max(0, 15 - v.hits * 0.5) + Math.max(0, 10 - deaths * 5);
+    const medal = score >= 82 ? 3 : score >= 58 ? 2 : 1;
+    const prev = [3, 2, 1].find((n) => g.save.found[`medal:${v.id}:${n}`]) ?? 0;
+    for (let n = 1; n <= medal; n++) g.save.found[`medal:${v.id}:${n}`] = true;
+    g.checkFeats();
+    writeSave(g.save);
+    const MEDALS = ['', 'Bronze', 'Silver', 'Gold'];
+    const m = this.div('menu dim');
+    const p = this.div('panel results');
+    p.innerHTML = `<h2>Realm Restored</h2><div class="sub">${g.level?.def.name ?? ''}</div>`;
+    const rows: [string, string][] = [
+      ['Time', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`],
+      ['Foes defeated', String(kills)],
+      ['Spirit gems gathered', String(v.gems)],
+      ['Best combo', String(v.combo)],
+      ['Top style rank', `${rank.letter} &middot; ${rank.name}`],
+      ['Hits taken', String(v.hits)],
+      ['Secrets found', `${have} / ${list.length}`],
+    ];
+    const grid = this.div('res-grid');
+    rows.forEach(([k, val], i) => {
+      const row = this.div('res-row', `<span>${k}</span><b>${val}</b>`);
+      row.style.animationDelay = `${0.15 + i * 0.12}s`;
+      grid.append(row);
+    });
+    p.append(grid);
+    const md = this.div(`medal m${medal}`, `<i></i><b>${MEDALS[medal]} Dragon Medal</b>${medal > prev && prev > 0 ? '<small>New best!</small>' : ''}${secFrac < 1 ? '<small>Secrets remain. The Wardgate lets you return any time.</small>' : ''}`);
+    md.style.animationDelay = `${0.2 + rows.length * 0.12}s`;
+    p.append(md);
+    const go = this.btn('Continue', () => {
+      this.hideAll();
+      g.state = 'play';
+      then();
+    });
+    go.style.marginTop = '14px';
+    p.append(go);
+    m.append(p);
+    this.push(m, null);
+    g.audio.play('levelUp');
   }
 
   private showSkins(): void {

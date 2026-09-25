@@ -270,3 +270,19 @@
 .lore .entry.feat.done .bar i { background: #f5c46b; }
 .panel .tabs button { width: auto; min-width: 0; flex: 0 0 auto; margin: 0; }
 .lore .entry.feat .bar { width: 100%; }
+.panel.results { min-width: 400px; text-align: center; }
+.res-grid { display: grid; gap: 4px; margin: 10px 0 6px; text-align: left; }
+.res-row { display: flex; justify-content: space-between; padding: 7px 12px; border-radius: 8px; background: rgba(255,255,255,.04);
+  opacity: 0; transform: translateX(-12px); animation: res-in .35s ease-out forwards; }
+.res-row span { color: #cbbfe8; font-size: 14px; }
+.res-row b { color: var(--gold); font: 600 16px var(--serif); }
+@keyframes res-in { to { opacity: 1; transform: none; } }
+.medal { display: flex; flex-direction: column; align-items: center; gap: 4px; margin-top: 12px; opacity: 0; transform: scale(.6); animation: medal-in .5s cubic-bezier(.2,1.6,.4,1) forwards; }
+.medal i { width: 58px; height: 58px; border-radius: 50%; display: block; box-shadow: 0 0 24px rgba(255,220,140,.5), inset 0 -6px 12px rgba(0,0,0,.35); }
+.medal.m3 i { background: radial-gradient(circle at 35% 30%, #fff3c0, #f5c46b 45%, #a8701c); }
+.medal.m2 i { background: radial-gradient(circle at 35% 30%, #ffffff, #c8d0e0 45%, #7a8498); box-shadow: 0 0 20px rgba(200,210,255,.45), inset 0 -6px 12px rgba(0,0,0,.35); }
+.medal.m1 i { background: radial-gradient(circle at 35% 30%, #ffd8b0, #c07a3a 45%, #6a3a14); box-shadow: 0 0 16px rgba(220,140,80,.4), inset 0 -6px 12px rgba(0,0,0,.35); }
+.medal b { font: 600 18px var(--serif); color: #fff; letter-spacing: .06em; }
+.medal small { color: #a99cc9; font-size: 12px; }
+@keyframes medal-in { to { opacity: 1; transform: none; } }
+.lvl-medal { font-size: 12px; margin-top: 4px; } .lvl-medal.m3 { color: #f5c46b; } .lvl-medal.m2 { color: #c8d0e0; } .lvl-medal.m1 { color: #d0925a; }

@@ -123,6 +123,9 @@ export class Game {
   private autosaveT = 0;
   activeArena: Arena | null = null;
   private titleT = 0;
+  /** Tallies for the current visit to a realm, for the results card at the end. */
+  readonly visit = { id: '', t0: 0, kills0: 0, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: 0, doneAtStart: true, shown: false };
+
   /** Level flags set by story scripts during this visit. */
   readonly sessionFlags = new Set<string>();
 
@@ -230,6 +233,13 @@ export class Game {
   }
 
   travel(target: string): void {
+    // Finishing a realm for the first time: show how it went before leaving.
+    const v = this.visit;
+    if (this.level && v.id === this.level.def.id && v.id !== 'sanctum' && !v.doneAtStart && !v.shown && this.save.levelsDone[v.id] && this.state !== 'ending') {
+      v.shown = true;
+      this.menus.showResults(() => this.travel(target));
+      return;
+    }
     this.audio.play('uiConfirm');
     this.fadeTo(() => {
       this.save.level = target;
@@ -285,6 +295,11 @@ export class Game {
     this.audio.stopAllLoops();
     this.prewarm();
     if (!opts.title) {
+      const v = this.visit;
+      if (v.id !== id) {
+        Object.assign(v, { id, t0: this.save.stats.playTime, kills0: this.save.stats.kills, gems: 0, combo: 0, rank: 0, hits: 0, deaths0: this.save.stats.deaths, shown: false });
+        v.doneAtStart = !!this.save.levelsDone[id];
+      }
       this.state = 'play';
       this.audio.setMusic(THEMES[def.music] ?? THEMES.fen!);
       this.hud.show(true);
@@ -518,6 +533,8 @@ export class Game {
     const want = this.combatHold > 0 ? 1 : 0;
     if (want !== this.audio.combatLevel) this.audio.setCombat(want);
     this.style.update(dt, this.combatHold > 0);
+    this.visit.combo = Math.max(this.visit.combo, this.style.combo);
+    this.visit.rank = Math.max(this.visit.rank, this.style.rank);
     if (this.style.bestCombo > this.save.stats.bestCombo) {
       this.save.stats.bestCombo = this.style.bestCombo;
       this.checkFeats();
@@ -1043,6 +1060,7 @@ export class Game {
     switch (kind) {
       case 'blue':
         this.save.gems += value;
+        this.visit.gems += value;
         this.hud.gemBump();
         this.audio.play('gemBlue', pitch, 0.7);
         break;

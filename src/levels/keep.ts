@@ -5,6 +5,7 @@ import { ambient, paint, jitter, bossFight, Cage } from './common';
 import { Nyxa } from '../enemies/bosses/nyxa';
 import { NYXA, ENDING } from '../game/story';
 import type { Game } from '../game/game';
+import { recordTime } from '../game/progress';
 import type { Prop } from '../entities/props';
 import type { Line } from '../ui/dialogue';
 import type { DragonLook } from '../player/dragonRig';
@@ -958,6 +959,12 @@ function keepEnding(g: Game, trigger: Prop | null): void {
     { who: 'nyxa', text: '...Next to yours. I think I remember that.' },
   ];
   g.say(lines, () => {
+    if (!g.save.levelsDone.keep) {
+      g.save.clears = (g.save.clears ?? 0) + 1;
+      // The Keep has no results card: note the time here.
+      if (g.visit.id === 'keep') recordTime(g.save, 'keep', Math.round(g.save.stats.playTime - g.visit.t0));
+      g.checkFeats();
+    }
     g.save.levelsDone.keep = true;
     g.saveNow();
     g.menus.showEnding(ENDING);

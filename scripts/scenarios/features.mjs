@@ -828,3 +828,87 @@ export async function skills(h) {
   h.check('the Journal lists every Skill Point, marking the ones earned', j.entries >= 12 && j.done === 3, JSON.stringify(j));
   await h.shot('journal-skills');
 }
+
+/** Replay systems: the Gloom Rift's endless waves, par times on the results card, and New Game+. */
+export async function replay(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 400; i++) {
+      await h.wait(50);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=sanctum&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  // --- the Gloom Rift ---
+  const r0 = await h.eval(async () => {
+    const g = window.wyrm;
+    if (!g.save.elements.includes('fire')) g.learnElement('fire');
+    // The Trial Stone stands once the fire lesson is done.
+    g.save.found['story:sanctum:lesson-done'] = true;
+    g.loadLevel('sanctum', {});
+    const { TRIALS } = await import('/src/levels/trials.ts');
+    const ground = g.level.props.find((p) => p.constructor.name === 'TrialGround');
+    window.__tg = ground;
+    ground.start(TRIALS.find((t) => t.id === 'rift'));
+    return { running: ground.running, foes: g.enemies.filter((e) => e.alive && e.def.id !== 'dummy').length };
+  });
+  h.check('the Gloom Rift opens with a first wave', r0.running && r0.foes >= 2, JSON.stringify(r0));
+  for (let w = 0; w < 3; w++) {
+    await h.eval(() => { for (const e of window.wyrm.enemies) if (e.def.id !== 'dummy' && e.alive) { e.alive = false; e.state = 'dead'; e.deadT = 0.2; } });
+    await waitGame(1.8);
+  }
+  const r1 = await h.eval(() => ({ wave: window.__tg.wave, foes: window.wyrm.enemies.filter((e) => e.alive && e.def.id !== 'dummy').length, time: window.__tg.timeLeft }));
+  h.check('each cleared wave opens the next and adds time', r1.wave >= 3 && r1.foes >= 3 && r1.time > 60, JSON.stringify(r1));
+  await h.eval(() => { window.__tg.timeLeft = 0; });
+  await waitGame(0.3);
+  const r2 = await h.eval(() => ({ running: window.__tg.running, best: window.wyrm.save.stats.riftBest }));
+  h.check('when the Rift closes, the best depth is kept', !r2.running && r2.best >= 3, JSON.stringify(r2));
+
+  // --- par times ---
+  await h.eval(() => { const g = window.wyrm; g.loadLevel('falls', {}); });
+  await h.skipDialogue(4000);
+  const t = await h.eval(() => {
+    const g = window.wyrm; const v = g.visit;
+    v.t0 = g.save.stats.playTime - 400;
+    g.save.levelsDone.falls = true;
+    g.menus.showResults(() => {});
+    const row = [...document.querySelectorAll('.res-row')].find((r) => /Time/.test(r.textContent));
+    const out = { best: g.save.bestTimes?.falls, row: row?.textContent };
+    document.querySelector('.panel.results button')?.click();
+    return out;
+  });
+  h.check('the results card times the realm against its par and keeps the best', t.best >= 399 && t.best <= 402 && /under par/.test(t.row) && /best/.test(t.row), JSON.stringify(t));
+
+  // --- New Game+ ---
+  await h.eval(() => {
+    const g = window.wyrm;
+    g.save.clears = 1;
+    g.save.levelsDone.keep = true;
+    g.save.upgrades.hornPower = 2;
+    g.save.found['story:fen:intro-test'] = true;
+    g.saveNow();
+    g.showTitle();
+  });
+  await h.wait(800);
+  const title = await h.eval(() => [...document.querySelectorAll('.menu-list button')].map((b) => b.textContent));
+  h.check('the title offers New Game+ once the story is done', title.some((s) => /New Game\+/.test(s)), JSON.stringify(title));
+  await h.eval(() => [...document.querySelectorAll('.menu-list button')].find((b) => /New Game\+/.test(b.textContent)).click());
+  await h.wait(300);
+  await h.eval(() => [...document.querySelectorAll('.menu-list button')].find((b) => /Begin the Legend Run/.test(b.textContent)).click());
+  await h.wait(3000);
+  await h.skipDialogue(6000);
+  const ng = await h.eval(async () => {
+    const g = window.wyrm;
+    const { ENEMIES } = await import('/src/enemies/defs.ts');
+    const e = g.enemies.find((q) => q.alive && !q.elite && q.def.id === 'grunt') ?? g.enemies.find((q) => q.alive && !q.elite);
+    return {
+      lvl: g.level.def.id, ng: g.save.ngPlus, done: Object.keys(g.save.levelsDone), horn: g.save.upgrades.hornPower, story: !!g.save.found['story:fen:intro-test'],
+      rift: g.save.stats.riftBest, hpK: e ? e.maxHp / (ENEMIES[e.def.id].hp * 1) : 0, skin: document.body ? 1 : 0,
+    };
+  });
+  h.check('New Game+ restarts the story in the Fen, keeping upgrades and records', ng.lvl === 'fen' && ng.ng === 1 && ng.done.length === 0 && ng.horn === 2 && !ng.story && ng.rift >= 3, JSON.stringify(ng));
+  h.check('the Gloom is tougher on a Legend Run', ng.hpK > 1.4, JSON.stringify(ng));
+  await h.shot('ngplus');
+}

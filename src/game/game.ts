@@ -15,7 +15,7 @@ import { StyleMeter } from '../combat/style';
 import { REACTION_INFO, type Reaction } from '../combat/status';
 import { makeHit, type DamageType, type Hit, type Hittable, type Element } from './types';
 import {
-  DIFFICULTY, loadOptions, loadSave, newSave, writeOptions, writeSave, maxHp, maxMana, SHARDS_PER_UPGRADE, learnElement,
+  DIFFICULTY, loadOptions, loadSave, newSave, writeOptions, writeSave, maxHp, maxMana, SHARDS_PER_UPGRADE, learnElement, ngScale, startNewGamePlus,
   eggsFound, SKINS, skinUnlocked, type Options, type SaveData, type Difficulty,
 } from './progress';
 import { findLetter, letterKey } from './letters';
@@ -191,8 +191,12 @@ export class Game {
   get killY(): number {
     return this.level ? this.level.killY : -50;
   }
+  /** The chosen difficulty, made harder by each New Game+ cycle. */
   get difficultyInfo() {
-    return DIFFICULTY[this.save.difficulty];
+    const d = DIFFICULTY[this.save.difficulty];
+    if (!this.save.ngPlus) return d;
+    const k = ngScale(this.save);
+    return { ...d, enemyHp: d.enemyHp * k.hp, enemyDamage: d.enemyDamage * k.dmg, aggression: d.aggression * k.aggro };
   }
 
   applyOptions(): void {
@@ -231,6 +235,19 @@ export class Game {
     writeSave(this.save);
     this.player.element = null;
     this.startPlaying(this.save.level, null);
+  }
+
+  /** A Legend Run: the story again, with everything earned kept and the Gloom far fiercer. */
+  newGamePlus(): void {
+    // From the title the stored save is the one to carry on; from the finale it is the live one.
+    const s = this.state === 'title' || this.state === 'menu' ? loadSave() ?? this.save : this.save;
+    startNewGamePlus(s);
+    this.save = s;
+    writeSave(s);
+    this.player.element = null;
+    this.visit.id = '';
+    this.sessionFlags.clear();
+    this.startPlaying(s.level, null);
   }
 
   continueGame(): void {
@@ -737,7 +754,9 @@ export class Game {
     }
     // Now and then a foe is an elite: gold-lit, tougher, and worth more.
     const common = def.speed > 0 && def.id !== 'dummy' && def.id !== 'totem';
-    if (common && this.level && this.level.def.id !== 'fen' && rng.chance(arena ? 0.06 : 0.1)) e.makeElite();
+    // Legend Runs field far more of them, even in the Fen.
+    const ng = ngScale(this.save);
+    if (common && this.level && (this.level.def.id !== 'fen' || ng.elite > 1) && rng.chance(Math.min(0.45, (arena ? 0.06 : 0.1) * ng.elite))) e.makeElite();
     this.enemies.push(e);
     return e;
   }
@@ -886,7 +905,7 @@ export class Game {
   onEnemyKilled(e: Enemy, reaction: Reaction | null): void {
     this.save.stats.kills++;
     if (e.elite) bump(this.save, 'elites');
-    const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1) * (e.elite ? 2.5 : 1);
+    const mul = this.style.reward * (reaction === 'shatter' ? 1.5 : 1) * (e.elite ? 2.5 : 1) * ngScale(this.save).gems;
     const g = e.def.gems;
     this.spawnGems(e.x, e.y + e.height * 0.5, e.z, {
       blue: Math.round(g.blue * mul), red: (g.red ?? 0) + (e.elite ? 1 : 0), green: g.green ?? 0, purple: (g.purple ?? 0) + (e.elite ? 1 : 0),

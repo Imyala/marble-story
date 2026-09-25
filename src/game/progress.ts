@@ -105,6 +105,12 @@ export interface SaveData {
   skin?: string;
   /** Every secret and chest id a realm holds, noted when it is visited (for "% explored"). */
   realmIds?: Record<string, string[]>;
+  /** Which Legend Run this is: 0 for the first journey, 1+ for New Game+. */
+  ngPlus?: number;
+  /** How many times the story has been finished (the Keep's finale). */
+  clears?: number;
+  /** Fastest time through each realm, in seconds (first finish of a run). */
+  bestTimes?: Record<string, number>;
 }
 
 /**
@@ -116,6 +122,8 @@ export interface SkinDef {
   id: string;
   name: string;
   eggs: number;
+  /** Story finishes needed (Legend scales), instead of eggs. */
+  clears?: number;
   look: Partial<DragonLook>;
 }
 
@@ -126,6 +134,9 @@ export const SKINS: SkinDef[] = [
   { id: 'rime', name: 'Rimefrost', eggs: 15, look: { body: 0x8ac0e8, belly: 0xf0f8ff, horn: 0xffffff, membrane: 0xbfe8ff, spikes: 0xffffff, eye: 0x40c0ff } },
   { id: 'moss', name: 'Mossback', eggs: 20, look: { body: 0x4a8a3a, belly: 0xd0b870, horn: 0x8a6a4a, membrane: 0xa0c060, spikes: 0x8a6a4a, eye: 0xffb030 } },
   { id: 'eclipse', name: 'Eclipse', eggs: 28, look: { body: 0x1a1428, belly: 0xc070ff, horn: 0xe8e0ff, membrane: 0x7a30c0, spikes: 0xe8e0ff, eye: 0xff80e0, glowEyes: true } },
+  // Legend scales: earned by finishing the story, then again on New Game+.
+  { id: 'ascendant', name: 'Ascendant', eggs: 0, clears: 1, look: { body: 0xf4ecd8, belly: 0xe8b84a, horn: 0xffd870, membrane: 0xffe6a0, spikes: 0xffd870, eye: 0x60e0ff, glowEyes: true } },
+  { id: 'voidfire', name: 'Voidfire', eggs: 0, clears: 2, look: { body: 0x0c0a12, belly: 0x2a1a3a, horn: 0xff6a20, membrane: 0xff4a10, spikes: 0xff8a30, eye: 0xffa020, glowEyes: true } },
 ];
 
 /** Share of a visited realm's secrets and chests found, 0..1, or null if never visited. */
@@ -141,7 +152,54 @@ export function eggsFound(s: SaveData): number {
 
 export function skinUnlocked(s: SaveData, id: string): boolean {
   const d = SKINS.find((k) => k.id === id);
-  return !!d && eggsFound(s) >= d.eggs;
+  return !!d && eggsFound(s) >= d.eggs && (s.clears ?? 0) >= (d.clears ?? 0);
+}
+
+/** Target times through each realm (seconds): beat them for the Swift Wings feat. */
+export const PAR_TIMES: Record<string, number> = { fen: 8 * 60, falls: 12 * 60, frostworks: 12 * 60, plains: 13 * 60, keep: 14 * 60 };
+
+export const clock = (secs: number): string => `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
+
+/** Notes a finished run through a realm; returns whether it set a new best. */
+export function recordTime(s: SaveData, lvl: string, secs: number): boolean {
+  const t = (s.bestTimes ??= {});
+  if (t[lvl] !== undefined && t[lvl]! <= secs) return false;
+  t[lvl] = secs;
+  return true;
+}
+
+/** Realms finished inside their par time, at best. */
+export function parsBeaten(s: SaveData): number {
+  return Object.entries(PAR_TIMES).filter(([k, par]) => (s.bestTimes?.[k] ?? Infinity) <= par).length;
+}
+
+/**
+ * How much harder (and richer) a Legend Run is: every New Game+ cycle makes
+ * the Gloom tougher, fiercer and more often elite, and pays more gems.
+ */
+export function ngScale(s: SaveData): { hp: number; dmg: number; aggro: number; elite: number; gems: number } {
+  const n = Math.max(0, s.ngPlus ?? 0);
+  return { hp: 1 + 0.45 * n, dmg: 1 + 0.3 * n, aggro: Math.min(1.6, 1 + 0.12 * n), elite: 1 + n, gems: 1 + 0.25 * n };
+}
+
+/** Found-keys that belong to one run of the story, cleared for New Game+. */
+const RUN_KEY = /^(story|arena|ward):|:chest:|:rings:/;
+
+/**
+ * Starts a Legend Run: the story, realms, fights and treasure chests begin
+ * again, while everything Aster has earned stays (upgrades, health and spirit
+ * shards, gems, relics, letters, eggs and scales, feats, Skill Points, medals,
+ * the Bestiary, best times).
+ */
+export function startNewGamePlus(s: SaveData): void {
+  s.ngPlus = (s.ngPlus ?? 0) + 1;
+  for (const k of Object.keys(s.found)) if (RUN_KEY.test(k)) delete s.found[k];
+  s.levelsDone = {};
+  s.unlocked = ['fen'];
+  s.level = 'fen';
+  s.checkpoint = null;
+  // Elements are relearned from the Wardens as the story unfolds; their upgrades wait.
+  s.elements = [];
 }
 
 export function newSave(difficulty: Difficulty = 'normal'): SaveData {

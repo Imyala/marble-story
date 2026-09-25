@@ -1,11 +1,11 @@
 import type { Game } from '../game/game';
 import {
-  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, explored, type UpgradeTree, type Difficulty,
+  UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, explored, skinUnlocked, recordTime, PAR_TIMES, clock, type UpgradeTree, type Difficulty,
 } from '../game/progress';
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
 import { LETTERS, letterKey } from '../game/letters';
-import { FEATS, BESTIARY, featKey } from '../game/feats';
+import { FEATS, BESTIARY, featKey, extra } from '../game/feats';
 import { SKILLS, SKILL_REWARD, skillKey } from '../game/skills';
 import { ENEMIES } from '../enemies/defs';
 import { HERO_LOOK } from '../player/dragonRig';
@@ -193,8 +193,12 @@ export class Menus {
     if (save) {
       const ex = explored(save, save.level);
       const eggs = eggsFound(save);
-      const bits = [LEVEL_INFO[save.level]?.name ?? save.level, ex !== null ? `${Math.round(ex * 100)}% explored` : '', eggs ? `${eggs} eggs` : ''].filter(Boolean).join(' &middot; ');
+      const bits = [save.ngPlus ? `Legend Run ${save.ngPlus}` : '', LEVEL_INFO[save.level]?.name ?? save.level, ex !== null ? `${Math.round(ex * 100)}% explored` : '', eggs ? `${eggs} eggs` : ''].filter(Boolean).join(' &middot; ');
       list.append(this.btn(`Continue <small style="opacity:.6">&middot; ${bits}</small>`, () => this.game.continueGame()));
+    }
+    if (save && (save.clears ?? 0) > 0) {
+      const n = (save.ngPlus ?? 0) + 1;
+      list.append(this.btn(`New Game+ <small style="opacity:.6">&middot; Legend Run ${n}</small>`, () => this.confirmNewGamePlus()));
     }
     list.append(
       this.btn('New Game', () => this.showDifficulty()),
@@ -205,6 +209,23 @@ export class Menus {
     t.append(list);
     m.append(t, this.div('menu-foot', 'A fan-made elemental dragon adventure &middot; best with mouse and keyboard or a gamepad'));
     this.push(m, null);
+  }
+
+  /** New Game+: explains what carries over, then starts the next Legend Run. */
+  private confirmNewGamePlus(): void {
+    const g = this.game;
+    const save = g.state === 'ending' ? g.save : loadSave() ?? g.save;
+    const n = (save.ngPlus ?? 0) + 1;
+    const k = 1 + 0.45 * n;
+    const m = this.div('menu dim');
+    const p = this.div('panel', `<h2>Legend Run ${n}</h2><div class="sub">The Gloom returns, and it has learned.</div>
+      <div class="entry"><p style="font-style:normal">The story begins again in the Fen. <b>You keep</b> your upgrades, health and spirit shards, spirit gems, relics, letters, eggs and scales, feats, Skill Points, medals and the Bestiary.</p>
+      <p style="font-style:normal"><b>It gets harder:</b> foes have about ${Math.round(k * 100)}% of their health, hit harder, press the attack and are far more often elite. <b>It pays more:</b> ${Math.round((1 + 0.25 * n) * 100)}% gems from every foe, the treasure chests fill again, and new scales wait at the end.</p></div>`);
+    const list = this.div('menu-list');
+    list.append(this.btn('Begin the Legend Run', () => g.newGamePlus()), this.btn('Not yet', () => this.pop()));
+    p.append(list);
+    m.append(p);
+    this.push(m, () => this.pop());
   }
 
   private showDifficulty(): void {
@@ -376,7 +397,7 @@ export class Menus {
       b.dataset.f = '1';
       b.disabled = !unlocked;
       const found = Object.keys(g.save.found).filter((k) => k.startsWith(`${id}:`) && /:(heart|mana|relic)\d+$/.test(k)).length;
-      b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>${exploredBar(id)}${medalOf(id) ? `<p class="lvl-medal m${medalOf(id)}">${['', 'Bronze', 'Silver', 'Gold'][medalOf(id)]} Dragon Medal</p>` : ''}`;
+      b.innerHTML = `<h3>${unlocked ? info.name : '???'}</h3><p>${unlocked ? info.blurb : 'Sealed.'}</p><p style="margin-top:6px">${unlocked ? `Collectibles found: ${found}/${info.collectibles}` : ''}</p>${exploredBar(id)}${medalOf(id) ? `<p class="lvl-medal m${medalOf(id)}">${['', 'Bronze', 'Silver', 'Gold'][medalOf(id)]} Dragon Medal</p>` : ''}${unlocked && g.save.bestTimes?.[id] !== undefined ? `<p class="lvl-pct">Best time ${clock(g.save.bestTimes[id]!)}${PAR_TIMES[id] && g.save.bestTimes[id]! <= PAR_TIMES[id]! ? ' &#10022;' : ` &middot; par ${clock(PAR_TIMES[id] ?? 0)}`}</p>` : ''}`;
       b.addEventListener('click', () => {
         if (!unlocked) return;
         g.audio.play('uiConfirm');
@@ -412,7 +433,7 @@ export class Menus {
       b.dataset.f = '1';
       b.disabled = locked;
       b.innerHTML = `<h3>${t.name}</h3><p>${locked ? `Requires ${t.needs.join(', ')}.` : t.desc}</p>
-        <p style="margin-top:6px;color:#cfe6ff">${locked ? '' : `Reward: ${done ? t.repeat : t.reward} gems &middot; ${t.time}s`}</p>`;
+        <p style="margin-top:6px;color:#cfe6ff">${locked ? '' : t.goal === 'endless' ? `Gems every wave &middot; best: ${extra(g.save).riftBest ?? 0} waves` : `Reward: ${done ? t.repeat : t.reward} gems &middot; ${t.time}s`}</p>`;
       b.addEventListener('click', () => {
         if (locked) return;
         g.audio.play('uiConfirm');
@@ -637,6 +658,8 @@ export class Menus {
     const kills = g.save.stats.kills - v.kills0;
     const deaths = g.save.stats.deaths - v.deaths0;
     const rank = RANKS[Math.min(RANKS.length - 1, v.rank)]!;
+    const newBest = recordTime(g.save, v.id, secs);
+    const par = PAR_TIMES[v.id];
     const score = secFrac * 45 + (v.rank / (RANKS.length - 1)) * 30 + Math.max(0, 15 - v.hits * 0.5) + Math.max(0, 10 - deaths * 5);
     const medal = score >= 82 ? 3 : score >= 58 ? 2 : 1;
     const prev = [3, 2, 1].find((n) => g.save.found[`medal:${v.id}:${n}`]) ?? 0;
@@ -648,7 +671,7 @@ export class Menus {
     const p = this.div('panel results');
     p.innerHTML = `<h2>Realm Restored</h2><div class="sub">${g.level?.def.name ?? ''}</div>`;
     const rows: [string, string][] = [
-      ['Time', `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`],
+      ['Time', `${clock(secs)}${par ? ` <small style="opacity:.75">${secs <= par ? '&#10022; under par' : `par ${clock(par)}`}</small>` : ''}${newBest ? ' <small style="color:var(--gold)">best!</small>' : ` <small style="opacity:.6">best ${clock(g.save.bestTimes?.[v.id] ?? secs)}</small>`}`],
       ['Foes defeated', String(kills)],
       ['Spirit gems gathered', String(v.gems)],
       ['Best combo', String(v.combo)],
@@ -691,10 +714,10 @@ export class Menus {
     const cur = g.save.skin ?? 'violet';
     const hex = (c: number) => `#${c.toString(16).padStart(6, '0')}`;
     for (const k of SKINS) {
-      const open = n >= k.eggs;
+      const open = skinUnlocked(g.save, k.id);
       const look = { ...HERO_LOOK, ...k.look };
       const card = this.div(`skin-card${open ? '' : ' locked'}${cur === k.id ? ' on' : ''}`,
-        `<div class="sw"><span style="background:${hex(look.body)}"></span><span style="background:${hex(look.belly)}"></span><span style="background:${hex(look.membrane)}"></span></div><b>${open ? k.name : '???'}</b><small>${open ? (cur === k.id ? 'Wearing' : 'Wear') : `${k.eggs} eggs`}</small>`);
+        `<div class="sw"><span style="background:${hex(look.body)}"></span><span style="background:${hex(look.belly)}"></span><span style="background:${hex(look.membrane)}"></span></div><b>${open ? k.name : '???'}</b><small>${open ? (cur === k.id ? 'Wearing' : 'Wear') : k.clears ? (k.clears === 1 ? 'Finish the story' : 'Finish a Legend Run') : `${k.eggs} eggs`}</small>`);
       if (open) {
         card.addEventListener('click', () => {
           g.save.skin = k.id;
@@ -828,6 +851,18 @@ export class Menus {
     go.style.opacity = '0';
     go.style.animation = `crawlIn 1s ${lines.length * 2.4 + 0.5}s forwards`;
     c.append(go);
+    // The story is done: offer the next, harder journey (it can also wait for the title screen).
+    const again = this.btn(`Begin Legend Run ${(g.save.ngPlus ?? 0) + 1} (New Game+)`, () => this.confirmNewGamePlus());
+    again.style.opacity = '0';
+    again.style.animation = `crawlIn 1s ${lines.length * 2.4 + 0.8}s forwards`;
+    c.append(again);
+    const unlocked = SKINS.filter((k) => k.clears === (g.save.clears ?? 0));
+    if (unlocked.length) {
+      const note = this.div('sub', `New scales unlocked: ${unlocked.map((k) => k.name).join(', ')}. Wear them from the pause menu.`);
+      note.style.opacity = '0';
+      note.style.animation = `crawlIn 1s ${lines.length * 2.4 + 0.5}s forwards`;
+      c.append(note);
+    }
     m.append(c);
     this.push(m, null);
   }

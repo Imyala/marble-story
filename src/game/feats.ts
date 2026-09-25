@@ -1,5 +1,5 @@
 import type { SaveData } from './progress';
-import { eggsFound } from './progress';
+import { eggsFound, parsBeaten } from './progress';
 import { skillsEarned } from './skills';
 
 /**
@@ -19,6 +19,8 @@ export interface ExtraStats {
   rings?: number;
   critters?: number;
   butterflies?: number;
+  /** Most waves cleared in one trip into the Gloom Rift. */
+  riftBest?: number;
 }
 
 export function extra(s: SaveData): ExtraStats {
@@ -58,6 +60,9 @@ export const FEATS: FeatDef[] = [
   { id: 'eggs', name: 'Egg Warden', desc: 'Return 14 lost dragon eggs.', goal: 14, reward: 150, progress: (s) => eggsFound(s) },
   { id: 'gold', name: 'Golden Wings', desc: 'Earn a Gold Dragon Medal in three realms.', goal: 3, reward: 250, progress: (s) => Object.keys(s.found).filter((k) => /^medal:.*:3$/.test(k)).length },
   { id: 'skills', name: 'Show-Off', desc: 'Earn 6 Skill Points.', goal: 6, reward: 150, progress: (s) => skillsEarned(s.found) },
+  { id: 'swift', name: 'Swift Wings', desc: 'Finish three realms inside their par time.', goal: 3, reward: 200, progress: (s) => parsBeaten(s) },
+  { id: 'rift', name: 'Rift Walker', desc: 'Clear 20 waves in one trip into the Gloom Rift.', goal: 20, reward: 300, progress: (s) => extra(s).riftBest ?? 0 },
+  { id: 'legend', name: 'Legend Reborn', desc: 'Finish the story again on a Legend Run (New Game+).', goal: 2, reward: 400, progress: (s) => s.clears ?? 0 },
   { id: 'letters', name: 'Archivist', desc: 'Read 16 lore letters.', goal: 16, reward: 150, progress: (s) => letters(s) },
 ];
 

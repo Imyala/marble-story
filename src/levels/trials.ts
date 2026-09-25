@@ -8,6 +8,8 @@ import { mat, glow } from '../render/materials';
 import { makeCyl } from '../world/collision';
 import { writeSave } from '../game/progress';
 import type { Element } from '../game/types';
+import { rng } from '../core/rng';
+import { extra } from '../game/feats';
 
 /**
  * Dragon Trials: optional challenge fights on the Sanctum training grounds.
@@ -23,7 +25,7 @@ export interface TrialDef {
   needs: Element[];
   waves: SpawnSpec[][];
   time: number;
-  goal: 'clear' | 'style' | 'reactions' | 'noHit';
+  goal: 'clear' | 'style' | 'reactions' | 'noHit' | 'endless';
   /** Style rank index or reaction count, for those goals. */
   target?: number;
   reward: number;
@@ -59,10 +61,58 @@ export const TRIALS: TrialDef[] = [
     waves: [[{ type: 'totem', x: 0, z: 0 }, ...ring(3, 'grunt')], [{ type: 'brute', x: 3, z: 3 }, { type: 'brute', x: -3, z: -3 }, ...ring(2, 'slinger', R * 0.8)], [{ type: 'knight', x: 0, z: R * 0.5 }, ...ring(2, 'shieldbearer', R * 0.7, 1)], [{ type: 'drake', x: R * 0.5, z: 0 }, { type: 'drake', x: -R * 0.5, z: 0, delay: 1.2 }]],
   },
   {
+    id: 'rift', name: 'The Gloom Rift', desc: 'Endless waves, each fiercer than the last. Every wave you clear adds time and pays gems. How deep can you go?', needs: ['fire'], time: 60, goal: 'endless', reward: 0, repeat: 0,
+    waves: [],
+  },
+  {
     id: 'legend', name: 'Trial of Legends', desc: 'Every element, every foe, and the Legendary style rank. For the truly fearless.', needs: ['fire', 'lightning', 'ice', 'earth'], time: 180, goal: 'style', target: 5, reward: 500, repeat: 40,
     waves: [[...ring(4, 'grunt'), { type: 'totem', x: 0, z: 0 }], [...ring(2, 'crawler'), ...ring(2, 'wisp', R * 0.6, 1)], [{ type: 'frostGolem', x: 3, z: 0 }, { type: 'stoneGolem', x: -3, z: 0 }], [{ type: 'knight', x: 2, z: 2 }, { type: 'knight', x: -2, z: -2 }, ...ring(3, 'grunt')], [...ring(3, 'drake', R * 0.7), { type: 'sapper', x: 0, z: 0, delay: 1 }]],
   },
 ];
+
+/** Foes the Gloom Rift can send, what each costs of a wave's budget, and the first wave it may appear in. */
+const RIFT_POOL: { type: string; cost: number; from: number }[] = [
+  { type: 'grunt', cost: 1, from: 1 }, { type: 'slinger', cost: 1.5, from: 2 }, { type: 'wisp', cost: 1.5, from: 3 },
+  { type: 'sapper', cost: 2, from: 4 }, { type: 'shieldbearer', cost: 2.5, from: 4 }, { type: 'crawler', cost: 2.5, from: 5 },
+  { type: 'brute', cost: 4, from: 6 }, { type: 'stormWisp', cost: 2.5, from: 7 }, { type: 'stoneGolem', cost: 5, from: 8 },
+  { type: 'frostGolem', cost: 5, from: 8 }, { type: 'knight', cost: 5, from: 9 }, { type: 'drake', cost: 6, from: 10 },
+  { type: 'totem', cost: 3, from: 11 }, { type: 'frostDrake', cost: 7, from: 13 }, { type: 'stormDrake', cost: 7, from: 15 },
+];
+
+/**
+ * One wave of the Gloom Rift (n counts from 1): a budget that grows with
+ * every wave, spent on whatever the Rift has unlocked by then. Every fifth
+ * wave is led by an elite champion.
+ */
+export function riftWave(n: number, rand: () => number = () => rng.next()): (SpawnSpec & { elite?: boolean })[] {
+  const pool = RIFT_POOL.filter((p) => p.from <= n);
+  let budget = 3 + n * 1.6;
+  const out: (SpawnSpec & { elite?: boolean })[] = [];
+  if (n % 5 === 0) {
+    const champs = pool.filter((p) => p.cost >= 4);
+    const c = champs[Math.floor(rand() * champs.length)] ?? pool[pool.length - 1]!;
+    out.push({ type: c.type, x: 0, z: R * 0.4, elite: true });
+    budget -= c.cost * 1.5;
+  }
+  while (budget >= 1 && out.length < 10) {
+    const can = pool.filter((p) => p.cost <= budget);
+    if (!can.length) break;
+    // Lean toward the Rift's newer (tougher) foes as the waves go on.
+    const p = can[Math.min(can.length - 1, Math.floor(Math.pow(rand(), 0.8) * can.length))]!;
+    budget -= p.cost;
+    out.push({ type: p.type, x: 0, z: 0, elite: n >= 6 && rand() < Math.min(0.4, (n - 5) * 0.04) });
+  }
+  out.forEach((s, i) => {
+    if (s.x === 0 && s.z === 0) {
+      const a = (i / out.length) * Math.PI * 2 + rand();
+      const r = R * (0.55 + rand() * 0.3);
+      s.x = Math.sin(a) * r;
+      s.z = Math.cos(a) * r;
+    }
+    s.delay = i * 0.2;
+  });
+  return out;
+}
 
 export class TrialGround implements Prop, Interactable {
   readonly range = 3;
@@ -133,6 +183,10 @@ export class TrialGround implements Prop, Interactable {
   private nextWave(): void {
     const t = this.active!;
     this.wave++;
+    if (t.goal === 'endless') {
+      this.riftWave();
+      return;
+    }
     if (this.wave >= t.waves.length) {
       if (t.goal === 'clear' || t.goal === 'noHit') this.finish(true);
       else {
@@ -154,6 +208,33 @@ export class TrialGround implements Prop, Interactable {
     }
   }
 
+  /** The Gloom Rift: pay for the wave just cleared, then open the next, a little worse. */
+  private riftWave(): void {
+    const g = this.game;
+    const cleared = this.wave;
+    if (cleared > 0) {
+      g.spawnGems(this.cx, g.player.y + 1, this.cz, { blue: 3 + cleared * 2, red: cleared % 3 === 0 ? 1 : 0 }, true);
+      this.timeLeft = Math.min(99, this.timeLeft + 22 + Math.min(20, cleared));
+      if (cleared % 5 === 0) {
+        g.hud.bigText(`${cleared} WAVES!`, 0xc070ff);
+        g.spawnGems(this.cx, g.player.y + 1, this.cz, { blue: 20 + cleared * 2, purple: 2 }, true);
+        g.audio.play('levelUp');
+      }
+      if (cleared >= 10) g.skill('sanctum:rift');
+    }
+    for (const s of riftWave(cleared + 1)) {
+      const x = this.cx + s.x;
+      const z = this.cz + s.z;
+      const gy = g.col.groundAt(x, z, 1e4, 0.2).y;
+      const e = g.spawnEnemy(s.type, x, gy + 0.05, z, Math.atan2(this.cx - x, this.cz - z), true);
+      if (s.elite) e.makeElite();
+      e.spawnDelay = s.delay ?? 0;
+      e.aggro = true;
+      this.alive.push(e);
+    }
+    if (cleared > 0) g.hud.levelTitle(`Wave ${cleared + 1}`, 'The Rift opens wider...');
+  }
+
   private objectiveText(t: TrialDef): string {
     const g = this.game;
     const time = `${Math.ceil(this.timeLeft)}s`;
@@ -162,6 +243,7 @@ export class TrialGround implements Prop, Interactable {
       case 'noHit': return `${t.name}: wave ${this.wave + 1}/${t.waves.length} &middot; untouched &middot; ${time}`;
       case 'style': return `${t.name}: rank ${['D', 'C', 'B', 'A', 'S', 'SS'][g.style.rank]} of ${['D', 'C', 'B', 'A', 'S', 'SS'][t.target!]} &middot; ${time}`;
       case 'reactions': return `${t.name}: reactions ${g.save.stats.reactions - this.startReactions}/${t.target} &middot; ${time}`;
+      case 'endless': return `${t.name}: wave ${this.wave + 1} &middot; best ${extra(g.save).riftBest ?? 0} &middot; ${time}`;
     }
   }
 
@@ -183,6 +265,19 @@ export class TrialGround implements Prop, Interactable {
     }
     this.alive = [];
     g.level!.emit('trial-end');
+    if (t.goal === 'endless') {
+      // The Rift always wins in the end; what counts is how deep Aster got.
+      const cleared = Math.max(0, this.wave);
+      const e = extra(g.save);
+      const best = cleared > (e.riftBest ?? 0);
+      if (best) e.riftBest = cleared;
+      g.checkFeats();
+      g.hud.bigText('THE RIFT CLOSES', 0xc070ff);
+      g.audio.play(best ? 'unlock' : 'uiBack');
+      g.toast(`${cleared} wave${cleared === 1 ? '' : 's'} cleared${best ? ' - a new best!' : ` (best ${e.riftBest ?? 0})`}`, best ? 'good' : 'info');
+      writeSave(g.save);
+      return;
+    }
     if (won) {
       const key = `trial:${t.id}`;
       const first = !g.save.found[key];

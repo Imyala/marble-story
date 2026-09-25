@@ -18,6 +18,7 @@ export const SKILLS: SkillDef[] = [
   { id: 'fen:boss', level: 'fen', name: 'Untouched by the Bogmaw', desc: 'Defeat the Bogmaw without taking a single hit.' },
   { id: 'sanctum:combo', level: 'sanctum', name: 'Warm-Up', desc: 'Land a 20-hit combo in the Sanctum.' },
   { id: 'sanctum:ring', level: 'sanctum', name: 'Rune Runner', desc: 'Charge over every rune in the Sanctum\'s rune ring without stopping.' },
+  { id: 'sanctum:rift', level: 'sanctum', name: 'Into the Deep', desc: 'Clear 10 waves in one trip into the Gloom Rift (the Trial Stone).' },
   { id: 'falls:superflame', level: 'falls', name: 'Hot Headed', desc: 'Defeat 5 foes while Superflame burns, in the Falls.' },
   { id: 'falls:boss', level: 'falls', name: 'Out of Reach', desc: 'Defeat Skrieka without taking a single hit.' },
   { id: 'frostworks:shatter', level: 'frostworks', name: 'Shatterer', desc: 'Set off 4 Shatter reactions in a single visit to the Frostworks.' },

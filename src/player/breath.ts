@@ -357,6 +357,7 @@ export class BreathController {
     this.furyCount = 0;
     g.slowmo(0.4, 2.6);
     g.cam.furyZoom(2.7);
+    g.renderer.impact(1);
     const p = this.player;
     const color = el === 'fire' ? 0xff7020 : el === 'lightning' ? 0xa8e6ff : el === 'ice' ? 0xbff4ff : 0x9be06a;
     g.fx.ring(p.x, p.y, p.z, 0.5, 6, color, 0.8);

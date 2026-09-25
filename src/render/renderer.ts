@@ -24,7 +24,7 @@ export class Renderer {
   private bloom: UnrealBloomPass | null = null;
   private grade: ShaderPass | null = null;
   /** Wanted grade state; eased every frame. */
-  readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null };
+  readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null, impact: 0 };
   /** Reduced flashing: no lens ripple or fringing, a gentler Fury glow, softer lightning. */
   calm = false;
   quality: Quality = 'high';
@@ -118,6 +118,11 @@ export class Renderer {
     return this.gl.domElement.height;
   }
 
+  /** A one-beat flash on a big hit (0..1). */
+  impact(amount = 1): void {
+    this.look.impact = Math.max(this.look.impact, amount);
+  }
+
   /** Photo-mode filter; null restores the normal look. */
   setPhotoFilter(f: { sat: number; contrast: number; lift: number; tint: [number, number, number]; vig: number } | null): void {
     if (!this.grade) return;
@@ -181,6 +186,8 @@ export class Renderer {
       u.uPulse!.value = L.pulse;
       u.uFury!.value += (L.fury * (this.calm ? 0.35 : 1) - u.uFury!.value) * (1 - Math.exp(-5 * dt));
       u.uCalm!.value = this.calm ? 1 : 0;
+      u.uImpact!.value = this.calm ? 0 : L.impact;
+      L.impact = Math.max(0, L.impact - dt * 9);
       u.uTime!.value = time;
       u.uAspect!.value = this.camera.aspect;
     }

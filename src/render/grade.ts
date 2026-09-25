@@ -25,13 +25,14 @@ export const GradeShader = {
     uVig: { value: 0 },
     uPhotoSat: { value: 1 },
     uCalm: { value: 0 },
+    uImpact: { value: 0 },
   },
   vertexShader: /* glsl */ `
 varying vec2 vUv;
 void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
   fragmentShader: /* glsl */ `
 uniform sampler2D tDiffuse;
-uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat, uCalm;
+uniform float uAspect, uTime, uSat, uTone, uDT, uPulse, uFury, uContrast, uLift, uVig, uPhotoSat, uCalm, uImpact;
 uniform vec3 uTint;
 uniform vec3 uShadow, uHigh;
 varying vec2 vUv;
@@ -58,6 +59,9 @@ void main() {
   // Fury: warm, and the edges of the frame smoulder.
   col = mix(col, col * vec3(1.1, 0.96, 0.86), uFury * 0.7);
   col += vec3(1.0, 0.42, 0.12) * smoothstep(0.45, 0.95, r) * uFury * (0.22 + 0.08 * sin(uTime * 9.0) * (1.0 - uCalm));
+  // Impact frame: a bright, drained pop on the biggest hits.
+  float il = dot(col, vec3(0.299, 0.587, 0.114));
+  col = mix(col, vec3(il * 1.35 + 0.08), uImpact * 0.55);
   // Photo filters.
   float pl = dot(col, vec3(0.299, 0.587, 0.114));
   col = mix(vec3(pl), col, uPhotoSat);

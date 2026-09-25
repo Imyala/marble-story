@@ -877,6 +877,7 @@ export class Game {
     const others = this.enemies.some((o) => o !== e && o.alive && o.aggro && Math.hypot(o.x - e.x, o.z - e.z) < 32);
     if (!others && !this.activeArena && !this.boss && e.def.id !== 'dummy' && this.combatHold > 0 && this.encounterKills >= 1) {
       this.slowmo(0.3, 0.55);
+      this.renderer.impact(1);
       this.cam.punchT = 0.5;
       this.shake(0.25, 0.2);
       this.audio.play('perfect', 0.7, 0.6);
@@ -887,6 +888,7 @@ export class Game {
   private encounterKills = 0;
 
   triggerReaction(e: Enemy, r: Reaction): void {
+    this.renderer.impact(0.8);
     const info = REACTION_INFO[r];
     const x = e.x;
     const y = e.y + e.height * 0.5;

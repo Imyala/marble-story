@@ -1213,12 +1213,36 @@ export class Player {
         this.breath.start(this.element);
         return;
       }
+      // Out of the recovery: once the last blow has landed, jump or steer
+      // straight out instead of waiting for the swing to finish.
+      const lastHit = def.hits.reduce((a, w) => Math.max(a, w.t1), 0);
+      if (b.grounded && !def.air && def.id !== 'uppercut' && def.id !== 'tailSpin' && t > lastHit + 0.05) {
+        if (inp.buffered('jump', 0.15)) {
+          inp.consume('jump');
+          b.vy = JUMP;
+          this.jumps = 1;
+          this.jumpCut = false;
+          b.grounded = false;
+          g.sfx('jump');
+          this.endMove(def);
+          return;
+        }
+        // Heading somewhere new (or late in the recovery) breaks off; holding
+        // the way you are swinging keeps the combo open.
+        const m = this.wish(this.w);
+        if (m > 0.6 && t > lastHit + 0.15 && (Math.abs(angleDiff(this.yaw, yawOf(this.w.x, this.w.z))) > 0.9 || t > def.duration * 0.78)) {
+          this.endMove(def);
+          return;
+        }
+      }
     }
-    if (t >= def.duration) {
-      this.move = null;
-      if (DELAY_FOLLOWUPS[def.id]) this.lastEnded = { id: def.id, t: this.clock };
-      this.setState('move');
-    }
+    if (t >= def.duration) this.endMove(def);
+  }
+
+  private endMove(def: MoveDef): void {
+    this.move = null;
+    if (DELAY_FOLLOWUPS[def.id]) this.lastEnded = { id: def.id, t: this.clock };
+    this.setState('move');
   }
 
   private checkWindow(w: HitWindow, set: Set<Hittable>, def: MoveDef): void {

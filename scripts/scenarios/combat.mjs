@@ -65,7 +65,7 @@ export default async function (h) {
   // Kill it and collect gems.
   await h.eval(() => { const e = window.__e; if (e.alive) e.hp = 1; });
   await h.tap('KeyJ', 2, 200);
-  await h.wait(2500);
+  await waitGame(2.5);
   s = await h.state();
   h.check('kill drops gems that get collected', s.gems > 0, JSON.stringify(s));
   // Enemy attacks the player.

@@ -36,7 +36,12 @@ export default async function (h) {
   // 3) Running horn -> lunge.
   await h.eval(() => { const g = window.wyrm; g.player.place(0, 1.2, -8, 0); window.__moves.length = 0; });
   await h.page.keyboard.down('KeyW');
-  await h.wait(700);
+  // Run until actually at speed (game time, not wall time), then swing.
+  for (let i = 0; i < 120; i++) {
+    const sp = await h.eval(() => Math.hypot(window.wyrm.player.body.vx, window.wyrm.player.body.vz));
+    if (sp > 7.6) break;
+    await h.wait(40);
+  }
   await h.tap('KeyJ', 1, 300);
   await h.page.keyboard.up('KeyW');
   mv = await h.eval(() => window.__moves.slice());

@@ -56,6 +56,9 @@ const TIPS = [
   ['Gems', 'Blue gems are spirit: spend them at Wardstones. Red heals, green restores mana, purple feeds your fury.'],
   ['Reading Puzzles', 'Every puzzle piece answers to one ability. Gloom eyes: bat their bolts back with a well-timed Horn. Boulders: Tail, Charge or Earth rolls them onto weight plates. Conduits: charge every one with Lightning before the first fades. Glowing rings on water: Ice freezes a floe. Ropes burn. Snap gates and blades: Dragon Time. Element locks: strike each socket with its element in the order the dots count.'],
   ['Stuck?', 'Linger near a puzzle and Flick will start offering hints, a little plainer each time.'],
+  ['Power-ups', 'A shrine ringed with dull stone sleeps while Gloom guards stand near it. Beat them and the ring lights up: run through it for SUPERFLAME (white-hot breath that melts iron), SUPERCHARGE (a faster charge that bowls foes over and smashes iron) or INVINCIBILITY (nothing hurts you, and touching foes hurts them). Speed runes on the ground supercharge a charge that runs over them without stopping.'],
+  ['Iron-bound Chests', 'Ordinary blows just ring off the iron. A supercharged ram, Superflame breath or Invincibility cracks them open.'],
+  ['Critters and Flick', 'Flick\'s glow shows how you are holding up: gold, then blue, then a flickering green. Roast or ram the realm\'s critters and Flick eats the butterflies they leave, mending you a little (or turning them into gems when you are well).'],
 ];
 
 export class Menus {

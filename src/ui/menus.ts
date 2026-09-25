@@ -80,6 +80,11 @@ export class Menus {
     return this.stack.length > 0;
   }
 
+  /** The pause menu itself is showing (not a screen opened from it, or another menu). */
+  get atPause(): boolean {
+    return this.stack.length === 1 && this.stack[0]!.el.classList.contains('pause-menu');
+  }
+
   hideAll(): void {
     for (const s of this.stack) s.el.remove();
     this.stack = [];
@@ -344,7 +349,7 @@ export class Menus {
   showPause(): void {
     this.hideAll();
     const g = this.game;
-    const m = this.div('menu dim');
+    const m = this.div('menu dim pause-menu');
     const p = this.div('panel');
     p.style.minWidth = '360px';
     // Count this realm's secrets from what it actually placed.
@@ -370,6 +375,8 @@ export class Menus {
     const list = this.div('menu-list');
     list.append(
       this.btn('Resume', () => g.resume()),
+      // The world map of this realm (src/ui/map.ts).
+      this.btn('Map', () => g.map.open(true)),
       this.btn('Abilities', () => this.showUpgrades()),
       this.btn('Moves', () => this.showMoves()),
       this.btn('Journal', () => this.showJournal()),
@@ -609,13 +616,13 @@ export class Menus {
     this.push(m, () => this.pop());
   }
 
-  private journalTab: 'relics' | 'letters' | 'bestiary' | 'feats' | 'skills' | 'tips' = 'relics';
+  private journalTab: 'quests' | 'relics' | 'letters' | 'bestiary' | 'feats' | 'skills' | 'tips' = 'quests';
 
   private showJournal(): void {
     const g = this.game;
     const m = this.div('menu dim');
     const p = this.div('panel lore');
-    p.innerHTML = '<h2>Journal</h2><div class="sub">Dragon Relics, letters and field notes.</div>';
+    p.innerHTML = '<h2>Journal</h2><div class="sub">Quests, Dragon Relics, letters and field notes.</div>';
     const tabs = this.div('tabs');
     const tab = (id: typeof this.journalTab, label: string) => {
       const b = this.btn(label, () => {
@@ -626,6 +633,7 @@ export class Menus {
       if (this.journalTab === id) b.classList.add('on');
       tabs.append(b);
     };
+    tab('quests', 'Quests');
     tab('relics', 'Relics');
     tab('letters', 'Letters');
     tab('bestiary', 'Bestiary');
@@ -633,7 +641,9 @@ export class Menus {
     tab('skills', 'Skill Points');
     tab('tips', 'Field notes');
     p.append(tabs);
-    if (this.journalTab === 'tips') {
+    if (this.journalTab === 'quests') {
+      this.journalQuests(p);
+    } else if (this.journalTab === 'tips') {
       for (const [t, d] of TIPS) p.append(this.div('entry', `<h4>${t}</h4><p>${d}</p>`));
       if (g.save.levelsDone.keep) p.append(this.div('entry', `<h4>${PARTNER_TIP[0]}</h4><p>${forInput(PARTNER_TIP[1], g.input)}</p>`));
     } else if (this.journalTab === 'bestiary') {
@@ -705,6 +715,59 @@ export class Menus {
     p.append(back);
     m.append(p);
     this.push(m, () => this.pop());
+  }
+
+  /**
+   * The quest log: the main quest's next step and Act I's chapters, side
+   * quests under way (with their steps and a Track button), finished ones
+   * (with any page they paid), and a hint of how many are still to find.
+   */
+  private journalQuests(p: HTMLElement): void {
+    const g = this.game;
+    const Q = g.quests;
+    const tracked = Q.trackedQuest();
+    const reopen = () => {
+      this.pop();
+      this.showJournal();
+    };
+    const trackBtn = (id: string | null) => {
+      const b = this.btn('Track', () => {
+        Q.track(id);
+        reopen();
+      }, false, 'btn small');
+      b.classList.add('track');
+      return b;
+    };
+    const tag = '<span class="tag tracked">Tracked</span>';
+    // The main quest.
+    const m = Q.main();
+    const chapters = m.chapters.map((c) => `<li class="${c.done ? 'done' : ''}">${c.done ? '&#10022; ' : ''}${c.title}</li>`).join('');
+    const main = this.div('entry quest main', `<h4>${m.title}<small>Main quest</small></h4><p class="step now">${m.text}</p>${tracked ? '' : tag}<ol class="chapters">${chapters}</ol>`);
+    if (tracked) main.append(trackBtn(null));
+    p.append(main);
+    // Side quests under way.
+    const active = Q.active();
+    if (active.length) p.append(this.div('entry', '<h4 style="color:var(--gold)">Under way</h4>'));
+    for (const q of active) {
+      const st = Q.state(q.id)!;
+      const steps = q.steps.map((s, i) => i < st.step ? `<li class="done">&#10003; ${s.text.replace(/\s*\(?\{n\}\/\{goal\}\)?/, '')}</li>` : i === st.step ? `<li class="now">${Q.stepText(q)}</li>` : '').join('');
+      const e = this.div('entry quest', `<h4>${q.title}<small>${LEVEL_INFO[q.realm]?.name ?? q.realm} &middot; ${q.giver}</small></h4><p>${q.desc}</p><ul class="steps">${steps}</ul>${q === tracked ? tag : ''}`);
+      if (q !== tracked) e.append(trackBtn(q.id));
+      p.append(e);
+    }
+    // Finished.
+    const done = Q.completed();
+    if (done.length) p.append(this.div('entry', `<h4 style="color:var(--gold)">Completed &middot; ${done.length}</h4>`));
+    for (const q of done) {
+      const pg = q.reward.page;
+      p.append(this.div('entry quest done', `<h4>&#10022; ${q.title}<small>${q.reward.gems} gems</small></h4><p>${q.desc}</p>${pg ? `<div class="page"><b>${pg.title}</b><p>${pg.text}</p><div class="from">&mdash; ${pg.from}</div></div>` : ''}`));
+    }
+    // Still out there: realms only, never who or where.
+    const left = Q.defs.filter((q) => !Q.isStarted(q.id));
+    if (left.length) {
+      const realms = [...new Set(left.filter((q) => g.save.unlocked.includes(q.realm)).map((q) => LEVEL_INFO[q.realm]?.name ?? q.realm))];
+      p.append(this.div('entry missing', `<h4>${left.length} more ${left.length === 1 ? 'soul needs' : 'folk need'} a hand</h4><p style="font-style:normal;color:#a99cc9">${realms.length ? `Somebody in ${realms.join(', ')} looks worried. The map marks them with a <b style="color:var(--gold)">!</b>` : 'Further along the journey.'}</p>`));
+    }
   }
 
   /** The end of a realm: how the visit went, with a medal for the best runs. */
@@ -851,6 +914,7 @@ export class Menus {
     choice('Auto camera', [[true, 'On'], [false, 'Off']], () => o.autoCamera, (v) => (o.autoCamera = v));
     choice('Damage numbers', [[true, 'On'], [false, 'Off']], () => o.damageNumbers, (v) => (o.damageNumbers = v));
     choice('Flashing effects', [[false, 'Full'], [true, 'Reduced']], () => !!o.reduceFlashing, (v) => (o.reduceFlashing = v));
+    choice('Quest tracker', [[true, 'On'], [false, 'Off']], () => o.questTracker !== false, (v) => (o.questTracker = v));
     choice('Graphics', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High']], () => o.quality, (v) => (o.quality = v));
     // Nyxa's place: beside Aster, or at home in the Sanctum (only once she has one).
     if (g.save.levelsDone.keep) choice('Nyxa fights beside you', [[true, 'On'], [false, 'Sent home']], () => o.partner !== false, (v) => (o.partner = v));
@@ -874,7 +938,7 @@ export class Menus {
       ['Move', 'W A S D', 'Left stick'], ['Camera', 'Mouse', 'Right stick'], ['Jump / flap / glide', 'Space (hold to glide)', 'A'],
       ['Horn attack', 'Left mouse / J', 'X'], ['Tail attack', 'E / L', 'Y'], ['Breath', 'Hold right mouse / K', 'RT'],
       ['Burst', 'Q / U', 'LB'], ['Fury', 'X', 'Back'], ['Dodge / hold to charge', 'Shift', 'B'], ['Dragon Time', 'Hold C', 'LT'],
-      ['Lock on', 'Tab / middle mouse', 'RB'], ['Change element', '1-4, mouse wheel, R', 'D-pad'], ['Interact', 'F', 'L3'], ['Flick: tap for a secret, hold for the way on!', 'H', 'R3'], ['Pause', 'Esc', 'Start'],
+      ['Lock on', 'Tab / middle mouse', 'RB'], ['Change element', '1-4, mouse wheel, R', 'D-pad'], ['Interact', 'F', 'L3'], ['Flick: tap for a secret, hold for the way on!', 'H', 'R3'], ['Map', 'M', 'Start, then Map'], ['Pause', 'Esc', 'Start'],
     ];
     // Nyxa's command, once she travels with Aster.
     if (this.game.save.levelsDone.keep) rows.splice(rows.length - 1, 0, ['Nyxa: tap to send her in, hold to make her stay', 'G', 'L3 (with nothing to use)']);

@@ -13,7 +13,9 @@ export type Action =
   | 'elem1' | 'elem2' | 'elem3' | 'elem4' | 'confirm' | 'back'
   | 'up' | 'down' | 'left' | 'right' | 'hint'
   // Nyxa, the partner: tap to send her in, hold to make her stay.
-  | 'partner';
+  | 'partner'
+  // The world map (src/ui/map.ts).
+  | 'map';
 
 const KEY_BINDINGS: Record<string, Action[]> = {
   Space: ['jump', 'confirm'],
@@ -50,6 +52,8 @@ const KEY_BINDINGS: Record<string, Action[]> = {
   KeyI: ['lock'],
   KeyR: ['elemNext'],
   KeyG: ['partner'],
+  // The world map.
+  KeyM: ['map'],
 };
 
 const MOUSE_BINDINGS: Record<number, Action> = { 0: 'horn', 1: 'lock', 2: 'breath' };
@@ -73,6 +77,10 @@ const PAD_BINDINGS: Record<number, Action[]> = {
   13: ['elem3', 'down'],
   14: ['elem4', 'left'],
   15: ['elem2', 'right'],
+  // The world map: the Guide button where the browser passes it on, and a
+  // PlayStation pad's touchpad click. (The pause menu also opens it.)
+  16: ['map'],
+  17: ['map'],
 };
 
 export class Input {

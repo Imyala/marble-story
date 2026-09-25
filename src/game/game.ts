@@ -39,6 +39,9 @@ import { Companion, isPartnerMove, PARTNER_COLOR } from '../player/companion';
 import { RELICS } from './story';
 import type { Boss } from '../enemies/boss';
 import { rng } from '../core/rng';
+import { Quests } from './quests';
+import { WorldMap, noteSecrets } from '../ui/map';
+import { SIDE_QUESTS, buildSideQuests } from '../levels/sidequests';
 
 export type GameState = 'title' | 'play' | 'pause' | 'dialogue' | 'transition' | 'dead' | 'menu' | 'ending';
 
@@ -97,6 +100,10 @@ export class Game {
   readonly touch: TouchControls;
   readonly photo: PhotoMode;
   readonly dialogue: Dialogue;
+  /** The main quest line and side quests. */
+  readonly quests: Quests;
+  /** The world map screen. */
+  readonly map: WorldMap;
   save: SaveData;
   options: Options;
   player: Player;
@@ -162,6 +169,8 @@ export class Game {
     this.options = loadOptions();
     this.save = loadSave() ?? newSave();
     this.director = new CombatDirector(this);
+    this.quests = new Quests(this, SIDE_QUESTS);
+    this.map = new WorldMap(this);
     this.player = new Player(this);
     this.flick = new Flick(this);
     this.partner = new Companion(this);
@@ -317,7 +326,9 @@ export class Game {
     const b = new Builder(this, level);
     if (def.terrain) b.terrain(def.terrain);
     if (def.water) b.water(def.water);
+    noteSecrets(b); // The map remembers where secrets lie, found ones too.
     def.build(b);
+    buildSideQuests(b); // Quest givers and quest items (src/levels/sidequests.ts).
     b.finish();
     this.renderer.backdrop.apply(BACKDROPS[def.id], def.sky, level.waterLevel > -1e3 ? level.waterLevel - 0.5 : -2);
     this.weather.apply(WEATHER[def.id]);
@@ -365,6 +376,7 @@ export class Game {
       const fresh = !this.sessionFlags.has(`entered:${id}`);
       this.sessionFlags.add(`entered:${id}`);
       def.onEnter?.(this, fresh);
+      this.quests.notify('enter', { level: id });
     } else this.hud.show(false);
   }
 
@@ -439,11 +451,17 @@ export class Game {
         break;
       case 'pause':
         if (this.photo.active) this.photo.update(dt);
+        else if (this.map.active) this.map.update(dt);
+        else if (this.menus.atPause && this.input.take('map', 0.2)) this.map.open(true);
         else this.menus.update(dt);
         break;
       case 'play':
         if (this.input.take('pause', 0.2)) {
           this.pause();
+          break;
+        }
+        if (this.input.take('map', 0.2)) {
+          this.map.open();
           break;
         }
         this.updateInteract();
@@ -633,6 +651,7 @@ export class Game {
     for (const g of this.gems) if (g.alive) g.update(pdt);
     this.updatePatches(wdt);
     this.updateSpikes(wdt);
+    this.quests.update(dt);
     this.flick.update(dt);
     this.fx.update(wdt);
 
@@ -941,6 +960,7 @@ export class Game {
       this.audio.play('perfect', 0.7, 0.6);
     }
     this.encounterKills = others ? this.encounterKills + 1 : 0;
+    this.quests.notify('kill', { enemy: e.def.id, ref: e });
   }
   /** Kills in the current fight, so a lone straggler does not get the finale. */
   private encounterKills = 0;
@@ -955,6 +975,7 @@ export class Game {
     this.checkFeats();
     // A reaction Nyxa sets off counts in the journey's tally, but not for Aster's style or Skill Points.
     const byPartner = isPartnerMove(e.lastHitBy);
+    this.quests.notify('reaction', { kind: r, ref: e });
     if (!byPartner && r === 'shatter' && ++this.visit.shatters >= 4 && this.level?.def.id === 'frostworks') this.skill('frostworks:shatter');
     if (!byPartner) this.style.bonus(90);
     this.hud.bigText(info.name, info.color);
@@ -1284,6 +1305,7 @@ export class Game {
     this.partner.onSecret(c.kind);
     const mote = c.kind === 'heart' ? 0xff6a7a : c.kind === 'mana' ? 0x6af09a : c.kind === 'egg' ? 0xd8b0ff : c.kind === 'letter' ? 0xffe0c0 : 0xfff0b0;
     this.fx.motes(c.x, c.y + 1, c.z, mote, 30);
+    this.quests.notify('collect', { id: c.id, kind: c.kind });
     writeSave(s);
   }
 

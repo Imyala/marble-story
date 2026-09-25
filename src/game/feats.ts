@@ -23,6 +23,8 @@ export interface ExtraStats {
   riftBest?: number;
   /** Foes defeated that Nyxa landed a blow on (Better Together). */
   partnerKills?: number;
+  /** Side quests finished, over every run (see src/game/quests.ts). */
+  quests?: number;
 }
 
 export function extra(s: SaveData): ExtraStats {
@@ -67,6 +69,7 @@ export const FEATS: FeatDef[] = [
   { id: 'legend', name: 'Legend Reborn', desc: 'Finish the story again on a Legend Run (New Game+).', goal: 2, reward: 400, progress: (s) => s.clears ?? 0 },
   { id: 'letters', name: 'Archivist', desc: 'Read 16 lore letters.', goal: 16, reward: 150, progress: (s) => letters(s) },
   { id: 'together', name: 'Better Together', desc: 'Defeat 50 foes with Nyxa\'s help.', goal: 50, reward: 150, progress: (s) => extra(s).partnerKills ?? 0 },
+  { id: 'helper', name: 'Helping Paw', desc: 'Finish 5 side quests for the folk of the realms.', goal: 5, reward: 150, progress: (s) => extra(s).quests ?? 0 },
 ];
 
 export const featKey = (id: string): string => `feat:${id}`;

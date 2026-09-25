@@ -463,3 +463,59 @@ export async function touch(h) {
   await h.eval(() => { const b = document.querySelector('.b-jump'); window.__touch('touchend', b, 3, 0, 0); });
   h.check('the Jump button jumps', !air.g, JSON.stringify(air));
 }
+
+/** The Fen's thief keeps to the ruin island, and its ring chain can really be flown from the glide ledge. */
+export async function fenextras(h) {
+  const waitGame = async (sec) => {
+    const start = await h.eval(() => window.wyrm.time);
+    for (let i = 0; i < 900; i++) {
+      await h.wait(30);
+      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
+    }
+  };
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=fen&seed=5&quality=low&maxdt=0.05', 2500);
+  await h.skipDialogue(6000);
+  await h.eval(() => {
+    const g = window.wyrm;
+    g.player.invuln = true;
+    window.__t = g.level.props.find((p) => p.id === 'fen:egg-thief' && p.mode);
+    window.__r = g.level.props.find((p) => p.id === 'fen:ledge' && p.rings);
+    for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
+    g.player.place(-3, g.col.groundAt(-3, 113, 1e4, 0.1).y + 0.05, 113, 0);
+  });
+  await waitGame(0.5);
+  let worst = { wet: 0, far: 0 };
+  for (let i = 0; i < 16; i++) {
+    // Chase it around: stay a few metres behind it.
+    await h.eval(() => { const g = window.wyrm; const t = window.__t; const dx = g.player.x - t.x; const dz = g.player.z - t.z; const d = Math.hypot(dx, dz) || 1; const px = t.x + dx / d * 5; const pz = t.z + dz / d * 5; const y = g.col.groundAt(px, pz, 1e4, 0.1).y; if (y > -1e3 && !g.isDeepWater(px, pz, y)) g.player.place(px, y + 0.05, pz, 0); });
+    await waitGame(0.5);
+    const s = await h.eval(() => { const g = window.wyrm; const t = window.__t; const gy = g.col.groundAt(t.x, t.z, t.y + 1, 0.1).y; return { wet: g.isDeepWater(t.x, t.z, gy) ? 1 : 0, far: Math.hypot(t.x + 3, t.z - 121), mode: t.mode }; });
+    worst = { wet: Math.max(worst.wet, s.wet), far: Math.max(worst.far, s.far), mode: s.mode };
+  }
+  h.check('the Fen thief runs about the ruins without ending up in the water', worst.wet === 0 && worst.far < 20 && worst.mode !== 'wait', JSON.stringify(worst));
+  await h.shot('fen-thief');
+  // Fly the ring chain: real jump, flap and glide; the bot only turns toward the next ring.
+  await h.eval(() => { const g = window.wyrm; g.player.place(2, 8.05, 94.3, Math.atan2(2.5, 4.2)); g.cam.snapBehind(Math.atan2(2.5, 4.2)); });
+  await waitGame(0.3);
+  await h.eval(() => window.wyrm.input.simulate('jump', true));
+  await waitGame(0.2);
+  await h.eval(() => window.wyrm.input.simulate('jump', false));
+  await waitGame(0.12);
+  await h.eval(() => window.wyrm.input.simulate('jump', true));
+  const trail = [];
+  for (let i = 0; i < 80; i++) {
+    const s = await h.eval(() => {
+      const g = window.wyrm; const r = window.__r; const n = r.rings[Math.min(r.next, r.rings.length - 1)];
+      const b = g.player.body;
+      g.player.yaw = Math.atan2(n.p.x - b.x, n.p.z - b.z);
+      return { j: g.player.jumps, vy: +b.vy.toFixed(1), st: g.state, ps: g.player.state, next: r.next, x: +b.x.toFixed(1), y: +b.y.toFixed(1), z: +b.z.toFixed(1), glide: g.player.gliding, found: !!g.save.found['rings:fen:ledge'] };
+    });
+    if (i % 4 === 0) trail.push(s);
+    if (s.found || (!s.glide && i > 20 && s.y < 3)) break;
+    await waitGame(0.06);
+  }
+  await h.eval(() => window.wyrm.input.simulate('jump', false));
+  const done = await h.eval(() => !!window.wyrm.save.found['rings:fen:ledge']);
+  h.check('the ledge ring chain can be flown in one glide', done, JSON.stringify(trail.slice(-8)));
+}

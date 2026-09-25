@@ -190,6 +190,8 @@ export const fen: LevelDef = {
     b.pillar(3.4, 95.5, 0.5, 8, 10.5);
     b.story('glide', 0, 93, 3, () => g.hud.flick('Jump, flap, then HOLD Space to glide over the water!', 6));
     b.gemLine([[0, 100], [0, 106]], 'blue', 2);
+    // Flight rings curve off the ledge to the east, toward the mill island.
+    b.skyRings('ledge', [[4.5, 10.2, 98.5], [9.5, 9.3, 104], [14.5, 8.2, 108.5], [20, 7, 111.5]], { time: 5, bonus: 1.5, reward: 50 });
     b.collectible('mana1', 'mana', -32, 83);
     b.crystal(-30, 81, 'green', 4);
 
@@ -224,6 +226,8 @@ export const fen: LevelDef = {
     // East: a barricade to charge through.
     b.gate(14, 124.5, 4.5, 3, Math.PI / 2 - 0.4, 'wood');
     b.story('charge', 10, 124, 4, () => g.hud.flick('A barricade! Hold Shift to charge straight through it!', 6));
+    // An egg thief skulks round the ruins: the Charge just learned is how to catch him.
+    b.eggThief('thief', -3, 121, 11);
 
     // The Gloom eye: a statue on a drum of rock that shoots bolts. Bat one back into the switch beside it
     // and the drawbridge drops to its hoard. It only watches the ruins, not the camp beyond.

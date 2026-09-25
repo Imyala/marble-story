@@ -53,7 +53,8 @@ jobs:
           for s in smoke flows combat content trials \
                    features:critters features:powerups features:skills features:replay \
                    features:slots features:thief features:journal features:results \
-                   fs-sanctum:library; do
+                   features:placedgems fs-sanctum:library \
+                   quests-main hollow-fissure hollow-swim hollow-pairs hollow-quests; do
             echo "::group::$s"
             if ! timeout 900 node scripts/play.mjs "$s"; then failed="$failed $s"; fi
             echo "::endgroup::"

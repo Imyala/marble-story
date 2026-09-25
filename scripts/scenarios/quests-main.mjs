@@ -76,6 +76,6 @@ export default async function (h) {
   await h.skipDialogue(8000);
   await waitGame(h, 0.6);
   m = await main(h);
-  h.check('after the Keep: something stirs beneath the Sanctum', /Something stirs beneath the Sanctum/.test(m.text) && m.title === 'The Hollow Below' && m.done === 6, JSON.stringify(m));
+  h.check('after the Keep: down through the fissure in the Sanctum', /split open in the Sanctum.*fissure/.test(m.text) && m.title === 'The Hollow Below' && m.done === 6 && m.spot?.[0] === 'sanctum', JSON.stringify(m));
   await h.shot('quests-main-after-keep');
 }

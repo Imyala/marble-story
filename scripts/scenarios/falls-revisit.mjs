@@ -23,7 +23,7 @@ export default async function (h) {
       npcs: g.level.npcs.map((n) => n.id),
     };
   });
-  h.check('no boss arena or caged warden on a revisit', info.barriers === 0 && info.npcs.length === 0, JSON.stringify(info));
+  h.check('no boss arena or caged warden on a revisit', info.barriers === 0 && !info.npcs.includes('stormcrest'), JSON.stringify(info));
   h.check('a portal home waits on the spire', info.portals.length === 1 && info.portals[0][3] === 'sanctum', JSON.stringify(info.portals));
   const [px, py, pz] = info.portals[0];
   await place(h, px, pz - 5, 0);

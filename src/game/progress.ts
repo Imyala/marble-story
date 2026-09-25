@@ -235,9 +235,19 @@ export interface Options {
   autoCamera: boolean;
 }
 
+/** Phones and tablets start on a lighter setting; everything else on the full look. */
+function defaultQuality(): Options['quality'] {
+  try {
+    if (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches && !matchMedia('(pointer: fine)').matches) return 'medium';
+  } catch {
+    /* ignore */
+  }
+  return 'high';
+}
+
 export function defaultOptions(): Options {
   return {
-    volume: 0.8, music: 0.55, sfx: 0.9, sensitivity: 1, invertY: false, quality: 'high', shake: 1,
+    volume: 0.8, music: 0.55, sfx: 0.9, sensitivity: 1, invertY: false, quality: defaultQuality(), shake: 1,
     damageNumbers: true, autoCamera: true,
   };
 }

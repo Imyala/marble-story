@@ -599,3 +599,19 @@ export async function guide(h) {
   const r = await h.eval(() => { const f = window.wyrm.flick; return { t: f.seekTarget && [Math.round(f.seekTarget.x), Math.round(f.seekTarget.z)], line: document.querySelector('.flick p')?.textContent ?? '', goals: window.wyrm.level.goals.map((q) => q.label) }; });
   h.check('holding Flick points toward the willow fight', !!r.t && /path goes on|Right here/.test(r.line), JSON.stringify(r));
 }
+
+/** A swing still winding up can be abandoned for a dodge. */
+export async function dodgecancel(h) {
+  await h.go('?level=sanctum&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.skipDialogue(8000);
+  const r = await h.eval(() => new Promise((res) => {
+    const g = window.wyrm; const p = g.player;
+    p.place(0, 0.3, -8, 0);
+    p.startMove(window.wyrmDebug.MOVES.horn3);
+    g.input.simulate('dodge', true);
+    const t0 = g.realTime;
+    const tick = () => { if (g.realTime - t0 < 0.15) { requestAnimationFrame(tick); return; } g.input.simulate('dodge', false); res(p.state); };
+    tick();
+  }));
+  h.check('dodge cancels an attack in its wind-up', r === 'dodge', r);
+}

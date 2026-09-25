@@ -1236,6 +1236,13 @@ export class Player {
       }
     }
 
+    // A swing still winding up can be abandoned for a dodge, so a telegraph is always answerable.
+    const startup = def.hits?.[0]?.t0 ?? 0;
+    if (t < startup * 0.85 && !def.air && inp.take('dodge', 0.12)) {
+      this.startDodge();
+      return;
+    }
+
     // Chaining.
     if (t >= def.cancelFrom) {
       if (inp.take('dodge', 0.2)) {

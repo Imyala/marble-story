@@ -14,7 +14,6 @@ import {
   Switch, Talker, Torch, Trigger, Updraft, Wardstone, Geyser, ClimbWall, GlideCourse, type CollectKind, type GateKind, type Interactable, type Prop, type SpawnSpec,
 } from '../entities/props';
 import type { GemKind } from '../entities/gems';
-import { SkyRings } from '../entities/rings';
 import { Breakable, BreakableSet, Chest, type BreakKind } from '../entities/breakables';
 import { WaterIce } from '../entities/waterice';
 import {
@@ -740,15 +739,6 @@ export class Builder {
   /** A lost dragon egg. Each realm hides a fixed number (see SKINS in progress.ts). */
   egg(id: string, x: number, z: number, y?: number): void {
     this.collectible(`egg-${id}`, 'egg', x, z, y);
-  }
-
-  /**
-   * A flight-ring challenge through the given points (absolute heights).
-   * Start with a ring the dragon can reach from the ground or a ledge; space
-   * the rest along a glide (roughly 8 to 14 m apart, gently descending).
-   */
-  skyRings(id: string, points: [number, number, number][], opts: { time?: number; bonus?: number; reward?: number } = {}): SkyRings {
-    return this.addProp(new SkyRings(this.game, `${this.level.def.id}:${id}`, points, opts));
   }
 
   /**

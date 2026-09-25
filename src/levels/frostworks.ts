@@ -6,9 +6,10 @@ import { Grolm } from '../enemies/bosses/grolm';
 import { FROSTFANG } from '../game/story';
 import type { Game } from '../game/game';
 import type { Prop, GateKind } from '../entities/props';
-import { makeBox, makeCyl, type Solid } from '../world/collision';
+import { makeBox, makeCyl, type Solid, type Surface } from '../world/collision';
 import { GEO } from '../render/decor';
-import { mat, matUnique, glow } from '../render/materials';
+import { mat, matUnique, glow as glowNew } from '../render/materials';
+import { mergeStatic } from '../render/shapes';
 import { rng } from '../core/rng';
 
 /**
@@ -39,7 +40,32 @@ const BOSS_R = 20;
 const CAGE_Z = 275.5;
 const TOP = 12;
 
+// Side areas off the main route.
+/** The ice-cutters' shelf on the west shore of the lake. */
+const CAMP = { x: -33, z: 58, y: 2.4 };
+/** The old harvest cellar cut into the west slope beside the Lower Works. */
+const CELLAR = { x0: -41, x1: -30.5, z: 98, y: 3.2 };
+/** A berg in the lake, one jump east of the floes' stepping rock. */
+const BERG = { x: 7.8, z: 72.5, top: 1.4 };
+/** The iron post in the gear pit below the Upper Works. */
+const SUPPORT = { x: -16, z: 186, top: 8.9 };
+
 const LINK = new THREE.TorusGeometry(0.2, 0.055, 5, 10);
+
+const GLOWS = new Map<string, THREE.MeshBasicMaterial>();
+/**
+ * Glow materials shared per color: decor batches by material, so a fresh
+ * material per call cost a draw call per glowing strip, ingot and lamp.
+ */
+function glow(color: number, opacity = 1): THREE.MeshBasicMaterial {
+  const key = `${color}|${opacity}`;
+  let m = GLOWS.get(key);
+  if (!m) {
+    m = glowNew(color, opacity);
+    GLOWS.set(key, m);
+  }
+  return m;
+}
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
 
 let cage: Cage | null = null;
@@ -89,6 +115,10 @@ export const frostworks: LevelDef = {
       // Upper Works and the Crucible, high above the gear pit.
       s.island(8, 211, 12, TOP, 2, 0.1, 1.6, 1);
       s.island(BOSS_X, BOSS_Z, 24, TOP, 2, 0.1, 1, 1.1);
+      // Side areas: the ice-cutters' shelf on the west shore, and a level cut
+      // into the west slope for the old harvest cellar.
+      s.flatten(CAMP.x, CAMP.z, 6.5, CAMP.y, 3.5);
+      s.path([[-21, CELLAR.z, CELLAR.y], [CELLAR.x0 - 1.5, CELLAR.z, CELLAR.y]], 7, 2.5, false, false);
     },
   },
 
@@ -107,6 +137,15 @@ export const frostworks: LevelDef = {
     buildGearworks(b);
     buildUpperWorks(b);
     buildCrucible(b);
+    // Everything below came later: it is built after the original areas so
+    // their scattered scenery (seeded in build order) stays where it was.
+    cuttersCamp(b);
+    harvestCellar(b);
+    frozenBerg(b);
+    supportEgg(b);
+    draftingRoof(b);
+    dressFrost(b);
+    b.level.props.push(new FogCull(b.game));
   },
 
   onEnter(g, fresh) {
@@ -508,12 +547,12 @@ function buildCrucible(b: Builder): void {
   const paving = new THREE.Mesh(new THREE.CylinderGeometry(20.8, 21.3, 1.05, 48), mat(0x8a909a, { rough: 0.95, flat: true }));
   paving.position.set(BOSS_X, TOP + 0.25 - 0.525, BOSS_Z);
   paving.receiveShadow = true;
-  b.level.root.add(paving);
+  b.addStatic(paving);
   for (const [r, w] of [[6.5, 0.12], [13.5, 0.14], [20.2, 0.2]] as const) {
     const ring = new THREE.Mesh(new THREE.TorusGeometry(r, w, 4, 64), glow(r > 20 ? 0xff9a40 : 0xff7a2a));
     ring.rotation.x = Math.PI / 2;
     ring.position.set(BOSS_X, TOP + 0.27, BOSS_Z);
-    b.level.root.add(ring);
+    b.addStatic(ring);
   }
   for (let i = 0; i < 8; i++) {
     const a = (i / 8) * Math.PI * 2 + 0.2;
@@ -525,7 +564,7 @@ function buildCrucible(b: Builder): void {
   const hub = new THREE.Mesh(new THREE.TorusGeometry(2.6, 0.35, 6, 20), mat(0x8ab8d0, { rough: 0.3, metal: 0.3, emissive: 0x3a90c8, emissiveIntensity: 0.4 }));
   hub.rotation.x = Math.PI / 2;
   hub.position.set(BOSS_X, TOP + 21, BOSS_Z);
-  b.level.root.add(hub);
+  b.addStatic(hub);
   for (let i = 0; i < 12; i++) {
     const a = (i / 12) * Math.PI * 2;
     if (Math.abs(Math.cos(a) + 1) < 0.1 || Math.abs(Math.cos(a) - 1) < 0.1) continue;
@@ -625,6 +664,422 @@ function frostOutro(g: Game): void {
 }
 
 // ---------------------------------------------------------------------------
+// Side areas, finds and dressing
+// ---------------------------------------------------------------------------
+
+/**
+ * The ice-cutters' camp on the west shore, reached by a rope bridge from the
+ * Frost Hollow's islet. Cutters sawed the lake into blocks for the forge's
+ * cold stores; a Gloom patrol has moved in around their fire. The egg they
+ * found is shut in the ice-house.
+ */
+function cuttersCamp(b: Builder): void {
+  const g = b.game;
+  const { x: cx, z: cz, y } = CAMP;
+  b.bridge(-16.2, 48.3, b.y(-16.2, 48.3), -27.6, 54.4, y, 3);
+  lamp(b, -15.4, b.col.terrainAt(-15.4, 49.6), 49.6, -1.2);
+  lamp(b, -28.2, b.col.terrainAt(-28.2, 52.8), 52.8, 1.9);
+  b.story('camp', -18, 49, 3, () => g.hud.flick('A camp over on the shore! Ice-cutters... and those are NOT ice-cutters around the fire.', 6));
+
+  // The ice-house against the slope, sealed with a wall of ice.
+  const hx = -37.4;
+  const hz = 58.6;
+  iceHouse(b, hx, hz, y, 3.4, 3.2, 2.8, Math.PI / 2);
+  b.egg('camp', hx - 0.5, hz, y);
+  b.story('icehouse', hx + 4, hz, 3, () => g.hud.flick('Something\'s glowing inside that ice-house. The door is solid ice... you know what melts ice!', 6));
+
+  // Hide tents, the fire, and what the Gloom have been sitting on.
+  hideTent(b, -35.4, 53.2, y, 0.4);
+  hideTent(b, -34.6, 63.2, y, -0.5);
+  campfire(b, -32.2, 58.2, y);
+  for (const [x, z, yaw] of [[-30.4, 56.6, 0.3], [-30.8, 60, -0.4], [-33.8, 56.1, 1.3]] as const) log(b, x, z, y, yaw);
+  b.enemy('grunt', -31.2, 57.4, -Math.PI / 2);
+  b.enemy('grunt', -33.6, 60.6, -Math.PI / 2);
+  b.enemy('sapper', -36.8, 55.4, Math.PI / 2);
+  b.breakables('keg', [[-30.2, 58.4], [-34.4, 57.2]]);
+  b.pile(-36.6, 61.8, 0.9, 3, ['barrel', 'crate', 'basket']);
+  b.pile(-28.8, 63.4, 0.9, 4, ['crate', 'barrel', 'crate', 'urn']);
+  b.breakables('basket', [[-33.2, 53.6], [-31.6, 63.8]]);
+  b.chest('cutters', -37.8, 54.4, Math.PI / 2 + 0.3, { blue: 25, red: 2 }, b.col.terrainAt(-37.8, 54.4));
+
+  // The trade itself: sawn blocks, a loaded sledge, the long saw.
+  iceStack(b, -29.2, 60.6, y);
+  sledge(b, -30.4, 54.2, y, 0.5, true);
+  put(b, GEO.box(), mat(IRON, { rough: 0.5, metal: 0.5 }), -28.1, y + 0.9, 59.1, 0.05, 0.28, 2.6, 0.9, 0.2, 0);
+  put(b, GEO.box(), woodM(), -28.1, y + 1.95, 58.5, 0.1, 0.1, 0.6, 0.9, 0.2, 0);
+  fishRack(b, -27.8, 56.8, y, 0.2);
+  b.letter('cutter', -28.6, 61.8, y);
+  lamp(b, -35, y, 61.1, Math.PI / 2);
+
+  b.scatter(12, cx, cz, 13, (x, z) => b.tree(x, z, 0.9 + Math.abs(jitter(x * 2 + z)) * 0.5, 'snowPine', { leaf: 0x2c5446 }),
+    (x, z, gy) => Math.hypot(x - cx, z - cz) > 7.5 && gy > 2.8 && x < -30);
+  // Rocks only where the slope is gentle enough for them to sit, not hang.
+  const gentle = (x: number, z: number) => Math.abs(b.col.terrainAt(x + 0.8, z) - b.col.terrainAt(x - 0.8, z)) + Math.abs(b.col.terrainAt(x, z + 0.8) - b.col.terrainAt(x, z - 0.8)) < 1.6;
+  b.scatter(10, cx, cz, 11, (x, z) => snowRock(b, x, z, 0.5 + Math.abs(jitter(x - z)) * 0.6), (x, z, gy) => Math.hypot(x - cx, z - cz) > 7 && gy > 1 && gentle(x, z));
+  b.scatter(16, cx, cz, 7, (x, z, gy) => b.decor.grass(x, gy, z, 0.8, 0x9aa89a), (_x, _z, gy) => gy > 2);
+  b.crystal(-38.6, 63.4, 'blue', 10);
+}
+
+/**
+ * The old harvest cellar, cut into the west slope beside the Lower Works:
+ * what the Frostworks was built for, before the chains. A barricade seals
+ * it; a rime golem minds the stores; the egg sits on the top shelf at the back.
+ */
+function harvestCellar(b: Builder): void {
+  const g = b.game;
+  const { x0, x1, z, y } = CELLAR;
+  const h = 4.4;
+  const z0 = z - 3.4;
+  const z1 = z + 3.4;
+  // Facade, walls, roof.
+  sbox(b, x1, y - 0.5, (z0 - 0.8 + z - 1.6) / 2, 1, h + 0.5, z - 1.6 - z0 + 0.8, STONE);
+  sbox(b, x1, y - 0.5, (z + 1.6 + z1 + 0.8) / 2, 1, h + 0.5, z1 + 0.8 - z - 1.6, STONE);
+  sbox(b, x1, y + 3.3, z, 1, h - 3.3, 3.2, STONE_DARK);
+  for (const sd of [-1, 1]) {
+    sbox(b, (x0 + x1) / 2, y - 0.5, z + sd * 3.6, x1 - x0, h + 0.5, 0.6, STONE);
+    put(b, GEO.box(), woodM(), x1 + 0.6, y + 1.65, z + sd * 1.75, 0.3, 3.3, 0.3);
+  }
+  put(b, GEO.box(), woodM(), x1 + 0.6, y + 3.4, z, 0.35, 0.3, 3.9);
+  sbox(b, x0 - 0.3, y - 0.5, z, 0.6, h + 0.5, z1 - z0 + 0.8, STONE);
+  sbox(b, (x0 + x1) / 2 - 0.1, y + h, z, x1 - x0 + 1.6, 0.6, z1 - z0 + 2, STONE_DARK);
+  put(b, GEO.box(), mat(SNOW, { rough: 0.9, flat: true }), (x0 + x1) / 2 - 0.1, y + h + 0.66, z, x1 - x0 + 1.2, 0.2, z1 - z0 + 1.6, 0, 0, 0, false);
+  icicles(b, x1 + 0.55, z0 - 0.4, x1 + 0.55, z1 + 0.4, y + h, 10);
+  // A sign over the door, lanterns either side, drifts round the doorway.
+  put(b, GEO.box(), woodM(), x1 + 0.62, y + 3.9, z, 0.08, 0.55, 2.2);
+  put(b, GEO.box(), mat(0xd84a3a, { rough: 0.6, emissive: 0xd84a3a, emissiveIntensity: 0.2 }), x1 + 0.68, y + 3.9, z, 0.04, 0.3, 0.3, Math.PI / 4, 0, 0, false);
+  for (const sd of [-1, 1]) {
+    lamp(b, x1 + 1.3, y, z + sd * 2.6, Math.PI / 2);
+    put(b, GEO.blob(), mat(SNOW, { rough: 0.9, flat: true }), x1 + 1.0, y - 0.1, z + sd * 3.7, 1.4, 0.7, 1.2, 0, sd, 0);
+    snowRock(b, x1 + 2.6, z + sd * 4.4, 0.9);
+  }
+  put(b, GEO.blob(), mat(SNOW, { rough: 0.9, flat: true }), (x0 + x1) / 2 + 2, y + h + 0.7, z + 1.5, 2.6, 0.5, 2.2, 0, 0.4, 0, false);
+  b.gate(x1 + 0.1, z, 3.2, 3.3, Math.PI / 2, 'wood', '', y);
+  b.story('cellar', x1 + 5, z, 3.5, () => {
+    g.hud.flick('A door into the hillside, boarded up. Charge it, or give it some fire!', 6);
+  });
+
+  // Shelves of preserves down both sides.
+  for (const sd of [-1, 1]) {
+    for (const sy of [1.1, 2.3]) sbox(b, (x0 + x1) / 2 - 0.3, y + sy - 0.1, z + sd * 2.95, x1 - x0 - 1.6, 0.1, 0.7, PLANK_DARK, 0, 'wood');
+    for (let x = x0 + 0.8; x < x1 - 0.8; x += 2.6) put(b, GEO.box(), woodM(PLANK_DARK), x, y, z + sd * 3.2, 0.12, 2.5, 0.12);
+    for (let i = 0; i < 3; i++) jar(b, x0 + 1.3 + i * 3.6, y + 1.1, z + sd * 2.95, i + (sd > 0 ? 7 : 0));
+  }
+  b.breakables('urn', [[x0 + 2.4, z - 2.9], [x0 + 6, z + 2.9], [x0 + 7.8, z - 2.9]], { y: y + 2.3, scale: 0.7 });
+  b.breakables('basket', [[x0 + 3.1, z + 2.9], [x0 + 6.7, z - 2.9]], { y: y + 1.1, scale: 0.8 });
+  // Frozen harvest crates up the back, climbable to the top shelf.
+  frozenCrate(b, x0 + 1.4, y, z + 1.4, 0, 1.5);
+  frozenCrate(b, x0 + 1.0, y, z - 0.1, 1, 2.6);
+  sbox(b, x0 + 0.4, y + 2.4, z - 1.8, 0.8, 0.12, 2.0, PLANK_DARK, 0, 'wood');
+  b.egg('cellar', x0 + 0.45, z - 1.8, y + 2.52);
+  b.chest('keeper', x0 + 1.2, z - 2.4, Math.PI / 2, { blue: 25, red: 2 }, y);
+  // Inside, under the roof: heights are passed, or b.y would find the roof.
+  b.breakables('barrel', [[x1 - 2.6, z + 2.2], [x1 - 1.5, z + 2.5]], { y });
+  b.breakables('crate', [[x1 - 2.4, z - 2.3], [x0 + 4.6, z - 2.2], [x1 - 3.6, z + 2.4]], { y });
+  b.letter('keeper', x1 - 1.6, z - 0.9, y);
+  for (const x of [x0 + 2.5, x0 + 7]) {
+    put(b, GEO.cyl6(), mat(IRON, { rough: 0.6, metal: 0.3 }), x, y + h - 0.9, z, 0.03, 0.9, 0.03, 0, 0, 0, false);
+    put(b, GEO.blobLow(), glow(0xffc070), x, y + h - 1.1, z, 0.18, 0.24, 0.18, 0, 0, 0, false);
+  }
+  for (const [x, zz, ry] of [[x0 + 3, z + 3.25, 0], [x0 + 8.4, z - 3.25, 0], [x0 + 0.05, z + 2.2, Math.PI / 2]] as const) {
+    put(b, GEO.box(), iceMat(), x, y + 2.8, zz, 1.4, 1.2, 0.08, 0, ry, 0, false);
+  }
+  b.enemy('frostGolem', x0 + 5, z, Math.PI / 2, y);
+  b.gemLine([[-20.5, z], [x1 + 3.5, z]], 'blue', 2);
+}
+
+/** A sawn ice block on a berg in the lake, with an egg frozen inside. */
+function frozenBerg(b: Builder): void {
+  const g = b.game;
+  const { x, z, top } = BERG;
+  const ice = mat(0xd8f0fb, { rough: 0.2, metal: 0.05, flat: true });
+  b.col.add(makeCyl(x, z, 2.3, -3, top)).surface = 'ice';
+  put(b, GEO.cyl6(), ice, x, -1.2, z, 2.4, top + 1.2, 2.4, 0, 0.4, 0);
+  put(b, GEO.rock(), ice, x + 0.6, top - 0.5, z - 0.4, 2.5, 0.6, 2.2, 0.1, 1.2, 0);
+  put(b, GEO.rock(), ice, x - 1.2, -0.2, z + 1.4, 1.6, 0.8, 1.3, 0.2, 0.5, 0);
+  iceHouse(b, x + 0.5, z, top, 1.6, 1.6, 2.1, -Math.PI / 2 + 0.35, true);
+  b.egg('berg', x + 0.5, z, top);
+  b.story('berg', 1.5, 74.8, 2.2, () => g.hud.flick('An egg, frozen into that berg! Melt the ice... and don\'t dawdle on the floes!', 6));
+}
+
+/** The iron post in the gear pit: an egg on its cap, a glide down from the Upper Works. */
+function supportEgg(b: Builder): void {
+  const g = b.game;
+  const { x, z, top } = SUPPORT;
+  const s = b.box(x, top - 0.6, z, 3, 0.6, 3, IRON, { noMesh: true, surface: 'metal' });
+  // No respawning out here: a fall sends you back up to where you jumped.
+  s.unsafe = true;
+  b.egg('post', x, z, top);
+  for (let i = 1; i <= 3; i++) {
+    const t = i / 4;
+    g.placeGem('blue', 1, -7.6 + (x + 7.6) * t, 13.2 - t * 3, 204 + (z - 204) * t);
+  }
+  // Flick spots it from the drafting-room roof, the best view of the pit.
+  let told = false;
+  b.level.props.push({
+    update: () => {
+      const p = g.player;
+      if (told || !p.body.grounded || p.y < TOP + 4 || Math.hypot(p.x + 6, p.z - 210) > 6) return;
+      told = true;
+      g.hud.flick('From up here you can see down into the gear pit: another egg, on that iron post! Glide down, and let go right over it.', 7);
+    },
+  });
+}
+
+/** Crates stacked as steps up the drafting room, and an egg on its snowy roof. */
+function draftingRoof(b: Builder): void {
+  const g = b.game;
+  const y = TOP;
+  const sz = 215.6;
+  for (const [x, w, hh, d, yaw] of [[-8.5, 1.4, 2.1, 1.5, 0.1], [-6.7, 1.5, 3.8, 1.5, -0.05]] as const) {
+    sbox(b, x, y - 0.2, sz, w, hh, d, 0x6a5238, yaw, 'wood');
+    put(b, GEO.box(), mat(IRON, { rough: 0.5, metal: 0.35 }), x, y - 0.2 + hh - 0.3, sz, w + 0.06, 0.12, d + 0.06, 0, yaw, 0, false);
+    put(b, GEO.box(), mat(SNOW, { rough: 0.9, flat: true }), x, y - 0.2 + hh + 0.04, sz, w - 0.1, 0.08, d - 0.1, 0, yaw, 0, false);
+  }
+  b.egg('roof', -6.2, 210.4, y + 5.1);
+  b.story('roof', -8.6, 217.4, 2.2, () => g.hud.flick('Is that an egg up on the drafting room roof? Those crates make a handy staircase.', 6));
+}
+
+/**
+ * Lived-in touches along the main route: a waystation at the landing, a
+ * Gloom supply sled in the Hollow, stores round the Lower Works kilns,
+ * cargo on the gear docks and powder by the Upper Works anvil.
+ */
+function dressFrost(b: Builder): void {
+  // Landing: a snowman, a broken sled and lanterns up the path.
+  snowman(b, 5.6, -4.2, b.y(5.6, -4.2), -0.5);
+  sledge(b, -7.4, 1.2, b.y(-7.4, 1.2), 2.4, false);
+  b.pile(-8.6, -0.8, 0.9, 3, ['crate', 'barrel', 'basket']);
+  for (const [x, z, yaw] of [[-3, 5.5, Math.PI / 2], [3, 10.5, -Math.PI / 2], [-3, 15, Math.PI / 2]] as const) lamp(b, x, b.y(x, z), z, yaw);
+  signpost(b, 3.4, 1.2, b.y(3.4, 1.2), 0.2);
+  // Frost Hollow: the Gloom's supply sled, with powder by the golem.
+  sledge(b, 7.8, 42.4, b.y(7.8, 42.4), -0.4, false);
+  b.breakables('keg', [[3.6, 46.4], [4.6, 47.4]]);
+  b.pile(9.6, 40.6, 0.8, 3, ['crate', 'crate', 'barrel']);
+  // Lower Works: stores by the kilns, and a keg or two in the yard.
+  b.pile(-16.4, 88.8, 0.9, 3, ['crate', 'barrel', 'basket']);
+  b.breakables('barrel', [[16.6, 93.4], [17.4, 94.6]]);
+  b.breakables('keg', [[-9.8, 97.4], [5.8, 101.6]]);
+  b.letter('quota', 6.6, 92.8);
+  // Gear docks.
+  b.pile(-8.4, 186.6, 0.6, 2, ['crate', 'barrel']);
+  // Upper Works: finished chain crated for shipping, powder by the anvil.
+  b.pile(15.6, 206.4, 0.9, 3, ['crate', 'crate', 'barrel']);
+  b.breakables('keg', [[3.2, 213.6], [12.6, 214.6]]);
+  b.breakables('crate', [[1.2, 205.2], [24.4, 213.6]]);
+  b.letter('apprentice', 1.8, 218.6);
+}
+
+// ---------------------------------------------------------------------------
+// Local builders for the side areas: solids drawn as merged statics, small
+// props made of instanced or merged parts.
+// ---------------------------------------------------------------------------
+
+const PLANK = 0x7a5a3a;
+const PLANK_DARK = 0x5a4a3a;
+const HIDE = 0x8a7458;
+
+const stoneM = (c: number) => mat(c, { rough: 0.9, flat: true });
+const woodM = (c = PLANK) => mat(c, { rough: 0.95 });
+const cutIce = () => mat(0xd8f2fc, { rough: 0.1, metal: 0.05, emissive: 0x4a9ac8, emissiveIntensity: 0.2, flat: true, transparent: true, opacity: 0.75 });
+
+/**
+ * A piece of static scenery. Unlike instanced decor (one draw for the whole
+ * level, so always drawn), these merge per material in 24 m chunks at the
+ * end of the build and are culled with their area.
+ */
+function put(b: Builder, geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number,
+  sx: number, sy: number, sz: number, rx = 0, ry = 0, rz = 0, cast = true): void {
+  const mesh = new THREE.Mesh(geo.clone(), m);
+  mesh.position.set(x, y, z);
+  mesh.rotation.set(rx, ry, rz);
+  mesh.scale.set(sx, sy, sz);
+  mesh.castShadow = cast;
+  mesh.receiveShadow = true;
+  b.addStatic(mesh);
+}
+
+/** The same, but instanced: for small props repeated all along the route (one draw for all of them). */
+function dec(b: Builder, geo: THREE.BufferGeometry, m: THREE.Material, x: number, y: number, z: number,
+  sx: number, sy: number, sz: number, rx = 0, ry = 0, rz = 0, cast = true): void {
+  b.decor.add(geo, m, x, y, z, sx, sy, sz, rx, ry, rz, cast);
+}
+
+/** A solid box drawn as a merged static. */
+function sbox(b: Builder, x: number, y0: number, z: number, w: number, h: number, d: number, color: number, yaw = 0, surface: Surface = 'stone'): Solid {
+  const s = b.box(x, y0, z, w, h, d, color, { yaw, surface, noMesh: true });
+  put(b, GEO.box(), surface === 'wood' ? woodM(color) : stoneM(color), x, y0 + h / 2, z, w, h, d, 0, yaw, 0);
+  return s;
+}
+
+/** A lantern on a post, its arm reaching along yaw. */
+function lamp(b: Builder, x: number, y: number, z: number, yaw = 0, color = 0xffc070): void {
+  const post = woodM(PLANK_DARK);
+  const ax = Math.sin(yaw);
+  const az = Math.cos(yaw);
+  dec(b, GEO.cyl6(), post, x, y, z, 0.07, 2.2, 0.07);
+  dec(b, GEO.box(), post, x + ax * 0.25, y + 2.15, z + az * 0.25, 0.06, 0.06, 0.55, 0, yaw, 0);
+  dec(b, GEO.blobLow(), glow(color), x + ax * 0.45, y + 1.9, z + az * 0.45, 0.14, 0.2, 0.14, 0, 0, 0, false);
+  dec(b, GEO.cap(), mat(SNOW, { rough: 0.9, flat: true }), x + ax * 0.25, y + 2.18, z + az * 0.25, 0.12, 0.05, 0.3, 0, yaw, 0, false);
+}
+
+/**
+ * A little house of sawn ice blocks with its door (local +z, turned by yaw)
+ * sealed by an ice gate. `small` makes a single block-cairn with a slab roof.
+ */
+function iceHouse(b: Builder, cx: number, cz: number, y: number, w: number, d: number, h: number, yaw: number, small = false): void {
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  const L = (lx: number, lz: number): [number, number] => [cx + lx * c + lz * s, cz - lx * s + lz * c];
+  const t = small ? 0.35 : 0.5;
+  const door = small ? 1.1 : 1.6;
+  const ice = cutIce();
+  const wall = (lx: number, lz: number, ww: number, dd: number, hh = h, y0 = y) => {
+    const [px, pz] = L(lx, lz);
+    b.box(px, y0 - 0.3, pz, ww, hh + 0.3, dd, 0xd8f2fc, { yaw, surface: 'ice', noMesh: true });
+    // Courses of blocks rather than one slab.
+    const rows = Math.max(1, Math.round(hh / 0.7));
+    for (let r = 0; r < rows; r++) {
+      const off = (r % 2) * 0.12;
+      put(b, GEO.box(), ice, px + c * off, y0 + (r + 0.5) * (hh / rows), pz - s * off, ww - 0.04, hh / rows - 0.05, dd - 0.02, 0, yaw, 0);
+    }
+  };
+  wall(0, -d / 2, w + t, t);
+  for (const sd of [-1, 1]) {
+    wall(sd * w / 2, 0, t, d);
+    wall(sd * (door / 2 + (w - door) / 4), d / 2, (w - door) / 2, t);
+  }
+  wall(0, d / 2, door, t, h - (small ? 1.7 : 2.3), y + (small ? 1.7 : 2.3));
+  const [rx, rz] = L(0, 0);
+  b.box(rx, y + h, rz, w + 0.8, 0.4, d + 0.8, 0xd8f2fc, { yaw, surface: 'ice', noMesh: true });
+  put(b, GEO.box(), ice, rx, y + h + 0.2, rz, w + 0.8, 0.4, d + 0.8, 0, yaw, 0);
+  put(b, GEO.box(), mat(SNOW, { rough: 0.9, flat: true }), rx, y + h + 0.45, rz, w + 0.6, 0.14, d + 0.6, 0, yaw, 0, false);
+  const [gx, gz] = L(0, d / 2);
+  b.gate(gx, gz, door, small ? 1.7 : 2.3, yaw, 'ice', '', y);
+  icicles(b, ...L(-(w + 0.8) / 2, d / 2 + 0.4), ...L((w + 0.8) / 2, d / 2 + 0.4), y + h, small ? 4 : 7);
+}
+
+/** A cone tent of stitched hides on a pole frame. */
+function hideTent(b: Builder, x: number, z: number, y: number, yaw: number): void {
+  b.box(x, y, z, 2.4, 2.2, 2.4, HIDE, { noMesh: true, yaw });
+  put(b, GEO.cone(), mat(HIDE, { rough: 1, flat: true }), x, y, z, 1.8, 2.8, 1.8, 0, yaw, 0);
+  put(b, GEO.cone(), mat(SNOW, { rough: 0.9, flat: true }), x, y + 1.9, z, 0.62, 0.9, 0.62, 0, yaw, 0, false);
+  for (let i = 0; i < 3; i++) {
+    const a = yaw + (i / 3) * Math.PI * 2;
+    put(b, GEO.cyl6(), woodM(PLANK_DARK), x + Math.sin(a) * 0.12, y + 2.5, z + Math.cos(a) * 0.12, 0.04, 0.8, 0.04, Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3, false);
+  }
+  put(b, GEO.box(), mat(0x3a2e24, { rough: 1 }), x + Math.sin(yaw) * 1.25, y + 0.5, z + Math.cos(yaw) * 1.25, 0.7, 1.0, 0.05, -0.55, yaw, 0, false);
+}
+
+function campfire(b: Builder, x: number, z: number, y: number): void {
+  const stone = stoneM(STONE_DARK);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2;
+    put(b, GEO.rock(), stone, x + Math.sin(a) * 0.7, y + 0.08, z + Math.cos(a) * 0.7, 0.22, 0.16, 0.22, 0, a, 0, false);
+  }
+  for (let i = 0; i < 3; i++) put(b, GEO.cyl6(), woodM(PLANK_DARK), x, y + 0.12, z, 0.07, 0.9, 0.07, Math.PI / 2, i * 2.1, 0, false);
+  put(b, GEO.cone(), glow(0xff8a2a), x, y + 0.1, z, 0.28, 0.75, 0.28, 0, 0, 0, false);
+  put(b, GEO.cone(), glow(0xffe0a0), x, y + 0.1, z, 0.13, 0.42, 0.13, 0, 0.4, 0, false);
+  b.level.props.push(new Smoker(b.game, x, y + 1.2, z, 0.35));
+}
+
+/** A log bench. */
+function log(b: Builder, x: number, z: number, y: number, yaw: number): void {
+  put(b, GEO.cyl6(), woodM(PLANK), x, y + 0.25, z, 0.25, 1.6, 0.25, Math.PI / 2, yaw, 0);
+  put(b, GEO.cap(), mat(SNOW, { rough: 0.9, flat: true }), x, y + 0.48, z, 0.2, 0.06, 0.7, 0, yaw, 0, false);
+}
+
+/** Sawn blocks of lake ice stacked for the sledge. */
+function iceStack(b: Builder, x: number, z: number, y: number): void {
+  const ice = cutIce();
+  b.box(x, y, z, 2.6, 1.6, 1.8, 0xd8f2fc, { noMesh: true, surface: 'ice' });
+  for (let r = 0; r < 2; r++) {
+    for (let i = 0; i < 3 - r; i++) {
+      for (let k = 0; k < 2; k++) {
+        put(b, GEO.box(), ice, x - 0.85 + i * 0.85 + r * 0.42, y + 0.4 + r * 0.8, z - 0.45 + k * 0.9, 0.8, 0.76, 0.86, 0, jitter(i + k + r * 3, 2) * 0.06, 0);
+      }
+    }
+  }
+}
+
+/** A cutters' sledge on runners, loaded with ice or broken down and empty. */
+function sledge(b: Builder, x: number, z: number, y: number, yaw: number, loaded: boolean): void {
+  const wood = woodM(PLANK);
+  const iron = mat(IRON, { rough: 0.5, metal: 0.4 });
+  const rx = Math.cos(yaw);
+  const rz = -Math.sin(yaw);
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  b.box(x, y, z, 1.4, loaded ? 1.5 : 0.7, 2.8, PLANK, { yaw, noMesh: true, surface: 'wood' });
+  dec(b, GEO.box(), wood, x, y + 0.55, z, 1.4, 0.12, 2.6, 0, yaw, 0);
+  for (const sd of [-1, 1]) {
+    dec(b, GEO.box(), iron, x + rx * sd * 0.6, y + 0.08, z + rz * sd * 0.6, 0.08, 0.1, 3.0, 0, yaw, 0);
+    dec(b, GEO.box(), iron, x + rx * sd * 0.6 + fx * 1.55, y + 0.25, z + rz * sd * 0.6 + fz * 1.55, 0.08, 0.1, 0.5, -0.8, yaw, 0);
+    for (const t of [-0.9, 0.9]) dec(b, GEO.box(), wood, x + rx * sd * 0.6 + fx * t, y + 0.3, z + rz * sd * 0.6 + fz * t, 0.1, 0.45, 0.1, 0, yaw, 0);
+  }
+  if (loaded) {
+    const ice = cutIce();
+    for (let i = 0; i < 3; i++) dec(b, GEO.box(), ice, x + rx * (i % 2 ? 0.3 : -0.3), y + 0.95, z + fz * (i - 1) * 0.8 + rz * 0, 0.6, 0.7, 0.7, 0, yaw + i * 0.1, 0);
+    dec(b, GEO.cyl6(), mat(0xc8b080, { rough: 1 }), x, y + 1.32, z, 0.03, 2.4, 0.03, Math.PI / 2, yaw, 0, false);
+  } else {
+    dec(b, GEO.box(), wood, x + fx * 0.4, y + 0.75, z + fz * 0.4, 1.2, 0.3, 0.9, 0.2, yaw, 0.1);
+  }
+}
+
+/** A drying rack with the day's catch. */
+function fishRack(b: Builder, x: number, z: number, y: number, yaw: number): void {
+  const ox = Math.cos(yaw);
+  const oz = -Math.sin(yaw);
+  for (const sd of [-1, 1]) put(b, GEO.cyl6(), woodM(PLANK_DARK), x + ox * 1.1 * sd, y, z + oz * 1.1 * sd, 0.07, 1.8, 0.07);
+  put(b, GEO.box(), woodM(PLANK_DARK), x, y + 1.75, z, 2.4, 0.07, 0.07, 0, yaw, 0);
+  for (let i = 0; i < 5; i++) {
+    const t = (i - 2) * 0.4;
+    put(b, GEO.blobLow(), mat(0x9ab0b8, { rough: 0.4, metal: 0.4 }), x + ox * t, y + 1.45, z + oz * t, 0.07, 0.26, 0.04, 0, yaw + Math.PI / 2, 0, false);
+  }
+}
+
+/** A glass jar of preserves on a shelf. */
+function jar(b: Builder, x: number, y: number, z: number, i: number): void {
+  const fruit = [0xd84a3a, 0xf0b040, 0x8ac050][i % 3]!;
+  put(b, GEO.cyl(), mat(fruit, { rough: 0.6, emissive: fruit, emissiveIntensity: 0.2 }), x, y, z, 0.17, 0.36, 0.17, 0, 0, 0, false);
+  put(b, GEO.cyl(), woodM(PLANK_DARK), x, y + 0.36, z, 0.19, 0.06, 0.19, 0, 0, 0, false);
+}
+
+/** A crate of harvest frozen in a block of ice, at an explicit height. */
+function frozenCrate(b: Builder, x: number, y: number, z: number, i: number, h: number): void {
+  b.box(x, y - 0.2, z, 1.4, h + 0.2, 1.4, 0x6a5238, { yaw: i * 0.3, surface: 'ice', noMesh: true });
+  put(b, GEO.box(), woodM(0x6a5238), x, y + (h * 0.55) / 2 - 0.1, z, 1.4, h * 0.55 + 0.2, 1.4, 0, i * 0.3, 0);
+  put(b, GEO.box(), cutIce(), x, y + h * 0.55 + (h * 0.45) / 2, z, 1.3, h * 0.45, 1.3, 0, i * 0.3, 0);
+  const fruit = [0xd84a3a, 0xf0b040, 0x8ac050][i % 3]!;
+  put(b, GEO.blobLow(), mat(fruit, { rough: 0.6, emissive: fruit, emissiveIntensity: 0.2 }), x, y + h * 0.78, z, 0.3, 0.3, 0.3, 0, 0, 0, false);
+}
+
+/** A snowman: three balls, coal eyes, a carrot and a forge-apprentice's scarf. */
+function snowman(b: Builder, x: number, z: number, y: number, yaw: number): void {
+  const snow = mat(SNOW, { rough: 0.9, flat: true });
+  b.col.add(makeCyl(x, z, 0.7, y - 0.5, y + 2.1));
+  dec(b, GEO.blob(), snow, x, y + 0.55, z, 0.75, 0.65, 0.75);
+  dec(b, GEO.blob(), snow, x, y + 1.35, z, 0.52, 0.48, 0.52);
+  dec(b, GEO.blob(), snow, x, y + 1.95, z, 0.36, 0.34, 0.36);
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  const rx = Math.cos(yaw);
+  const rz = -Math.sin(yaw);
+  for (const sd of [-1, 1]) dec(b, GEO.blobLow(), mat(0x1a1a20, { rough: 0.8 }), x + fx * 0.32 + rx * sd * 0.13, y + 2.05, z + fz * 0.32 + rz * sd * 0.13, 0.05, 0.05, 0.05, 0, 0, 0, false);
+  dec(b, GEO.cone(), mat(0xe87a2a, { rough: 0.7 }), x + fx * 0.3, y + 1.95, z + fz * 0.3, 0.06, 0.4, 0.06, Math.PI / 2, yaw, 0, false);
+  dec(b, GEO.cyl(), mat(0xb03a3a, { rough: 0.9 }), x, y + 1.66, z, 0.42, 0.12, 0.42, 0, 0, 0, false);
+  dec(b, GEO.box(), mat(0xb03a3a, { rough: 0.9 }), x + rx * 0.3 + fx * 0.3, y + 1.35, z + rz * 0.3 + fz * 0.3, 0.12, 0.5, 0.05, 0.2, yaw, 0.1, false);
+  for (const sd of [-1, 1]) dec(b, GEO.cyl6(), woodM(PLANK_DARK), x + rx * sd * 0.5, y + 1.35, z + rz * sd * 0.5, 0.03, 0.7, 0.03, 0, yaw, sd * 1.0, false);
+}
+
+/** A signpost with two arms, capped with snow. */
+function signpost(b: Builder, x: number, z: number, y: number, yaw: number): void {
+  dec(b, GEO.cyl6(), woodM(PLANK_DARK), x, y, z, 0.08, 1.9, 0.08);
+  dec(b, GEO.box(), woodM(), x + Math.sin(yaw) * 0.35, y + 1.65, z + Math.cos(yaw) * 0.35, 0.05, 0.26, 0.9, 0, yaw, 0);
+  dec(b, GEO.box(), woodM(), x - Math.sin(yaw + 0.5) * 0.3, y + 1.3, z - Math.cos(yaw + 0.5) * 0.3, 0.05, 0.22, 0.75, 0, yaw + 0.5, 0);
+  dec(b, GEO.box(), mat(SNOW, { rough: 0.9, flat: true }), x + Math.sin(yaw) * 0.35, y + 1.8, z + Math.cos(yaw) * 0.35, 0.08, 0.05, 0.9, 0, yaw, 0, false);
+}
+
+// ---------------------------------------------------------------------------
 // Moving parts
 // ---------------------------------------------------------------------------
 
@@ -703,8 +1158,10 @@ class Gear implements Prop {
     // Axle into the water below.
     const axle = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.7, top + 4, 8), mat(IRON, { rough: 0.6, metal: 0.3 }));
     axle.position.set(x, (top - 0.8 - 4) / 2 - 0.2, z);
-    b.level.root.add(axle);
+    b.addStatic(axle);
     this.root.position.set(x, top, z);
+    mergeStatic(this.root);
+    this.root.userData.fogCull = true;
     b.level.root.add(this.root);
   }
 
@@ -750,6 +1207,7 @@ class Piston implements Prop {
       this.mesh.add(band);
     }
     this.mesh.position.set(x, low, z);
+    mergeStatic(this.mesh);
     b.level.root.add(this.mesh);
     b.level.on(signal, () => (this.active = true));
   }
@@ -834,6 +1292,58 @@ class IceFloe implements Prop {
   }
 }
 
+/**
+ * Hides what lies wholly beyond the fog. Fully fogged things cannot be seen,
+ * but three.js still draws them: from the landing that was about 160 draw
+ * calls for the far end of the valley. It only touches things whose
+ * visibility nothing else manages (plain static meshes, gems, dragon rigs and
+ * the gears), and only shows again what it hid itself.
+ */
+class FogCull implements Prop {
+  private t = 0;
+  private hidden = new Set<THREE.Object3D>();
+  private sphere = new THREE.Sphere();
+  private fwd = new THREE.Vector3();
+  constructor(private game: Game) {}
+  update(dt: number): void {
+    this.t -= dt;
+    if (this.t > 0) return;
+    this.t = 0.15;
+    const g = this.game;
+    const level = g.level;
+    const fog = g.renderer.scene.fog as THREE.Fog | null;
+    if (!level || !fog) return;
+    const cam = g.camera.position;
+    // Fog thickens with depth along the view, not with distance.
+    const fwd = this.fwd.set(0, 0, -1).applyQuaternion(g.camera.quaternion);
+    const far = fog.far;
+    const check = (o: THREE.Object3D, r: number, cx: number, cy: number, cz: number) => {
+      const d = (cx - cam.x) * fwd.x + (cy - cam.y) * fwd.y + (cz - cam.z) * fwd.z - r;
+      if (d > far + 2) {
+        if (o.visible) {
+          o.visible = false;
+          this.hidden.add(o);
+        }
+      } else if (d < far && this.hidden.has(o)) {
+        o.visible = true;
+        this.hidden.delete(o);
+      }
+    };
+    for (const o of level.root.children) {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && !(m as unknown as THREE.InstancedMesh).isInstancedMesh) {
+        if (!m.geometry.boundingSphere) m.geometry.computeBoundingSphere();
+        // The level root sits at the origin, so a child's own matrix is its world matrix.
+        m.updateMatrix();
+        this.sphere.copy(m.geometry.boundingSphere!).applyMatrix4(m.matrix);
+        check(m, this.sphere.radius, this.sphere.center.x, this.sphere.center.y, this.sphere.center.z);
+      } else if (o.userData.fogCull) check(o, 6, o.position.x, o.position.y, o.position.z);
+    }
+    for (const n of level.npcs) check(n.rig.root, 5, n.x, n.y + 1, n.z);
+    for (const gem of g.gems) if (gem.alive) check(gem.mesh, 0.5, gem.x, gem.y, gem.z);
+  }
+}
+
 /** A decorative wheel turning on a wall. `yaw` faces its axle. */
 class Wheel implements Prop {
   private spinner: THREE.Group;
@@ -844,8 +1354,10 @@ class Wheel implements Prop {
     this.spinner = new THREE.Group();
     const gm = gearMesh(r, 0.6, color);
     gm.rotation.x = Math.PI / 2;
+    mergeStatic(gm);
     this.spinner.add(gm);
     holder.add(this.spinner);
+    holder.userData.fogCull = true;
     b.level.root.add(holder);
   }
   update(dt: number): void {

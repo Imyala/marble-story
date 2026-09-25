@@ -2,7 +2,6 @@ import './ui/style.css';
 import { Game } from './game/game';
 import { reseed } from './core/rng';
 import { MOVES } from './player/moves';
-import { SkyRings } from './entities/rings';
 
 declare global {
   interface Window {
@@ -19,7 +18,7 @@ const root = document.getElementById('game-root')!;
 const game = new Game(root);
 window.wyrm = game;
 // Handles for automated tests and tinkering from the console.
-(window as unknown as { wyrmDebug: unknown }).wyrmDebug = { MOVES, SkyRings };
+(window as unknown as { wyrmDebug: unknown }).wyrmDebug = { MOVES };
 
 // Automated tests run on slow software rendering; let them keep real time.
 const maxdt = Number(params.get('maxdt'));

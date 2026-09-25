@@ -191,7 +191,11 @@ export const fen: LevelDef = {
     b.story('glide', 0, 93, 3, () => g.hud.flick('Jump, flap, then HOLD Space to glide over the water!', 6));
     b.gemLine([[0, 100], [0, 106]], 'blue', 2);
     // Flight rings curve off the ledge to the east, toward the mill island.
-    b.skyRings('ledge', [[4.5, 10.2, 98.5], [9.5, 9.3, 104], [14.5, 8.2, 108.5], [20, 7, 111.5]], { time: 5, bonus: 1.5, reward: 50 });
+    b.glideRings('ledge', ([[4.5, 10.2, 98.5], [9.5, 9.3, 104], [14.5, 8.2, 108.5], [20, 7, 111.5]] as const).map(([x, y, z], i, a) => {
+      const n = a[Math.min(a.length - 1, i + 1)]!;
+      const p = a[Math.max(0, i - 1)]!;
+      return [x, y, z, Math.atan2(n[0] - p[0], n[2] - p[2])] as [number, number, number, number];
+    }), 7, 50);
     b.collectible('mana1', 'mana', -32, 83);
     b.crystal(-30, 81, 'green', 4);
 

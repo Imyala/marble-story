@@ -364,55 +364,6 @@ export async function drake(h) {
   await waitGame(1);
 }
 
-/** Flight rings: flying through the first starts the clock; the whole chain pays out; timing out resets. */
-export async function rings(h) {
-  const waitGame = async (sec) => {
-    const start = await h.eval(() => window.wyrm.time);
-    for (let i = 0; i < 900; i++) {
-      await h.wait(40);
-      if ((await h.eval(() => window.wyrm.time)) - start >= sec) return;
-    }
-  };
-  await h.page.addInitScript(() => localStorage.clear());
-  await h.go('?level=sanctum&seed=5&quality=high&maxdt=0.1', 2500);
-  await h.skipDialogue(8000);
-  await h.eval(() => {
-    const g = window.wyrm;
-    const R = window.wyrmDebug.SkyRings;
-    const pts = [[0, 2.5, -2], [0, 3.5, 8], [4, 3.5, 17], [8, 3, 26]];
-    window.__r = new R(g, 'sanctum:test', pts, { time: 4, bonus: 2, reward: 50 });
-    g.level.props.push(window.__r);
-    g.player.place(0, 0.3, -9, 0);
-    g.player.invuln = true;
-    g.cam.snapBehind(0, 0.2);
-  });
-  await waitGame(0.3);
-  await h.shot('rings-idle');
-  const gems0 = await h.eval(() => window.wyrm.save.gems);
-  // Fly the dragon through each ring in turn.
-  for (const [x, y, z] of [[0, 2.5, -2], [0, 3.5, 8], [4, 3.5, 17]]) {
-    await h.eval(([x, y, z]) => { const g = window.wyrm; g.player.body.x = x; g.player.body.y = y - 0.7; g.player.body.z = z; g.player.body.vy = 0; }, [x, y, z]);
-    await waitGame(0.25);
-  }
-  const mid = await h.eval(() => ({ next: window.__r.next, running: window.__r.running, hud: window.__r.hud.textContent }));
-  await h.shot('rings-running');
-  await h.eval(() => { const g = window.wyrm; g.player.body.x = 8; g.player.body.y = 2.3; g.player.body.z = 26; });
-  await waitGame(0.3);
-  await waitGame(1);
-  const done = await h.eval(() => ({ found: !!window.wyrm.save.found['rings:sanctum:test'], running: window.__r.running, gems: window.wyrm.save.gems }));
-  h.check('the ring chain starts, counts and pays out', mid.running && mid.next === 3 && done.found && !done.running, JSON.stringify({ mid, done, gems0 }));
-  // A second attempt that times out resets.
-  await h.eval(() => { const g = window.wyrm; g.player.body.x = 0; g.player.body.y = 1.8; g.player.body.z = -2; });
-  await waitGame(0.3);
-  await h.eval(() => { const g = window.wyrm; g.player.place(0, 0.3, -9, 0); });
-  for (let k = 0; k < 6; k++) {
-    await waitGame(1);
-    console.log(await h.eval(() => [window.wyrm.time.toFixed(2), window.__r.timeLeft.toFixed(2), window.__r.running, window.wyrm.state]));
-  }
-  const reset = await h.eval(() => ({ running: window.__r.running, next: window.__r.next }));
-  h.check('running out of time resets the rings', !reset.running && reset.next === 0, JSON.stringify(reset));
-}
-
 /** Touch controls: appear on first touch; the left thumb moves, the right drags the camera, buttons act. */
 export async function touch(h) {
   const waitGame = async (sec) => {
@@ -480,7 +431,7 @@ export async function fenextras(h) {
     const g = window.wyrm;
     g.player.invuln = true;
     window.__t = g.level.props.find((p) => p.id === 'fen:egg-thief' && p.mode);
-    window.__r = g.level.props.find((p) => p.id === 'fen:ledge' && p.rings);
+    window.__r = g.level.props.find((p) => p.id === 'fen:rings:ledge');
     for (const e of g.enemies) { e.alive = false; e.state = 'dead'; e.deadT = 1; }
     g.player.place(-3, g.col.groundAt(-3, 113, 1e4, 0.1).y + 0.05, 113, 0);
   });
@@ -508,14 +459,14 @@ export async function fenextras(h) {
     const s = await h.eval(() => {
       const g = window.wyrm; const r = window.__r; const n = r.rings[Math.min(r.next, r.rings.length - 1)];
       const b = g.player.body;
-      g.player.yaw = Math.atan2(n.p.x - b.x, n.p.z - b.z);
-      return { j: g.player.jumps, vy: +b.vy.toFixed(1), st: g.state, ps: g.player.state, next: r.next, x: +b.x.toFixed(1), y: +b.y.toFixed(1), z: +b.z.toFixed(1), glide: g.player.gliding, found: !!g.save.found['rings:fen:ledge'] };
+      g.player.yaw = Math.atan2(n.x - b.x, n.z - b.z);
+      return { j: g.player.jumps, vy: +b.vy.toFixed(1), st: g.state, ps: g.player.state, next: r.next, x: +b.x.toFixed(1), y: +b.y.toFixed(1), z: +b.z.toFixed(1), glide: g.player.gliding, found: !!g.save.found['fen:rings:ledge'] };
     });
     if (i % 4 === 0) trail.push(s);
     if (s.found || (!s.glide && i > 20 && s.y < 3)) break;
     await waitGame(0.06);
   }
   await h.eval(() => window.wyrm.input.simulate('jump', false));
-  const done = await h.eval(() => !!window.wyrm.save.found['rings:fen:ledge']);
+  const done = await h.eval(() => !!window.wyrm.save.found['fen:rings:ledge']);
   h.check('the ledge ring chain can be flown in one glide', done, JSON.stringify(trail.slice(-8)));
 }

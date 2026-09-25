@@ -8,6 +8,7 @@ import { GEM_COLORS, type GemKind } from './gems';
 import { rng } from '../core/rng';
 import { ENEMIES } from '../enemies/defs';
 import type { Enemy } from '../enemies/enemy';
+import { bump } from '../game/feats';
 
 export interface Prop {
   update(dt: number): void;
@@ -1331,10 +1332,11 @@ export class ClimbWall implements Prop {
 
 export class GlideCourse implements Prop {
   private rings: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; x: number; y: number; z: number; nx: number; nz: number }[] = [];
-  private next = 0;
+  next = 0;
   private timeLeft = 0;
   private done: boolean;
   private prev = new THREE.Vector3();
+  private hud: HTMLDivElement;
 
   constructor(private game: Game, readonly id: string, pts: [number, number, number, number][], private limit: number, private reward: number) {
     this.done = !!game.save.found[id];
@@ -1346,14 +1348,23 @@ export class GlideCourse implements Prop {
       game.level!.root.add(ring);
       this.rings.push({ mesh: ring, mat: m, x, y, z, nx: Math.sin(yaw), nz: Math.cos(yaw) });
     }
+    // The countdown sits at the top of the screen while a run is on.
+    this.hud = document.createElement('div');
+    this.hud.className = 'toast good';
+    this.hud.style.cssText = 'position:absolute;left:50%;top:7%;transform:translateX(-50%);font-size:16px;display:none;';
+    game.hud.root.appendChild(this.hud);
     this.paint();
+  }
+
+  dispose(): void {
+    this.hud.remove();
   }
 
   private paint(): void {
     this.rings.forEach((r, i) => {
-      const col = this.done ? 0x9af0aa : i === this.next ? 0xffffff : i < this.next ? 0x6a8aff : 0xf5c46b;
+      const col = this.done && this.next === 0 ? 0x9af0aa : i === this.next ? 0xffffff : i < this.next ? 0x6a8aff : 0xf5c46b;
       r.mat.color.setHex(col);
-      r.mat.opacity = i < this.next ? 0.35 : 0.85;
+      r.mat.opacity = i < this.next ? 0.3 : i === this.next ? 0.8 : 0.6;
     });
   }
 
@@ -1363,8 +1374,17 @@ export class GlideCourse implements Prop {
     const cy = p.y + 0.6;
     if (this.next > 0) {
       this.timeLeft -= dt;
-      if (this.timeLeft <= 0) {
+      this.hud.style.display = '';
+      this.hud.innerHTML = `Glide rings ${this.next}/${this.rings.length} &middot; ${Math.max(0, this.timeLeft).toFixed(1)}s`;
+      // A trail of sparks leads on to the next ring.
+      const nx = this.rings[this.next];
+      if (nx && Math.random() < 0.5) {
+        const k = Math.random() * 0.35;
+        g.fx.sparkle(p.x + (nx.x - p.x) * k, cy + (nx.y - cy) * k, p.z + (nx.z - p.z) * k, 0xffe08a, 1);
+      }
+      if (this.timeLeft <= 0 || !g.player.alive) {
         this.next = 0;
+        this.hud.style.display = 'none';
         g.toast('Too slow! The rings reset.', 'warn');
         g.audio.play('uiBack');
         this.paint();
@@ -1373,6 +1393,7 @@ export class GlideCourse implements Prop {
     const r = this.rings[this.next];
     if (r) {
       r.mesh.rotation.z += dt * 1.5;
+      r.mesh.scale.setScalar(1 + Math.sin(g.time * 6) * 0.05);
       // Crossed the ring's plane close to its center since last step?
       const a = (this.prev.x - r.x) * r.nx + (this.prev.z - r.z) * r.nz;
       const b = (p.x - r.x) * r.nx + (p.z - r.z) * r.nz;
@@ -1382,15 +1403,20 @@ export class GlideCourse implements Prop {
         g.audio.play('gem', 1 + this.next * 0.08, 0.9);
         g.fx.ring(r.x, r.y - 0.5, r.z, 0.5, 3, 0xffffff, 0.3);
         g.fx.sparkle(r.x, r.y, r.z, 0xf5c46b, 12);
+        r.mesh.scale.setScalar(1);
         this.next++;
         if (this.next >= this.rings.length) {
           this.next = 0;
+          this.hud.style.display = 'none';
           const first = !this.done;
           this.done = true;
           g.save.found[this.id] = true;
-          g.spawnGems(p.x, p.y + 1, p.z, { blue: first ? this.reward : Math.round(this.reward / 5) }, true);
+          g.spawnGems(p.x, p.y + 1, p.z, { blue: first ? this.reward : Math.round(this.reward / 5), ...(first ? { purple: 1 } : {}) }, true);
           g.hud.bigText('RINGS CLEARED', 0xf5c46b);
           g.audio.play('unlock');
+          g.style.bonus(40);
+          bump(g.save, 'rings');
+          g.checkFeats();
         } else if (this.next === 1) g.toast(`Glide rings: ${this.limit}s to fly through them all!`, 'info');
         this.paint();
       }

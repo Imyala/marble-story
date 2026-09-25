@@ -9,7 +9,7 @@ export default async function (h) {
       for (let x = x0; x <= x1; x += step) {
         const gy = g.col.groundAt(x, z, 1e4, 0.1).y;
         const deep = g.isDeepWater(x, z, gy);
-        row += gy < -1e3 ? ' ' : deep ? '~' : gy > 8 ? '^' : String(Math.max(0, Math.min(9, Math.round(gy))));
+        row += gy < -1e3 ? ' ' : deep ? '~' : gy >= 9.5 ? String.fromCharCode(97 + Math.min(25, Math.floor((gy - 9.5) / 2))) : String(Math.max(0, Math.round(gy)));
       }
       rows.push(row);
     }

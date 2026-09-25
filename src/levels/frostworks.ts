@@ -237,6 +237,8 @@ function buildHollow(b: Builder): void {
   b.scatter(26, 0, 38, 13, (x, z, y) => b.decor.grass(x, y, z, 0.8, 0x9aa89a), () => true);
   // A frozen pond with an iron marker.
   b.decor.add(GEO.cyl(), mat(0xcfeefa, { rough: 0.1, metal: 0.1, emissive: 0x4a90c0, emissiveIntensity: 0.15 }), 7, b.y(7, 34) + 0.02, 34, 3.2, 0.06, 2.4, 0, 0, 0, false);
+  // An egg thief waits at the landing, the first thing through the gate.
+  b.eggThief('thief', 0, 9, 9);
   b.enemy('grunt', -6, 35, Math.PI);
   b.enemy('grunt', 6, 40, Math.PI);
   b.enemy('frostGolem', 1, 45, Math.PI);

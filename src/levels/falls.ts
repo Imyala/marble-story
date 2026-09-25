@@ -300,6 +300,8 @@ function highTerrace(b: Builder): void {
   b.enemy('grunt', -6, 112, Math.PI);
   b.enemy('slinger', -12, 104, Math.PI / 2);
   b.story('brute', 1, 101, 6, () => say('That big one is a Gloom Brute. It shrugs off hits! When it slams the ground, jump the shockwave, then punish it.', 7));
+  // An egg thief darts between the pines by the terrace checkpoint.
+  b.eggThief('thief', -8, 93, 10);
 
   // The roc's nest on the pinnacle, reached on an updraft from the east edge.
   const nestY = b.y(NEST.x, NEST.z);

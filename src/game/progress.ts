@@ -107,7 +107,8 @@ export interface SaveData {
 
 /**
  * Scales Aster can wear, unlocked by returning lost dragon eggs. Hidden eggs:
- * Fen 5, Sanctum 3, Falls 5, Frostworks 5, Plains 5, Keep 5 (28 in all).
+ * Fen 5, Sanctum 3, Falls 5, Frostworks 5, Plains 5, Keep 5 (28 in all), plus one
+ * carried off by an egg thief in most realms.
  */
 export interface SkinDef {
   id: string;

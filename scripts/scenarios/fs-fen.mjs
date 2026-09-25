@@ -84,7 +84,7 @@ export async function counts(h) {
   console.log(JSON.stringify(c));
   h.check('40 to 80 breakables', c.n >= 40 && c.n <= 80, `${c.n}`);
   h.check('no new urns (content.mjs smashes every urn)', c.kinds.urn === 4, JSON.stringify(c.kinds));
-  h.check('five eggs, four letters', c.sec.egg === 5 && c.sec.letter === 4, JSON.stringify(c.sec));
+  h.check('five eggs plus the thief egg, four letters', c.sec.egg === 6 && c.sec.letter === 4, JSON.stringify(c.sec));
   h.check('three chests', c.chests === 3, `${c.chests}`);
   // Ground where the new areas expect it.
   const g = await h.eval(() => {

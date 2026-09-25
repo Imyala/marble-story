@@ -532,6 +532,11 @@ export async function photo(h) {
   const b = await h.eval(() => ({ yaw: window.wyrm.photo.yaw, filter: document.querySelector('.photo-filter')?.textContent }));
   h.check('dragging orbits and 3 picks the Dusk filter', Math.abs(b.yaw - a.yaw) > 0.3 && /Dusk/.test(b.filter), JSON.stringify({ a, b }));
   await h.shot('photo-mode');
+  for (let i = 0; i < 3; i++) await h.page.keyboard.press('BracketRight');
+  await h.wait(600);
+  const dof = await h.eval(() => document.querySelector('.photo-filter')?.textContent ?? '');
+  h.check('] adds focus blur', /Focus blur 3/.test(dof), dof);
+  await h.shot('photo-dof');
   const dl = h.page.waitForEvent('download', { timeout: 15000 }).catch(() => null);
   await h.page.keyboard.press('Enter');
   const file = await dl;

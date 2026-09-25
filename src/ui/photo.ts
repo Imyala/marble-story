@@ -31,6 +31,8 @@ export class PhotoMode {
   private pitch = 0.25;
   private dist = 6;
   private filter = 0;
+  /** Depth-of-field strength, 0 (off) to 4. */
+  private dof = 0;
   private keys = new Set<string>();
   private drag: { id: number; x: number; y: number } | null = null;
   private prevQuality: Quality = 'high';
@@ -55,6 +57,7 @@ export class PhotoMode {
     this.yaw = Math.atan2(off.x, off.z);
     this.pitch = Math.asin(THREE.MathUtils.clamp(off.y / (off.length() || 1), -0.9, 0.9));
     this.filter = 0;
+    this.dof = 0;
     this.applyFilter();
     this.buildUi();
   }
@@ -64,6 +67,7 @@ export class PhotoMode {
     if (!this.active) return;
     this.active = false;
     g.renderer.setPhotoFilter(null);
+    g.renderer.setDof(null);
     if (this.prevQuality !== 'high') g.renderer.setQuality(this.prevQuality);
     for (const off of this.offs) off();
     this.offs = [];
@@ -78,7 +82,7 @@ export class PhotoMode {
   private applyFilter(): void {
     const f = FILTERS[this.filter]!;
     this.game.renderer.setPhotoFilter(f);
-    if (this.label) this.label.textContent = `Filter: ${f.name}`;
+    if (this.label) this.label.textContent = `Filter: ${f.name}${this.dof ? ` \u00b7 Focus blur ${this.dof}` : ''}`;
   }
 
   private cycle(d = 1): void {
@@ -97,8 +101,8 @@ export class PhotoMode {
     const o = document.createElement('div');
     o.className = 'photo-layer';
     o.innerHTML = `<div class="photo-bar"><b>Photo mode</b><span class="photo-filter"></span>
-      <span class="photo-keys">Drag: orbit &middot; Wheel: zoom &middot; WASD, R/F: move &middot; 1-5 or Tab: filter &middot; Enter: capture &middot; Esc: back</span></div>
-      <div class="photo-btns"><button class="btn small" data-a="filter">Filter</button><button class="btn small" data-a="in">+</button><button class="btn small" data-a="out">&minus;</button><button class="btn small" data-a="snap">Capture</button><button class="btn small" data-a="done">Done</button></div>`;
+      <span class="photo-keys">Drag: orbit &middot; Wheel: zoom &middot; WASD, R/F: move &middot; 1-5 or Tab: filter &middot; [ ]: focus blur &middot; Enter: capture &middot; Esc: back</span></div>
+      <div class="photo-btns"><button class="btn small" data-a="filter">Filter</button><button class="btn small" data-a="dof">Blur</button><button class="btn small" data-a="in">+</button><button class="btn small" data-a="out">&minus;</button><button class="btn small" data-a="snap">Capture</button><button class="btn small" data-a="done">Done</button></div>`;
     this.label = o.querySelector('.photo-filter');
     g.renderer.canvas.parentElement!.appendChild(o);
     this.overlay = o;
@@ -109,6 +113,7 @@ export class PhotoMode {
         e.stopPropagation();
         const a = (b as HTMLElement).dataset.a;
         if (a === 'filter') this.cycle();
+        else if (a === 'dof') this.setDof((this.dof + 1) % 5);
         else if (a === 'in') this.dist = Math.max(1.5, this.dist * 0.85);
         else if (a === 'out') this.dist = Math.min(18, this.dist / 0.85);
         else if (a === 'snap') this.snap();
@@ -136,11 +141,19 @@ export class PhotoMode {
       if (e.code === 'Escape') { this.exit(); return; }
       if (e.code === 'Enter' || e.code === 'Space') { this.snap(); return; }
       if (e.code === 'Tab') { e.preventDefault(); this.cycle(e.shiftKey ? -1 : 1); return; }
+      if (e.code === 'BracketRight') { this.setDof(Math.min(4, this.dof + 1)); return; }
+      if (e.code === 'BracketLeft') { this.setDof(Math.max(0, this.dof - 1)); return; }
       const n = Number(e.key);
       if (n >= 1 && n <= FILTERS.length) { this.filter = n - 1; this.applyFilter(); return; }
       this.keys.add(e.code);
     }, { capture: true });
     this.on(window, 'keyup', (e: KeyboardEvent) => { e.stopPropagation(); this.keys.delete(e.code); }, { capture: true });
+  }
+
+  private setDof(n: number): void {
+    this.dof = n;
+    this.applyFilter();
+    this.game.audio.play('ui');
   }
 
   /** Saves what the camera sees (at the current filter) as a PNG. */
@@ -194,5 +207,7 @@ export class PhotoMode {
       this.target.z + Math.cos(this.yaw) * cp * this.dist,
     );
     cam.lookAt(this.target);
+    // Focus on whatever the camera orbits.
+    this.game.renderer.setDof(this.dof ? this.dist : null, [0, 0.0006, 0.0014, 0.0028, 0.005][this.dof]);
   }
 }

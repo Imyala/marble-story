@@ -4,6 +4,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js';
 import { GradeShader, chroma } from './grade';
 import { Sky, type SkyDef } from './sky';
 import { WATER_LIGHT } from './water';
@@ -23,6 +24,7 @@ export class Renderer {
   private composer: EffectComposer | null = null;
   private bloom: UnrealBloomPass | null = null;
   private grade: ShaderPass | null = null;
+  private bokeh: BokehPass | null = null;
   /** Wanted grade state; eased every frame. */
   readonly look = { dragon: false, fury: 0, dt: 0, pulse: 1, sky: null as SkyDef | null, impact: 0 };
   /** Reduced flashing: no lens ripple or fringing, a gentler Fury glow, softer lightning. */
@@ -98,6 +100,7 @@ export class Renderer {
       this.composer = null;
       this.bloom = null;
       this.grade = null;
+      this.bokeh = null;
     }
     this.resize();
   }
@@ -116,6 +119,24 @@ export class Renderer {
 
   get height(): number {
     return this.gl.domElement.height;
+  }
+
+  /** Depth of field for photo mode: focus distance and aperture (0 or null turns it off). */
+  setDof(focus: number | null, aperture = 0): void {
+    if (!this.composer) return;
+    if (focus === null || aperture <= 0) {
+      if (this.bokeh) this.bokeh.enabled = false;
+      return;
+    }
+    if (!this.bokeh) {
+      this.bokeh = new BokehPass(this.scene, this.camera, { focus, aperture, maxblur: 0.012 });
+      // After bloom, before the output conversion and the grade.
+      this.composer.insertPass(this.bokeh, 2);
+    }
+    this.bokeh.enabled = true;
+    const u = (this.bokeh as unknown as { uniforms: Record<string, THREE.IUniform> }).uniforms;
+    u.focus!.value = focus;
+    u.aperture!.value = aperture;
   }
 
   /** A one-beat flash on a big hit (0..1). */

@@ -70,6 +70,8 @@ export class Audio {
   private combat = 0;
   private lastPlayed = new Map<string, number>();
   private ambBus!: GainNode;
+  private muffler!: BiquadFilterNode;
+  private muffleAmt = 0;
   private amb: { kind: AmbienceKind; nodes: AudioScheduledSourceNode[]; gain: GainNode; timers: number[] } | null = null;
   private wantAmb: AmbienceKind | null = null;
 
@@ -88,7 +90,12 @@ export class Audio {
     const comp = c.createDynamicsCompressor();
     comp.threshold.value = -14;
     comp.ratio.value = 4;
-    this.master.connect(comp).connect(c.destination);
+    // A lowpass that muffles the mix in Dragon Time and behind menus.
+    this.muffler = c.createBiquadFilter();
+    this.muffler.type = 'lowpass';
+    this.muffler.frequency.value = 20000;
+    this.muffler.Q.value = 0.5;
+    this.master.connect(this.muffler).connect(comp).connect(c.destination);
     this.sfxBus = c.createGain();
     this.sfxBus.gain.value = this.sfxVolume;
     this.sfxBus.connect(this.master);
@@ -172,6 +179,43 @@ export class Audio {
     src.connect(f).connect(g).connect(opts.bus ?? this.sfxBus);
     src.start(t, Math.random() * 1.5);
     src.stop(t + dur + 0.05);
+  }
+
+  /** 0 = clear, 1 = heavily muffled (as if underwater). Eases toward the target. */
+  setMuffle(amount: number): void {
+    const c = this.ctx;
+    if (!c || Math.abs(amount - this.muffleAmt) < 0.01) return;
+    this.muffleAmt = amount;
+    const hz = 20000 * Math.pow(600 / 20000, amount);
+    this.muffler.frequency.setTargetAtTime(hz, c.currentTime, 0.12);
+  }
+
+  /** A footfall on the given ground: soft on grass and snow, a click on stone, a knock on wood. */
+  footstep(surface: string, vol = 1): void {
+    const c = this.ctx;
+    if (!c) return;
+    const v = 0.5 * vol * (0.8 + Math.random() * 0.4);
+    switch (surface) {
+      case 'stone': case 'metal': case 'crystal':
+        this.noise(0.05, 0.05 * v, { type: 'highpass', freq: 2200 });
+        this.tone(140 + Math.random() * 40, 0.06, 'sine', 0.05 * v);
+        break;
+      case 'wood':
+        this.tone(170 + Math.random() * 40, 0.08, 'triangle', 0.07 * v, { filter: 900 });
+        this.noise(0.04, 0.025 * v, { type: 'bandpass', freq: 1400 });
+        break;
+      case 'snow': case 'ice':
+        this.noise(0.09, 0.07 * v, { type: 'bandpass', freq: 3200 + Math.random() * 800, q: 1.2 });
+        break;
+      case 'water':
+        this.noise(0.14, 0.06 * v, { type: 'bandpass', freq: 900, freqEnd: 2200, q: 1.5 });
+        break;
+      case 'mud':
+        this.noise(0.1, 0.05 * v, { type: 'lowpass', freq: 600 });
+        break;
+      default: // grass, sand
+        this.noise(0.07, 0.045 * v, { type: 'bandpass', freq: 1800 + Math.random() * 600, q: 0.9 });
+    }
   }
 
   // ---- ambience -------------------------------------------------------------

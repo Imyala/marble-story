@@ -434,6 +434,8 @@ export class Game {
     this.renderer.follow(this.player.body.y > -1e3 ? new THREE.Vector3(this.player.x, this.player.y, this.player.z) : new THREE.Vector3());
     if (this.level?.water) this.level.water.update(this.realTime, this.camera.position.x, this.camera.position.z);
     this.renderer.look.fury = this.player.state === 'fury' ? 1 : 0;
+    // Dragon Time and menus hush the world.
+    this.audio.setMuffle(this.state === 'pause' && this.level ? 0.55 : this.player.dragonTimeActive ? 0.45 : 0);
     PUSHER.value.set(this.player.body.x, this.player.body.y, this.player.body.z);
     if (this.level && this.state !== 'menu' && this.state !== 'pause') {
       this.weather.update(dt);

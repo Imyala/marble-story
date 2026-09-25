@@ -608,12 +608,24 @@ export class Player {
   private trailT = 0;
 
   /** Footfall puffs when running, and wingtip streaks when gliding fast. */
+  private footT = 0;
+
   private motionFx(dt: number): void {
     const g = this.game;
     const b = this.body;
     const hs = Math.hypot(b.vx, b.vz);
     const fx = Math.sin(this.yaw);
     const fz = Math.cos(this.yaw);
+    // Footfalls, paced by speed and pitched to the ground underfoot.
+    if (b.grounded && (this.state === 'move' || this.state === 'charge') && hs > 1.2) {
+      this.footT -= dt * Math.min(1.6, hs / RUN);
+      if (this.footT <= 0) {
+        this.footT = this.state === 'charge' ? 0.16 : 0.3;
+        const lvl = g.level?.def.id;
+        const surf = this.inWater ? 'water' : b.ground?.surface ?? (lvl === 'frostworks' ? 'snow' : lvl === 'keep' ? 'stone' : lvl === 'fen' ? 'mud' : 'grass');
+        g.audio.footstep(surf, Math.min(1, hs / RUN) * (this.state === 'charge' ? 1.3 : 1));
+      }
+    } else this.footT = 0.05;
     if (b.grounded && !this.inWater && (this.state === 'move' || this.state === 'charge') && hs > 4.5) {
       this.stepFxT -= dt * (hs / RUN);
       if (this.stepFxT <= 0) {

@@ -570,3 +570,20 @@ export async function wardflight(h) {
   const sub = await h.eval(() => document.querySelector('.panel .sub')?.textContent ?? '');
   h.check('the pause menu shows how much is explored', /\d+% explored/.test(sub), sub);
 }
+
+/** Running plays footsteps for the ground underfoot; pausing muffles the mix. */
+export async function footsteps(h) {
+  await h.go('?level=frostworks&seed=5&quality=low&maxdt=0.1', 2500);
+  await h.eval(() => window.wyrm.audio.unlock());
+  await h.skipDialogue(6000);
+  await h.eval(() => { const a = window.wyrm.audio; window.__steps = []; const f = a.footstep.bind(a); a.footstep = (s, v) => { window.__steps.push(s); f(s, v); }; });
+  await h.page.keyboard.down('KeyW');
+  await h.wait(1500);
+  await h.page.keyboard.up('KeyW');
+  const steps = await h.eval(() => window.__steps);
+  h.check('running on snow plays snowy footsteps', steps.length >= 3 && steps.includes('snow'), JSON.stringify(steps.slice(0, 8)));
+  await h.eval(() => window.wyrm.pause());
+  await h.wait(400);
+  const m = await h.eval(() => window.wyrm.audio.muffleAmt);
+  h.check('the pause menu muffles the world', m > 0.4, String(m));
+}

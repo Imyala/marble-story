@@ -303,6 +303,8 @@ export class Game {
         const def = ENEMIES[t];
         if (!def) continue;
         const m = def.build();
+        // Same shader variant as the real thing (see Enemy's rim light).
+        m.rim?.(0xc8a0ff, 0.28);
         m.root.position.set(this.player.x, this.player.y - 200, this.player.z);
         this.scene.add(m.root);
         temp.push(m.root);

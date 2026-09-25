@@ -249,7 +249,7 @@ export async function results(h) {
   });
   await h.wait(2500);
   const r = await h.eval(() => ({ state: window.wyrm.state, rows: [...document.querySelectorAll('.res-row')].map((e) => e.textContent), medal: document.querySelector('.medal b')?.textContent }));
-  h.check('a results card shows before leaving a finished realm', r.state === 'pause' && r.rows.length === 7 && !!r.medal, JSON.stringify(r));
+  h.check('a results card shows before leaving a finished realm', r.state === 'pause' && r.rows.length === 8 && !!r.medal, JSON.stringify(r));
   // Headless frames are slow; skip the entrance animations for the screenshot.
   await h.eval(() => document.getAnimations().forEach((a) => { if (a.effect?.target?.closest?.('.results')) a.finish(); }));
   await h.wait(300);

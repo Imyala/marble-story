@@ -656,6 +656,8 @@ export class Menus {
       ['Hits taken', String(v.hits)],
       ['Secrets found', `${have} / ${list.length}`],
     ];
+    const lvlSkills = SKILLS.filter((s) => s.level === g.level?.def.id);
+    if (lvlSkills.length) rows.push(['Skill Points', `${lvlSkills.filter((s) => g.save.found[skillKey(s.id)]).length} / ${lvlSkills.length}`]);
     const grid = this.div('res-grid');
     rows.forEach(([k, val], i) => {
       const row = this.div('res-row', `<span>${k}</span><b>${val}</b>`);

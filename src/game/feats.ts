@@ -78,5 +78,7 @@ export const BESTIARY: Record<string, { blurb: string; tip: string }> = {
   crawler: { blurb: 'A Shellback: armored on top, soft underneath.', tip: 'Flip it with a heavy hit (Tail or Ground Pound), then strike the belly.' },
   knight: { blurb: 'Nyxa\'s elite guard. Patient, precise, and it punishes button mashing.', tip: 'Break its guard with heavy hits or get behind it; dodge its lunge.' },
   drake: { blurb: 'A wild dragon swallowed by the Gloom: fast, clever, and far too much like you.', tip: 'It pounces from afar. Dodge sideways, then punish the long recovery. Its wings hate lightning.' },
+  frostDrake: { blurb: 'A Shade Drake grown fat on the Frostworks\' cold. Its spit rimes whatever it touches.', tip: 'Ice does nothing to it; fire does plenty. Keep moving when it rears to spit.' },
+  stormDrake: { blurb: 'The fastest of the drakes, crackling with stolen storm. Its bolt flies straight and quick.', tip: 'Lightning passes through it; Earth knocks it flat. Dodge sideways, not back.' },
   totem: { blurb: 'A shard of the Gloom planted in the ground, shielding every foe near it.', tip: 'Smash the totem first and the others lose their ward.' },
 };

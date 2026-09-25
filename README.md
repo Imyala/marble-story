@@ -97,6 +97,7 @@ dragoness, beneath the eclipse.
   the air pay out if you fly through all of them before the clock runs out.
 - **Shade Drakes.** Wild dragons of the Gloom, built on Aster's own skeleton:
   they bite, pounce from range, sweep with their tails and spit shadow fire.
+  Rime Drakes in the Frostworks spit ice; Storm Drakes at the Falls spit lightning.
 - **Feats, a Bestiary and Dragon Medals.** Long-term feats pay spirit gems;
   every foe you meet gets a Journal page with its weaknesses and Flick's advice;
   finishing a realm shows a results card and a Bronze, Silver or Gold medal.

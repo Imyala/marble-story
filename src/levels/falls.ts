@@ -700,6 +700,8 @@ function ridersAerie(b: Builder): void {
   banner(b, -61.4, 42.2, Y(-61.4, 42.2), 4.2, Math.PI / 2, cloth, false);
   banner(b, -61.4, 47.8, Y(-61.4, 47.8), 4.2, Math.PI / 2, cloth, true);
   b.enemy('shieldbearer', -66, 44, Math.PI / 2);
+  // A Storm Drake perches on the aerie's edge.
+  b.enemy('stormDrake', -61, 48, Math.PI / 2);
   b.story('hall', -61, 45, 3.5, () => say('The Riders\' Hall. That back room is barricaded... wood burns, and wood breaks, Aster!', 6));
   b.gemLine([[-52, 61], [-58, 52], [-61, 45]]);
 

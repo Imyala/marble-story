@@ -901,6 +901,18 @@ export const DRAKE_LOOK: DragonLook = {
   scale: 1.08, hornStyle: 'blade', tailStyle: 'scythe', slender: 0.75, glowEyes: true,
 };
 
+/** A drake that has fed on the Frostworks' cold. */
+export const RIME_DRAKE_LOOK: DragonLook = {
+  body: 0x7aa4c8, belly: 0xdcefff, horn: 0xf4fbff, membrane: 0x4a7ab8, eye: 0x9fe8ff, spikes: 0xe8f6ff,
+  scale: 1.08, hornStyle: 'crown', tailStyle: 'fan', slender: 0.7, glowEyes: true,
+};
+
+/** A drake crackling with the Stormspire's lightning. */
+export const STORM_DRAKE_LOOK: DragonLook = {
+  body: 0x2a3658, belly: 0x6a86b8, horn: 0xe8f4ff, membrane: 0x3ac8f0, eye: 0xe8fbff, spikes: 0x9fe0ff,
+  scale: 1.08, hornStyle: 'blade', tailStyle: 'arrow', slender: 0.8, glowEyes: true,
+};
+
 export class DrakeModel implements EnemyModel {
   readonly root = new THREE.Group();
   private rig: DragonRig;

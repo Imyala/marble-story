@@ -1,5 +1,5 @@
 import type { EnemyDef } from './enemy';
-import { DrakeModel, ImpModel, WispModel, GolemModel, CrawlerModel, TotemModel, DummyModel } from './models';
+import { DrakeModel, RIME_DRAKE_LOOK, STORM_DRAKE_LOOK, ImpModel, WispModel, GolemModel, CrawlerModel, TotemModel, DummyModel } from './models';
 
 /**
  * The roster. Each enemy is built to ask a different question of the player:
@@ -174,6 +174,34 @@ export const ENEMIES: Record<string, EnemyDef> = {
         projectile: { speed: 15, radius: 0.4, damage: 9, type: 'shadow', color: 0xff3060, life: 2.5, gravity: 0, count: 3, spread: 0.18 } },
     ],
     build: () => new DrakeModel(),
+    styleValue: 1.5,
+  },
+  frostDrake: {
+    id: 'frostDrake', name: 'Rime Drake', hp: 105, radius: 0.7, height: 1.4, speed: 6.0, turnRate: 6, mass: 0.55, poise: 30,
+    resist: { ice: 0, fire: 1.45, shadow: 0.6 }, statusResist: { ice: 0, fire: 1.3 }, aggroRange: 20,
+    gems: { blue: 14, red: 1, purple: 1 },
+    attacks: [
+      { id: 'bite', pose: 'horn1', range: 2.3, windup: 0.45, active: 0.18, recover: 0.5, cooldown: 1.1, weight: 3, kind: 'melee', damage: 10, knockback: 5, hitRange: 1.8, hitArc: 1.0, lunge: 5, type: 'ice' },
+      { id: 'pounce', pose: 'horn3', range: 8, minRange: 3.5, windup: 0.65, active: 0.34, recover: 0.75, cooldown: 3.5, weight: 2, kind: 'melee', damage: 13, knockback: 8, hitRange: 1.6, hitArc: 1.0, lunge: 16 },
+      { id: 'tail', pose: 'tail1', range: 2.6, windup: 0.5, active: 0.22, recover: 0.55, cooldown: 2.5, weight: 1, kind: 'melee', damage: 11, knockback: 7, hitRange: 2.4, hitArc: 2.8 },
+      { id: 'spit', pose: 'spit', range: 15, minRange: 5, windup: 0.8, active: 0.1, recover: 0.6, cooldown: 3.2, weight: 2, kind: 'projectile', damage: 9, knockback: 3, type: 'ice',
+        projectile: { speed: 14, radius: 0.45, damage: 9, type: 'ice', color: 0x9fe8ff, life: 2.5, gravity: 0, count: 3, spread: 0.2 } },
+    ],
+    build: () => new DrakeModel(RIME_DRAKE_LOOK),
+    styleValue: 1.5,
+  },
+  stormDrake: {
+    id: 'stormDrake', name: 'Storm Drake', hp: 95, radius: 0.7, height: 1.4, speed: 6.8, turnRate: 6.5, mass: 0.6, poise: 25,
+    resist: { lightning: 0, earth: 1.45, shadow: 0.6 }, statusResist: { lightning: 0 }, aggroRange: 22,
+    gems: { blue: 14, red: 1, purple: 1 },
+    attacks: [
+      { id: 'bite', pose: 'horn1', range: 2.3, windup: 0.4, active: 0.18, recover: 0.45, cooldown: 1.0, weight: 3, kind: 'melee', damage: 10, knockback: 5, hitRange: 1.8, hitArc: 1.0, lunge: 6, type: 'lightning' },
+      { id: 'pounce', pose: 'horn3', range: 9, minRange: 3.5, windup: 0.55, active: 0.34, recover: 0.7, cooldown: 3.2, weight: 2, kind: 'melee', damage: 13, knockback: 8, hitRange: 1.6, hitArc: 1.0, lunge: 18 },
+      { id: 'tail', pose: 'tail1', range: 2.6, windup: 0.5, active: 0.22, recover: 0.55, cooldown: 2.5, weight: 1, kind: 'melee', damage: 11, knockback: 7, hitRange: 2.4, hitArc: 2.8 },
+      { id: 'spit', pose: 'spit', range: 16, minRange: 5, windup: 0.7, active: 0.1, recover: 0.55, cooldown: 2.8, weight: 2, kind: 'projectile', damage: 8, knockback: 3, type: 'lightning',
+        projectile: { speed: 20, radius: 0.35, damage: 8, type: 'lightning', color: 0xbfe8ff, life: 2, gravity: 0, count: 1, spread: 0 } },
+    ],
+    build: () => new DrakeModel(STORM_DRAKE_LOOK),
     styleValue: 1.5,
   },
   dummy: {

@@ -698,6 +698,8 @@ function cuttersCamp(b: Builder): void {
   b.enemy('grunt', -31.2, 57.4, -Math.PI / 2);
   b.enemy('grunt', -33.6, 60.6, -Math.PI / 2);
   b.enemy('sapper', -36.8, 55.4, Math.PI / 2);
+  // A Rime Drake keeps the cutters' camp.
+  b.enemy('frostDrake', -31, 51.5, -Math.PI / 2);
   b.breakables('keg', [[-30.2, 58.4], [-34.4, 57.2]]);
   b.pile(-36.6, 61.8, 0.9, 3, ['barrel', 'crate', 'basket']);
   b.pile(-28.8, 63.4, 0.9, 4, ['crate', 'barrel', 'crate', 'urn']);

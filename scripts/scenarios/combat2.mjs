@@ -28,7 +28,9 @@ export default async function (h) {
     p.setState('move'); p.move = null;
     p.lastEnded = { id: 'horn2', t: p.clock - 0.25 };
     g.input.simulate('horn', true);
-    return new Promise((res) => setTimeout(() => { g.input.simulate('horn', false); res({ state: p.state, move: p.move?.id }); }, 400));
+    // Let 0.4 s of game time pass (a wall-clock timer would depend on the frame rate).
+    const t0 = g.realTime;
+    return new Promise((res) => { const tick = () => { if (g.realTime - t0 < 0.4) { requestAnimationFrame(tick); return; } g.input.simulate('horn', false); res({ state: p.state, move: p.move?.id }); }; tick(); });
   });
   h.check('horn, horn, pause, horn gives a flurry', fl.move === 'flurry', JSON.stringify(fl));
   await h.wait(900);
@@ -42,7 +44,10 @@ export default async function (h) {
     if (sp > 7.6) break;
     await h.wait(40);
   }
-  await h.tap('KeyJ', 1, 300);
+  await h.eval(() => window.wyrm.input.simulate('horn', true));
+  await h.wait(120);
+  await h.eval(() => window.wyrm.input.simulate('horn', false));
+  await h.wait(300);
   await h.page.keyboard.up('KeyW');
   mv = await h.eval(() => window.__moves.slice());
   h.check('horn while running is a lunge', mv[0] === 'lunge', mv.join(','));
@@ -85,8 +90,10 @@ export default async function (h) {
   await h.eval(() => { window.__moves.length = 0; for (const e of window.wyrm.enemies) if (e.alive) e.die(null); });
   await h.wait(500);
   await h.page.keyboard.down('KeyW');
-  await h.tap('ShiftLeft', 1, 200);
-  await h.tap('KeyJ', 1, 300);
+  await h.wait(300);
+  const tapAction = async (a, gap) => { await h.eval((a) => window.wyrm.input.simulate(a, true), a); await h.wait(60); await h.eval((a) => window.wyrm.input.simulate(a, false), a); await h.wait(gap); };
+  await tapAction('dodge', 120);
+  await tapAction('horn', 300);
   await h.page.keyboard.up('KeyW');
   mv = await h.eval(() => window.__moves.slice());
   h.check('dodge into horn is a dodge strike', mv.includes('lunge'), mv.join(','));

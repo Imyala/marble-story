@@ -161,15 +161,16 @@ export default async function (h) {
   h.check('Skrieka defeated', b && !b.alive, JSON.stringify(b));
   await step(h, 0.8);
   await shot(h, 'boss-death');
-  // The outro waits two real seconds.
-  await h.wait(2300);
-  await step(h, 0.5);
+  // The outro waits two seconds of game time.
+  await step(h, 2.4);
   s = await snap(h);
   h.check('rescue dialogue', s.state === 'dialogue', JSON.stringify(s));
   await shot(h, 'boss-rescue');
   await skip(h, 20);
   for (let i = 0; i < 10; i++) {
     await step(h, 0.3);
+    // The Realm Restored card waits for Continue before the journey home.
+    await h.eval(() => document.querySelector('.panel.results button')?.click());
     const lvl = await h.eval(() => window.wyrm.level?.def.id);
     if (lvl === 'sanctum') break;
   }

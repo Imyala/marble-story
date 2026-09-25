@@ -63,7 +63,8 @@ export default async function (h) {
   h.check('air combo keeps hitting', s2.combo >= 4, JSON.stringify(s2));
   await h.wait(1500);
   // Kill it and collect gems.
-  await h.eval(() => { const e = window.__e; if (e.alive) e.hp = 1; });
+  // Wherever the air combo left it, stand just in front of it for the final blow.
+  await h.eval(() => { const g = window.wyrm; const e = window.__e; if (e.alive) { e.hp = 1; g.player.place(e.x, e.y + 0.05, e.z - 1.6, 0); g.player.yaw = 0; } });
   await h.tap('KeyJ', 2, 200);
   await waitGame(2.5);
   s = await h.state();

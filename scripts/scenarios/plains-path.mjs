@@ -122,6 +122,8 @@ export default async function (h) {
     const e = g.enemies.find((q) => q.alive && q.def.id === 'stoneGolem' && q.state !== 'spawn');
     if (!e) return null;
     g.player.hp = g.player.maxHp;
+    // Hold its swings so a knockdown cannot eat the tail press.
+    e.globalCd = 99;
     g.player.place(e.x, e.y + 0.05, e.z - 2.6, 0);
     g.player.yaw = 0;
     g.cam.snapBehind(0);
@@ -132,6 +134,8 @@ export default async function (h) {
   const chill = await h.eval(() => (window.__golem ? { frozen: window.__golem.status.frozen, hp: Math.round(window.__golem.hp) } : { frozen: 0 }));
   const r0 = await h.eval(() => window.wyrm.save.stats.reactions);
   await h.eval(() => { const g = window.wyrm; const e = window.__golem; if (e) { g.player.place(e.x, e.y + 0.05, e.z - 2.4, 0); g.player.yaw = 0; } });
+  // Let the breath wind down first: a Tail pressed mid-breath is not taken.
+  await h.wait(250);
   await h.tap('KeyE', 1, 1500);
   const r1 = await h.eval(() => window.wyrm.save.stats.reactions);
   h.check('ice freezes a golem and the tail shatters it', chill.frozen > 0 && r1 > r0, `golem ${JSON.stringify(golem)} after ice ${JSON.stringify(chill)} reactions ${r0}->${r1}`);

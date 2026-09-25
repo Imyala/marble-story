@@ -28,11 +28,14 @@ async function gameWait(ms) {
   const now = () => page.evaluate(() => window.wyrm?.realTime ?? null).catch(() => null);
   const t0 = process.env.WALL ? null : await now();
   if (t0 === null) return page.waitForTimeout(ms);
-  const deadline = Date.now() + ms * 12;
+  const start = Date.now();
+  const deadline = start + ms * 12;
   for (;;) {
     await page.waitForTimeout(Math.min(40, ms));
     const t = await now();
     if (t === null || (t - t0) * 1000 >= ms || Date.now() > deadline) return;
+    // Frames stepped by the scenario itself (game time frozen between steps): plain wall wait.
+    if (t === t0 && Date.now() - start >= ms) return;
   }
 }
 
@@ -45,7 +48,7 @@ const h = {
   },
   wait: (ms) => gameWait(ms),
   async hold(key, ms) { await page.keyboard.down(key); await gameWait(ms); await page.keyboard.up(key); },
-  async tap(key, n = 1, gap = 120) { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await page.waitForTimeout(gap); } },
+  async tap(key, n = 1, gap = 120) { for (let i = 0; i < n; i++) { await page.keyboard.press(key); await gameWait(gap); } },
   eval: (fn, arg) => page.evaluate(fn, arg),
   /** Presses Esc only while a conversation is open. */
   async skipDialogue(maxWait = 3000) {

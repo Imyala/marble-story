@@ -30,7 +30,7 @@ export default async function (h) {
     h.check('climb the lookout stones', ok);
     await h.eval(([x, z]) => { const g = window.wyrm; const p = g.player; const y = Math.atan2(x - p.x, z - p.z); p.yaw = y; g.cam.snapBehind(y, 0.2); }, [heart[0], heart[2]]);
     await shot(h, 'secret-veil-view');
-    let s = await glideJump(h, 1.1);
+    let s = await glideJump(h, 1.3);
     await releaseAll(h);
     s = s.concat(await (async () => { const out = []; for (let i = 0; i < 12; i++) { await step(h, 0.1); out.push(await snap(h)); } return out; })());
     const got = await found(h, 'heart1');

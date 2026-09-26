@@ -112,11 +112,22 @@ export class Hud {
   /** Says what is loading, or what failed to, over everything else. */
   private veil: HTMLDivElement;
   private veilT: ReturnType<typeof setTimeout> | null = null;
+  /** The failed-load veil's highlighted button (what Enter or the pad's confirm presses). */
+  private veilFocus: HTMLButtonElement | null = null;
+
+  /** Presses the failed-load veil's highlighted button; false when there is none. */
+  pressVeil(): boolean {
+    const b = this.veilFocus;
+    if (!b) return false;
+    b.click();
+    return true;
+  }
 
   /** Shows `text` after a moment (quick loads never flash it), or hides the veil (null). */
   loading(text: string | null): void {
     if (this.veilT) clearTimeout(this.veilT);
     this.veilT = null;
+    this.veilFocus = null;
     if (text === null) {
       this.veil.className = 'load-veil';
       this.veil.innerHTML = '';
@@ -128,8 +139,12 @@ export class Hud {
     }, 250);
   }
 
-  /** A realm's code would not load: say so plainly, with a retry (and a way to stay, when there is one). */
-  loadFailed(name: string, retry: () => void, stay: (() => void) | null): void {
+  /**
+   * A realm's code would not load: say so plainly, with a retry, a way to
+   * stay (when there is a realm to stay in) and a reload. `again`: the
+   * retry failed too, so the reload is the one to try.
+   */
+  loadFailed(name: string, retry: () => void, stay: (() => void) | null, again = false): void {
     if (this.veilT) clearTimeout(this.veilT);
     this.veilT = null;
     // The boot splash would sit over the message.
@@ -137,7 +152,7 @@ export class Hud {
     this.veil.className = 'load-veil on failed';
     this.veil.innerHTML = `<div class="panel load-fail"><h2>The way is shut</h2>
       <p>${name} could not be loaded. The connection may have dropped, or the game has been updated since this page was opened.</p>
-      <p class="sub">Try again, or reload the page (your progress is saved).</p><div class="menu-list"></div></div>`;
+      <p class="sub">${again ? 'Still shut. Reloading the page usually opens it' : 'Try again, or reload the page'} (your progress is saved).</p><div class="menu-list"></div></div>`;
     const list = this.veil.querySelector('.menu-list')!;
     const button = (label: string, fn: () => void) => {
       const b = el('button', 'btn', label);
@@ -148,12 +163,14 @@ export class Hud {
       list.appendChild(b);
       return b;
     };
-    button('Try again', retry).classList.add('focus');
+    const again1 = button('Try again', retry);
     if (stay) button('Stay here', stay);
-    button('Reload the page', () => {
+    const reload = button('Reload the page', () => {
       this.game.saveNow();
       location.reload();
     });
+    this.veilFocus = again ? reload : again1;
+    this.veilFocus.classList.add('focus');
   }
 
   private build(): void {

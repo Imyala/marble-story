@@ -11,7 +11,8 @@ export default defineConfig({
       input: 'dev.html',
       output: {
         // three.js gets a chunk of its own, so a game update does not make
-        // players download it again. Each realm (src/levels/index.ts loads
+        // players download it again (unless the game starts using parts of
+        // three.js it did not before). Each realm (src/levels/index.ts loads
         // them on demand) lands in its own chunk automatically.
         manualChunks(id) {
           if (/[\\/]node_modules[\\/]three[\\/]/.test(id)) return 'three';

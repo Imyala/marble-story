@@ -457,7 +457,7 @@
 .load-veil { position: absolute; inset: 0; z-index: 50; display: none; place-items: center; pointer-events: none; font-family: var(--sans); color: var(--text); }
 .load-veil.on { display: grid; }
 .load-veil.failed { pointer-events: auto; background: rgba(4, 2, 10, .82); }
-.load-note { position: absolute; left: 50%; bottom: 12%; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+.load-note { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 10px;
   font: italic 17px var(--serif); letter-spacing: .12em; color: #d8c8ff; text-shadow: 0 2px 8px #000; white-space: nowrap; }
 .load-note i { width: 10px; height: 10px; transform: rotate(45deg); background: var(--gold); animation: loadPulse 1s ease-in-out infinite; }
 @keyframes loadPulse { 50% { opacity: .25; transform: rotate(225deg); } }

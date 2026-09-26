@@ -355,6 +355,7 @@ export class Game {
     }
     const name = LEVEL_INFO[need]?.name ?? need;
     return new Promise<void>((resolve) => {
+      let fails = 0;
       const attempt = () => {
         this.loadFail = null;
         this.hud.loading(`Loading ${name}...`);
@@ -363,7 +364,8 @@ export class Game {
           fn();
           resolve();
         }, (err: unknown) => {
-          console.error(`could not load realm "${need}"`, err);
+          fails++;
+          console.warn(`could not load realm "${need}"`, err);
           // Staying put is only possible with a realm to stay in (not at boot).
           const stay = this.level ? () => {
             this.loadFail = null;
@@ -379,7 +381,8 @@ export class Game {
             resolve();
           } : null;
           this.loadFail = { retry: attempt, cancel: stay };
-          this.hud.loadFailed(name, attempt, stay);
+          // (Browsers may remember a failed fetch for the rest of the page's life: then only a reload helps.)
+          this.hud.loadFailed(name, attempt, stay, fails > 1);
         });
       };
       attempt();
@@ -539,6 +542,17 @@ export class Game {
     this.realTime += dt;
     WIND.value += dt;
     this.input.update(dt);
+    // A realm that would not load: the veil's buttons, from the keyboard or a pad (before any menu sees the press).
+    const fail = this.loadFail;
+    if (fail) {
+      if (this.input.take('confirm', 0.2) || this.input.take('interact', 0.2)) {
+        if (!this.hud.pressVeil()) fail.retry();
+      } else if (fail.cancel && this.input.take('back', 0.2)) {
+        // The same Esc also reads as Pause: eat it, or staying would pause at once.
+        this.input.consume('pause');
+        fail.cancel();
+      }
+    }
 
     switch (this.state) {
       case 'title':
@@ -697,10 +711,6 @@ export class Game {
       }
     } else if (this.transitionPhase === 'hold') {
       this.hud.fade(1);
-      // The loading veil's buttons, from the keyboard or a pad.
-      const f = this.loadFail;
-      if (f && (this.input.take('confirm', 0.2) || this.input.take('interact', 0.2))) f.retry();
-      else if (f?.cancel && this.input.take('back', 0.2)) f.cancel();
     } else {
       this.hud.fade(1 - Math.min(1, this.transitionT / 0.5));
       if (this.transitionT >= 0.5) {

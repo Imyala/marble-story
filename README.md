@@ -36,6 +36,7 @@ dragoness, beneath the eclipse.
 | Stonewild Plains | Grasslands, geysers and standing stones. Boss: Graveljaw, the Burrow Wyrm. Learn Earth |
 | Eclipse Keep | Nyxa's fortress. Every element, the hardest fights, the finale of Act I |
 | The Hollow Gate | **Act II begins.** After the Keep, the Hollow King's roots split the Sanctum's lawn. Below lies a glowing cavern: a lake to swim and dive in, Burrowfolk to help, dragon ruins, and four sealed gates to Act II's realms |
+| The Mycelium Deep | **Act II's first realm**, behind the Hollow's eastern gate, which opens for a dragon who has returned twelve eggs. A fungal underworld: bounce-cap climbs, glowthreads to light, spore vents and blight clouds, cocooned Burrowfolk to free. Boss: Mycora, the Spore Mother |
 
 Once the Keep is done, **Nyxa travels with Aster** as a partner dragon: she
 follows, fights beside you (flanking shields, finishing frozen foes, a rising
@@ -71,7 +72,7 @@ where you tell her for puzzles built for two.
 - **Things to find and smash.** Crates, barrels, urns, baskets, Gloom pods and
   powder kegs (fire sets them off, and they chain) spill gems; treasure chests
   open once per save. Lore letters from the people of each realm are kept in
-  the Journal. Twenty-eight lost dragon eggs are hidden across the realms, and
+  the Journal. Forty lost dragon eggs are hidden across the realms, and
   returning them earns Aster new scales to wear. The pause screen counts each
   realm's secrets, eggs and letters.
 - **Dragon Trials.** Six optional challenge fights on the Sanctum training
@@ -104,6 +105,11 @@ where you tell her for puzzles built for two.
 - **Shade Drakes.** Wild dragons of the Gloom, built on Aster's own skeleton:
   they bite, pounce from range, sweep with their tails and spit shadow fire.
   Rime Drakes in the Frostworks spit ice; Storm Drakes at the Falls spit lightning.
+- **The Deep's own foes.** Sporelings swarm and burst into stinging spore
+  clouds (unless they die burning or shattered); Puffcaps lob spore bombs and
+  grow more sporelings; Rootstalkers burrow and erupt under you until Earth or a
+  Ground Pound flips them belly-up; Thornspitters duck underground when you
+  close in and come back up dazed.
 - **Feats, a Bestiary and Dragon Medals.** Long-term feats pay spirit gems;
   every foe you meet gets a Journal page with its weaknesses and Flick's advice;
   finishing a realm shows a results card and a Bronze, Silver or Gold medal.
@@ -132,7 +138,7 @@ where you tell her for puzzles built for two.
   moths wander each realm and scatter from Aster. Roast or ram one and it
   leaves a butterfly that Flick eats to mend you; Flick's glow shows your
   health, gold to blue to a flickering green.
-- **Skill Points.** Twelve optional challenges, two per realm: bowl over three
+- **Skill Points.** Sixteen optional challenges, two or three per realm: bowl over three
   foes in one supercharged charge, light every rune in the Sanctum's rune ring
   in one charge, beat each boss without a scratch (a beaten boss waits by a
   standing stone for a rematch), and more. The Journal keeps the list.
@@ -159,6 +165,10 @@ where you tell her for puzzles built for two.
   (cavern walls, fungal groves, ruined halls, the Hollow King's roots, sealed
   gates, docks, statues) and a realm template that lays out a whole route,
   its arenas and its secret pockets from a short description.
+- **Quick to start, safe to update.** Each realm downloads the first time you
+  go there (the realms you have unlocked are fetched quietly in the
+  background), and saves from any earlier version are upgraded when they load;
+  a save that cannot be read is set aside, never lost.
 - **Accessibility.** A Reduced flashing option softens lightning, lens effects
   and hit flashes; touch and gamepad players see their own buttons named in
   tutorials; screen shake, camera and damage numbers are all adjustable.
@@ -209,7 +219,7 @@ graphics quality and difficulty (Story, Adventurer, Legend).
 | `npm run play <scenario>[:<part>]` | Runs `scripts/scenarios/<scenario>.mjs` (or one named export of it, e.g. `puzzles:keep`) against the dev server |
 
 URL parameters for development: `?level=<id>` skips the title and loads a realm
-(`fen`, `sanctum`, `falls`, `frostworks`, `plains`, `keep`), `&cp=<wardstone>`
+(`fen`, `sanctum`, `falls`, `frostworks`, `plains`, `keep`, `hollow`, `mycelium`), `&cp=<wardstone>`
 starts at a checkpoint, `&seed=<n>` makes random rolls reproducible,
 `&quality=low|medium|high` overrides graphics, and `&maxdt=0.25` lets slow
 software rendering keep real time in automated tests.
@@ -231,7 +241,7 @@ src/player/    dragon rig, player controller and combos, elements, Flick
 src/combat/    statuses and reactions, style meter
 src/enemies/   enemy AI, roster, models, and one file per boss
 src/entities/  projectiles, gems, and props (gates, switches, torches, platforms...)
-src/levels/    one file per realm, plus shared story helpers
+src/levels/    one file per realm (each built into its own chunk), plus shared story helpers
 src/game/      the game loop, camera, progression and saves, story text
 src/ui/        HUD, dialogue, menus
 tests/         unit tests

@@ -874,7 +874,9 @@ class QuestItem implements Prop, Removable {
     if (this.kind === 'page') this.root.rotation.z = Math.sin(this.t * 1.7) * 0.25;
     if (Math.random() < dt * 5) g.fx.sparkle(this.x, this.y + 1.1, this.z, this.kind === 'flame' ? 0xffc060 : 0xffe8a0, 1);
     const p = g.player.body;
-    if (g.player.alive && Math.hypot(p.x - this.x, p.y + 0.6 - (this.y + 1.1), p.z - this.z) < 1.7) this.take();
+    // A squat reach (1.7 m across, about 1.2 m up and down): a swimmer at the surface cannot scoop
+    // up something lying on the bed below; she has to dive for it.
+    if (g.player.alive && Math.hypot(p.x - this.x, (p.y + 0.6 - (this.y + 1.1)) * 1.4, p.z - this.z) < 1.7) this.take();
   }
 
   private take(): void {

@@ -334,7 +334,7 @@ export class Game {
     b.finish();
     this.renderer.backdrop.apply(BACKDROPS[def.id], def.sky, level.waterLevel > -1e3 ? level.waterLevel - 0.5 : -2);
     this.weather.apply(WEATHER[def.id]);
-    this.audio.setAmbience((['fen', 'sanctum', 'falls', 'frostworks', 'plains', 'keep', 'hollow'] as const).find((k) => k === def.id) ?? null);
+    this.audio.setAmbience((['fen', 'sanctum', 'falls', 'frostworks', 'plains', 'keep', 'hollow', 'mycelium'] as const).find((k) => k === def.id) ?? null);
     this.cam.collectOccluders(level.root);
     for (const s of this.pendingSpawns) this.spawnEnemy(s.type, s.x, s.y, s.z, s.yaw, false);
     this.pendingSpawns = [];

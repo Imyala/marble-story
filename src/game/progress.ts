@@ -151,6 +151,7 @@ export const SKINS: SkinDef[] = [
   { id: 'rime', name: 'Rimefrost', eggs: 15, look: { body: 0x8ac0e8, belly: 0xf0f8ff, horn: 0xffffff, membrane: 0xbfe8ff, spikes: 0xffffff, eye: 0x40c0ff } },
   { id: 'moss', name: 'Mossback', eggs: 20, look: { body: 0x4a8a3a, belly: 0xd0b870, horn: 0x8a6a4a, membrane: 0xa0c060, spikes: 0x8a6a4a, eye: 0xffb030 } },
   { id: 'eclipse', name: 'Eclipse', eggs: 28, look: { body: 0x1a1428, belly: 0xc070ff, horn: 0xe8e0ff, membrane: 0x7a30c0, spikes: 0xe8e0ff, eye: 0xff80e0, glowEyes: true } },
+  { id: 'sporelight', name: 'Sporelight', eggs: 36, look: { body: 0x3a2a5e, belly: 0xffd070, horn: 0xeadcff, membrane: 0x3ae0c8, spikes: 0xffc850, eye: 0x9affe8, glowEyes: true } },
   // Legend scales: earned by finishing the story, then again on New Game+.
   { id: 'ascendant', name: 'Ascendant', eggs: 0, clears: 1, look: { body: 0xf4ecd8, belly: 0xe8b84a, horn: 0xffd870, membrane: 0xffe6a0, spikes: 0xffd870, eye: 0x60e0ff, glowEyes: true } },
   { id: 'voidfire', name: 'Voidfire', eggs: 0, clears: 2, look: { body: 0x0c0a12, belly: 0x2a1a3a, horn: 0xff6a20, membrane: 0xff4a10, spikes: 0xff8a30, eye: 0xffa020, glowEyes: true } },
@@ -173,7 +174,7 @@ export function skinUnlocked(s: SaveData, id: string): boolean {
 }
 
 /** Target times through each realm (seconds): beat them for the Swift Wings feat. */
-export const PAR_TIMES: Record<string, number> = { fen: 8 * 60, falls: 12 * 60, frostworks: 12 * 60, plains: 13 * 60, keep: 14 * 60 };
+export const PAR_TIMES: Record<string, number> = { fen: 8 * 60, falls: 12 * 60, frostworks: 12 * 60, plains: 13 * 60, keep: 14 * 60, mycelium: 18 * 60 };
 
 export const clock = (secs: number): string => `${Math.floor(secs / 60)}:${String(Math.floor(secs % 60)).padStart(2, '0')}`;
 

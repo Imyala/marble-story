@@ -25,6 +25,7 @@ export const REALM_CRITTERS: Record<string, CritterKind[]> = {
   plains: ['sheep', 'beetle', 'hare'],
   keep: ['moth'],
   hollow: ['beetle', 'moth'],
+  mycelium: ['moth', 'beetle', 'frog'],
 };
 
 const SPEC: Record<CritterKind, { walk: number; run: number; hop: boolean; hover: number; voice: Sfx; pitch: number }> = {

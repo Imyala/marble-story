@@ -1185,3 +1185,44 @@ class QuestGoat implements Prop, Removable {
     this.game.level?.root.remove(this.root);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Act II: the Mycelium Deep. The giver, Bramble, is one of the foragers Aster
+// cuts out of a cocoon in the Rotting Market (src/levels/mycelium.ts); the
+// quest's lamps are placed here, like the other realms' quest things.
+// ---------------------------------------------------------------------------
+
+/** Where Bramble stands once freed, and where the foragers' three lost lamps went. */
+const MYC = {
+  bramble: { level: 'mycelium', x: 70.5, z: 180.5, label: 'Bramble' },
+  lampPools: { level: 'mycelium', x: 55, z: 35, label: 'A forager\'s lamp, under the water' },
+  lampWall: { level: 'mycelium', x: -7.4, z: 77.8, label: 'A forager\'s lamp, high on the Capstair\'s west wall' },
+  lampHollow: { level: 'mycelium', x: 29, z: 166.5, label: 'A forager\'s lamp, in the Strangled Hollow' },
+} satisfies Record<string, QuestSpot>;
+const MYC_LAMPS = [MYC.lampPools, MYC.lampWall, MYC.lampHollow];
+
+SIDE_QUESTS.push({
+  id: 'mycelium-lamps', title: 'Lamps for the Lost', giver: 'Bramble, forager of Lanternhollow', realm: 'mycelium', giverAt: MYC.bramble,
+  desc: 'A forager\'s lamp leads her home. When the Spore Mother\'s silk took Bramble\'s party, three of their lamps rolled away into the Deep, and without them the others will never find the way back.',
+  steps: [
+    { text: 'Find the foragers\' three lost lamps ({n}/{goal})', on: { event: 'item', id: /^myc-lamp-\d$/, count: 3 },
+      at: (g) => MYC_LAMPS.filter((_, i) => !g.quests.hasItem('mycelium-lamps', `myc-lamp-${i}`)) },
+    { text: 'Bring the lamps back to Bramble in the Rotting Market', on: { event: 'talk', id: 'bramble' }, at: [MYC.bramble] },
+  ],
+  reward: {
+    gems: 110,
+    page: { title: 'The Foragers\' Rule', from: 'Bramble', text: 'Go down with a lamp. Come up with a lamp. Leave a lamp at every turning, so the ones behind you can see where you went. And if you find somebody else\'s lamp in the dark, carry it home for them. That is the whole of the rule. The rest is mushrooms.' },
+  },
+  // Offered once Bramble is out of her cocoon.
+  available: (g) => !!g.save.found['story:mycelium:freed-bramble'],
+});
+
+/** The Mycelium Deep: the lamps, one in the pools (a dive), one on a high ledge, one past the roots. */
+function buildMycelium(b: Builder): void {
+  const g = b.game;
+  const lamps = new Stage(g, 'mycelium-lamps');
+  b.level.props.push(lamps);
+  MYC_LAMPS.forEach((at, i) => lamps.item(`myc-lamp-${i}`, 'flame', at.x, at.z, 'A forager\'s lamp', (s) => s === 0));
+  lamps.sync();
+}
+BUILD.mycelium = buildMycelium;

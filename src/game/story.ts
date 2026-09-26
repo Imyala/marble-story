@@ -25,6 +25,12 @@ export const SPEAKERS: Record<string, { name: string; color: string }> = {
   mossa: { name: 'Elder Mossa', color: '#ffc890' },
   tallow: { name: 'Tallow the Lampwright', color: '#ffe08a' },
   pip: { name: 'Pip', color: '#9af0dc' },
+  // Act II: the Mycelium Deep's foragers, and the Spore Mother.
+  bramble: { name: 'Bramble the Forager', color: '#c8e070' },
+  pickle: { name: 'Pickle', color: '#ffb0c8' },
+  burdock: { name: 'Old Burdock', color: '#d8c090' },
+  tansy: { name: 'Tansy', color: '#a0e8ff' },
+  mycora: { name: 'Mycora, the Spore Mother', color: '#e8a8ff' },
 };
 
 export const PROLOGUE = [
@@ -75,6 +81,7 @@ export const LEVEL_INFO: Record<string, LevelInfo> = {
   keep: { name: 'Eclipse Keep', blurb: 'Nyxa\'s fortress beneath the darkened moons.', collectibles: 5 },
   // Act II: the Hollow Below.
   hollow: { name: 'The Hollow Gate', blurb: 'A glowing cavern under the Sanctum, where the Hollow King\'s roots reach up from the deep.', collectibles: 3 },
+  mycelium: { name: 'The Mycelium Deep', blurb: 'A fungal underworld the size of a country, where the Spore Mother feeds the Hollow King\'s roots.', collectibles: 3 },
 };
 
 export const RELICS: Record<string, { title: string; text: string; level: string }> = {
@@ -97,6 +104,8 @@ export const RELICS: Record<string, { title: string; text: string; level: string
   keep3: { level: 'keep', title: 'The Last Page', text: 'If a violet dragon rises again, they will stand where I stood, and choose what I could not. (Torn from a Warden\'s journal.)' },
   hollow1: { level: 'hollow', title: 'The Hollow Gate', text: 'Before there was a Sanctum in the sky, dragons nested below, by a lake that shone like the moons. The four sealed ways led to the first hatcheries, the mines and the drowned towns. The Wardens went up into the light. Not everyone followed.' },
   hollow2: { level: 'hollow', title: 'Roots of the King', text: 'The Hollow King does not grow roots. He is the roots. Wherever they reach, light goes quiet, and he listens.' },
+  myc1: { level: 'mycelium', title: 'The Old Gardens', text: 'Before the Sanctum, the old dragons grew gardens under the world: caps as tall as towers, and threads of light to carry warmth from the deep springs to the nurseries. They called the oldest cap Mother, and she listened, and she was kind.' },
+  myc2: { level: 'mycelium', title: 'A Marriage of Roots', text: 'The King\'s roots cannot find the light on their own. They need threads fine enough to feel for it in the dark. Whoever gave him the threads gave him the whole underworld.' },
 };
 
 export const ENDING = [

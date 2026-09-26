@@ -633,11 +633,11 @@ export async function critters(h) {
   await h.page.addInitScript(() => localStorage.clear());
   await h.go('?level=fen&seed=5&quality=low&maxdt=0.1', 2500);
   await h.skipDialogue(6000);
-  const counts = await h.eval(() => {
+  const counts = await h.eval(async () => {
     const g = window.wyrm;
     const out = {};
     for (const id of ['sanctum', 'falls', 'frostworks', 'plains', 'keep', 'fen']) {
-      g.loadLevel(id, {});
+      await g.loadLevel(id, {});
       const cs = g.level.props.filter((p) => p.constructor.name === 'Critter');
       out[id] = cs.map((c) => c.kind).join(',');
     }
@@ -796,7 +796,7 @@ export async function skills(h) {
   h.check('five butterflies in one Fen visit earn a Skill Point', bf.n >= 5 && bf.got, JSON.stringify(bf));
 
   // A beaten realm offers a boss rematch; winning it untouched earns the Skill Point.
-  await h.eval(() => { const g = window.wyrm; g.save.levelsDone.fen = true; g.loadLevel('fen', {}); });
+  await h.eval(() => { const g = window.wyrm; g.save.levelsDone.fen = true; return g.loadLevel('fen', {}); });
   await h.skipDialogue(4000);
   const st = await h.eval(() => {
     const g = window.wyrm;
@@ -867,7 +867,7 @@ export async function replay(h) {
   h.check('when the Rift closes, the best depth is kept', !r2.running && r2.best >= 3, JSON.stringify(r2));
 
   // --- par times ---
-  await h.eval(() => { const g = window.wyrm; g.loadLevel('falls', {}); });
+  await h.eval(() => { const g = window.wyrm; return g.loadLevel('falls', {}); });
   await h.skipDialogue(4000);
   const t = await h.eval(() => {
     const g = window.wyrm; const v = g.visit;

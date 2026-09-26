@@ -11,7 +11,7 @@ export async function waitGame(h, sec) {
 
 /** Loads a realm with Eclipse Keep done (so Nyxa travels along), Aster untouchable and the realm's foes gone. */
 export async function withNyxa(h, level, clearFoes = true) {
-  await h.eval((level) => { const g = window.wyrm; g.save.levelsDone.keep = true; g.loadLevel(level, {}); }, level);
+  await h.eval((level) => { const g = window.wyrm; g.save.levelsDone.keep = true; return g.loadLevel(level, {}); }, level);
   await h.skipDialogue(6000);
   await h.eval((clearFoes) => {
     const g = window.wyrm;

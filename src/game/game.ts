@@ -86,6 +86,9 @@ interface Spikes {
   t: number;
 }
 
+/** A render layer nothing draws: foes lost in the fog wait on it (see fogCull). */
+const FOG_LAYER = 31;
+
 export class Game {
   readonly renderer: Renderer;
   readonly scene: THREE.Scene;
@@ -1046,6 +1049,19 @@ export class Game {
       }
       const depth = (s.center.x - cam.x) * fwd.x + (s.center.y - cam.y) * fwd.y + (s.center.z - cam.z) * fwd.z;
       o.visible = depth - s.radius < far;
+    }
+    // Foes deep in the fog would draw as a faint smudge at best: skip their draws.
+    // A foe's own visibility is game state (burrowed, hidden), so this moves its
+    // meshes to a layer the camera does not render instead of touching it.
+    const deep = fog.near + (fog.far - fog.near) * 0.92;
+    for (const e of this.enemies) {
+      if (e.isBoss) continue;
+      const depth = (e.x - cam.x) * fwd.x + (e.y - cam.y) * fwd.y + (e.z - cam.z) * fwd.z;
+      const hide = depth - e.def.radius * 2 > deep;
+      const root = e.model.root;
+      if (hide === !!root.userData.fogHidden) continue;
+      root.userData.fogHidden = hide;
+      root.traverse((c) => c.layers.set(hide ? FOG_LAYER : 0));
     }
   }
 

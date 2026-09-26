@@ -77,6 +77,8 @@ const RIFT_POOL: { type: string; cost: number; from: number }[] = [
   { type: 'brute', cost: 4, from: 6 }, { type: 'stormWisp', cost: 2.5, from: 7 }, { type: 'stoneGolem', cost: 5, from: 8 },
   { type: 'frostGolem', cost: 5, from: 8 }, { type: 'knight', cost: 5, from: 9 }, { type: 'drake', cost: 6, from: 10 },
   { type: 'totem', cost: 3, from: 11 }, { type: 'frostDrake', cost: 7, from: 13 }, { type: 'stormDrake', cost: 7, from: 15 },
+  // Act II: the Mycelium Deep's foes come through deep in the Rift.
+  { type: 'sporeling', cost: 1, from: 12 }, { type: 'thornspitter', cost: 3, from: 12 }, { type: 'rootstalker', cost: 3.5, from: 14 }, { type: 'puffcap', cost: 4, from: 16 },
 ];
 
 /**

@@ -204,6 +204,50 @@ export const ENEMIES: Record<string, EnemyDef> = {
     build: () => new DrakeModel(STORM_DRAKE_LOOK),
     styleValue: 1.5,
   },
+  // --- Act II: the Mycelium Deep (PLACEHOLDERS: stats and models borrowed from
+  // Act I foes so the realm can be built; the real families replace these). ---
+  sporeling: {
+    id: 'sporeling', name: 'Sporeling', hp: 26, radius: 0.45, height: 1.0, speed: 5, turnRate: 8, mass: 1.2, poise: 0,
+    resist: {}, statusResist: {}, aggroRange: 15,
+    gems: { blue: 4 },
+    attacks: [
+      { id: 'bump', pose: 'swing', range: 1.8, windup: 0.5, active: 0.2, recover: 0.5, cooldown: 1.2, weight: 1, kind: 'melee', damage: 7, knockback: 4, hitRange: 1.3, hitArc: 1.1, lunge: 4 },
+    ],
+    build: () => new ImpModel({ skin: 0x6a4a8a, belly: 0xc890ff, eye: 0xb0ff60, scale: 0.8, bulk: 0.2, ears: 'long', weapon: 'none', offhand: 'none' }),
+    styleValue: 0.8,
+  },
+  puffcap: {
+    id: 'puffcap', name: 'Puffcap', hp: 50, radius: 0.7, height: 1.6, speed: 2.5, turnRate: 5, mass: 0.6, poise: 10,
+    resist: {}, statusResist: {}, aggroRange: 17, keepAway: 8,
+    gems: { blue: 10, green: 1 },
+    attacks: [
+      { id: 'puff', pose: 'cast', range: 14, windup: 0.9, active: 0.1, recover: 0.8, cooldown: 2.6, weight: 1, kind: 'projectile', damage: 8, knockback: 3,
+        projectile: { speed: 10, radius: 0.45, damage: 8, type: 'shadow', color: 0xb0ff60, life: 3, gravity: 6, explode: 2 } },
+    ],
+    build: () => new TotemModel(),
+    styleValue: 1.3,
+  },
+  rootstalker: {
+    id: 'rootstalker', name: 'Rootstalker', hp: 80, radius: 0.8, height: 1.4, speed: 4.4, turnRate: 5, mass: 0.5, poise: 20, armored: true,
+    resist: {}, statusResist: {}, aggroRange: 16,
+    gems: { blue: 14, red: 1 },
+    attacks: [
+      { id: 'bite', pose: 'bite', range: 2.4, windup: 0.5, active: 0.2, recover: 0.5, cooldown: 1.3, weight: 1, kind: 'melee', damage: 11, knockback: 6, hitRange: 1.6, hitArc: 0.9, lunge: 5 },
+    ],
+    build: () => new CrawlerModel(0x2a2230, 0x4a3a5a, 0xb04cff, 1.1),
+    styleValue: 1.7,
+  },
+  thornspitter: {
+    id: 'thornspitter', name: 'Thornspitter', hp: 70, radius: 0.8, height: 2.2, speed: 0, turnRate: 3, mass: 0, poise: 999,
+    resist: {}, statusResist: {}, aggroRange: 18,
+    gems: { blue: 12, green: 2 },
+    attacks: [
+      { id: 'thorns', pose: 'cast', range: 16, windup: 0.8, active: 0.1, recover: 0.8, cooldown: 2.2, weight: 1, kind: 'projectile', damage: 9, knockback: 4,
+        projectile: { speed: 16, radius: 0.3, damage: 9, type: 'shadow', color: 0x8a60a0, life: 2, gravity: 0, count: 3, spread: 0.18 } },
+    ],
+    build: () => new TotemModel(),
+    styleValue: 1.4,
+  },
   dummy: {
     id: 'dummy', name: 'Training Dummy', hp: 60, radius: 0.55, height: 2.2, speed: 0, turnRate: 0, mass: 0.05, poise: 0,
     resist: {}, statusResist: {}, aggroRange: 0,

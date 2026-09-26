@@ -453,11 +453,14 @@ export class Quests {
       const fissure: QuestSpot = { level: 'sanctum', x: 0, z: -25, label: 'The fissure' };
       const myc = 'mycelium';
       const met = !!s.found['story:hollow:mossa'];
-      // Inside the Mycelium Deep: what feeds the roots, then the one feeding them.
+      // Inside the Mycelium Deep: what feeds the roots (the Rootchoke, deep in the realm), then the one
+      // feeding them, in her grove (the fight starts at (0, 204); see src/levels/mycelium.ts).
       if (here === myc && !done(myc)) {
         const n = next(myc);
-        if (n?.label === 'boss') return out(title, 'Defeat Mycora, the Spore Mother', n.spot);
-        return out(title, 'Find what feeds the roots in the Mycelium Deep', n?.spot ?? null);
+        if (n?.label === 'boss' || s.found['story:mycelium:rootchoke']) {
+          return out(title, 'Defeat Mycora, the Spore Mother', { level: myc, x: 0, z: 204, label: 'Mycora\'s Grove' });
+        }
+        return out(title, 'Find what feeds the roots in the Mycelium Deep', { level: myc, x: 24, z: 188, label: 'The Rootchoke' });
       }
       if (here === hollow) {
         const n = next(hollow);
@@ -489,7 +492,9 @@ export class Quests {
       }
       // Mycora has fallen: home to Mossa, and then the next gate (a later chapter).
       if (!s.found['story:hollow:mossa-mycelium']) {
-        return here === hollow ? out(title, 'Return to Elder Mossa', { level: hollow, x: -3, z: -57, label: 'Elder Mossa' }) : out(title, `Return to Elder Mossa in ${inText(hollow)}`, wayDown);
+        if (here === hollow) return out(title, 'Return to Elder Mossa', { level: hollow, x: -3, z: -57, label: 'Elder Mossa' });
+        // From the Deep, the portal home that opens in Mycora's grove.
+        return out(title, `Return to Elder Mossa in ${inText(hollow)}`, here === myc ? { level: myc, x: -3.2, z: 200.5, label: 'The way home' } : wayDown);
       }
       return out(title, 'The Drowned City\'s gate still holds. More of the Hollow\'s folk need you', null);
     }

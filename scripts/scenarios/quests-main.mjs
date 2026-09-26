@@ -106,7 +106,7 @@ export default async function (h) {
   m = await main(h);
   h.check('the gate open: go through', m.text === 'The Mycelium gate is open: go through' && m.spot?.[0] === 'hollow', JSON.stringify(m));
   // Inside the Mycelium Deep (stood in for by this level's id and goals, so the realm's content does not matter).
-  const inDeep = async (fightDone) => h.eval((fightDone) => {
+  const inDeep = async (fightDone, found = null) => h.eval(([fightDone, found]) => {
     const g = window.wyrm;
     const lv = g.level;
     const def = lv.def;
@@ -114,16 +114,20 @@ export default async function (h) {
     lv.def = { ...def, id: 'mycelium' };
     lv.goals.length = 0;
     lv.goals.push({ x: 0, y: 0, z: 120, label: 'fight', done: () => fightDone }, { x: 0, y: 0, z: 204, label: 'boss', done: () => false });
+    if (found) g.save.found[found] = true;
     const mq = g.quests.main();
+    if (found) delete g.save.found[found];
     lv.def = def;
     lv.goals.length = 0;
     lv.goals.push(...goals);
     return { title: mq.title, text: mq.text, spot: mq.spot && [mq.spot.level, Math.round(mq.spot.x), Math.round(mq.spot.z)] };
-  }, fightDone);
+  }, [fightDone, found]);
   m = await inDeep(false);
-  h.check('in the Deep: find what feeds the roots', m.text === 'Find what feeds the roots in the Mycelium Deep' && m.spot?.[0] === 'mycelium', JSON.stringify(m));
+  h.check('in the Deep: find what feeds the roots (the Rootchoke, 24, 188)', m.text === 'Find what feeds the roots in the Mycelium Deep' && JSON.stringify(m.spot) === '["mycelium",24,188]', JSON.stringify(m));
+  m = await inDeep(false, 'story:mycelium:rootchoke');
+  h.check('the Rootchoke found: defeat Mycora at her grove (0, 204)', m.text === 'Defeat Mycora, the Spore Mother' && JSON.stringify(m.spot) === '["mycelium",0,204]', JSON.stringify(m));
   m = await inDeep(true);
-  h.check('its fights won: defeat Mycora at her grove (0, 204)', m.text === 'Defeat Mycora, the Spore Mother' && JSON.stringify(m.spot) === '["mycelium",0,204]', JSON.stringify(m));
+  h.check('its fights won: defeat Mycora there too', m.text === 'Defeat Mycora, the Spore Mother' && JSON.stringify(m.spot) === '["mycelium",0,204]', JSON.stringify(m));
   await h.eval(() => { window.wyrm.save.levelsDone.mycelium = true; });
   m = await main(h);
   h.check('Mycora fallen: return to Elder Mossa', m.text === 'Return to Elder Mossa' && m.spot?.[0] === 'hollow' && m.done === 8, JSON.stringify(m));

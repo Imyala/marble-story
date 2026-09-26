@@ -416,6 +416,8 @@ export interface VentOpts {
   /** Seconds between puffs, and where in the cycle it starts. */
   period?: number;
   phase?: number;
+  /** How long each puff lasts (it throws during the first three quarters). Default 0.7. */
+  puff?: number;
   /** Seconds a freeze holds it open. Default 12. */
   freeze?: number;
   /** Fired each time it is frozen open. */
@@ -448,13 +450,15 @@ export class SporeVent implements Prop, Hittable {
   private fxT = 0;
   private hintT = 0;
   private launched = false;
+  /** This puff has already thrown Aster (a puff throws once, however long she stays in it). */
+  private threw = false;
   private readonly h: number;
   private readonly frozenH: number;
   private readonly reach: number;
   private readonly period: number;
   private readonly freezeFor: number;
   private readonly signal: string;
-  static readonly PUFF = 0.7;
+  private readonly puffLen: number;
 
   constructor(private game: Game, readonly x: number, readonly y: number, readonly z: number, o: VentOpts = {}) {
     this.radius = o.r ?? 1.3;
@@ -462,6 +466,7 @@ export class SporeVent implements Prop, Hittable {
     this.frozenH = o.frozenH ?? this.h;
     this.reach = o.reach ?? this.h * 0.6;
     this.period = o.period ?? 3.2;
+    this.puffLen = o.puff ?? 0.7;
     this.t = ((o.phase ?? 0) % this.period + this.period) % this.period;
     this.freezeFor = o.freeze ?? 12;
     this.signal = o.signal ?? '';
@@ -487,12 +492,12 @@ export class SporeVent implements Prop, Hittable {
 
   /** Seconds until the next puff starts (0 while one is going). */
   get untilPuff(): number {
-    const at = this.period - SporeVent.PUFF;
+    const at = this.period - this.puffLen;
     return this.t >= at ? 0 : at - this.t;
   }
 
   get puffing(): boolean {
-    return !this.frozen && this.t >= this.period - SporeVent.PUFF;
+    return !this.frozen && this.t >= this.period - this.puffLen;
   }
 
   takeHit(hit: Hit): HitResult {
@@ -580,15 +585,16 @@ export class SporeVent implements Prop, Hittable {
     if (this.t >= this.period) {
       this.t -= this.period;
       this.launched = false;
+      this.threw = false;
     }
-    const puffAt = this.period - SporeVent.PUFF;
+    const puffAt = this.period - this.puffLen;
     const warn = smoothstep(puffAt - 1.1, puffAt, this.t);
     const puffing = this.t >= puffAt;
     this.coreMat.color.setHex(SPORE.gold).multiplyScalar(0.35 + warn * 0.65 + (puffing ? 0.3 : 0));
     this.core.scale.setScalar(0.7 + warn * 0.35);
     if (warn > 0 && !puffing && rng.chance(dt * 14)) g.fx.sparkle(this.x + rng.signed() * this.radius * 0.6, this.y + 0.3, this.z + rng.signed() * this.radius * 0.6, SPORE.gold, 1);
     if (puffing) {
-      const k = (this.t - puffAt) / SporeVent.PUFF;
+      const k = (this.t - puffAt) / this.puffLen;
       if (!this.launched) {
         this.launched = true;
         this.puffs++;
@@ -606,15 +612,15 @@ export class SporeVent implements Prop, Hittable {
           bright: 1.8, drag: 2, jitter: this.radius * 0.5,
         });
       }
-      // The first part of a puff throws whoever is in it.
-      if (p.alive && k < 0.75 && this.inColumn(this.reach)) {
-        const v = Math.sqrt(2 * 32 * this.h);
-        if (b.vy < v * 0.8) {
-          if (p.state === 'slam') p.setState('move');
-          b.vy = v;
-          b.grounded = false;
-          g.sfx('launch', this.x, this.y, this.z, 1.2, 0.8);
-        }
+      // The first part of a puff throws whoever is in it, once: `h` higher than wherever she was.
+      if (!this.threw && p.alive && k < 0.75 && this.inColumn(this.reach)) {
+        this.threw = true;
+        if (p.state === 'slam') p.setState('move');
+        // A throw, not an updraft: a glider is tossed like a jumper (held wings would carry her on up forever).
+        p.gliding = false;
+        b.vy = Math.max(b.vy, Math.sqrt(2 * 32 * this.h));
+        b.grounded = false;
+        g.sfx('launch', this.x, this.y, this.z, 1.2, 0.8);
       }
     } else {
       this.col.visible = false;
@@ -1046,6 +1052,8 @@ export class BlightCloud extends Hazard implements Hittable {
   private stateT = 0;
   private heat = 0;
   private sting = 0;
+  /** The face Aster came in by (+1 or -1 along the passage), while she is inside. */
+  private entry = 0;
   private blobs: THREE.InstancedMesh;
   private base: { x: number; y: number; z: number; s: number; ph: number }[] = [];
   private blobMat: THREE.MeshStandardMaterial;
@@ -1195,12 +1203,19 @@ export class BlightCloud extends Hazard implements Hittable {
       const b = this.base[Math.floor(rng.next() * this.base.length)]!;
       g.fx.emit(b.x, b.y, b.z, { count: 1, speed: 0.4, spread: 1, life: [1.2, 2], size: [0.06, 0.12], sizeEnd: 0.3, color: 0xd0f070, bright: 1.4, gravity: -0.1 });
     }
-    // It stings, and shoves back out toward the nearer face.
+    // It stings, thickens the air like mud, and shoves back out the way she came in.
     this.sting -= dt;
-    if (this.sting <= 0 && p.alive && this.contains(p.x, p.y + 0.3, p.z)) {
+    const inside = p.alive && this.contains(p.x, p.y + 0.3, p.z);
+    if (!inside) this.entry = 0;
+    else {
+      if (this.entry === 0) this.entry = this.local(p.x, p.z).v >= 0 ? 1 : -1;
+      const k = Math.exp(-7 * dt);
+      p.body.vx *= k;
+      p.body.vz *= k;
+    }
+    if (this.sting <= 0 && inside) {
       this.sting = 0.5;
-      const { v } = this.local(p.x, p.z);
-      const side = v >= 0 ? 1 : -1;
+      const side = this.entry;
       p.takeHit(makeHit({
         damage: this.dmg * g.difficultyInfo.enemyDamage, type: 'shadow', dirX: this.sin * side, dirZ: this.cos * side, knockback: 9, launch: 3,
         source: 'env', move: 'blight', fromPlayer: false, ox: this.x - this.sin * side * 3, oz: this.z - this.cos * side * 3,

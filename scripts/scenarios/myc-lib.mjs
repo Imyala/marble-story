@@ -3,7 +3,7 @@
 // Built on hollow-lib's fixed-step fast mode: the game is detached from
 // requestAnimationFrame and stepped at 1/30 s, rendering only for screenshots,
 // so bounces, puffs and glides time the same on a slow headless machine.
-import { act2Save, useSave, fastMode, step, skip } from './hollow-lib.mjs';
+import { act2Save, useSave, fastMode, step, skip, pos } from './hollow-lib.mjs';
 
 export { act2Save, useSave, fastMode, step, skip, place, press, down, up, stick, stop, pos, face, steerTo, shot, found } from './hollow-lib.mjs';
 
@@ -36,6 +36,9 @@ export async function boot(h, o = {}) {
 
 /** Sends Nyxa home for a scenario (tour shots, or puzzles she would stand in). */
 export const noPartner = (h) => h.eval(() => { const g = window.wyrm; g.options.partner = false; g.partner.clear(); });
+
+/** Clears every foe (so a puzzle test is not a fight). */
+export const calm = (h) => h.eval(() => { for (const e of window.wyrm.enemies) if (e.alive) e.die(null); window.wyrm.player.hp = window.wyrm.player.maxHp; });
 
 /** Selects an element (fire, lightning, ice, earth). */
 export const element = (h, el) => h.eval((el) => { const g = window.wyrm; g.player.element = el; g.hud.elementChanged?.(el); }, el);
@@ -101,4 +104,57 @@ export async function talk(h, re) {
   }
   await step(h, 0.3);
   return ok;
+}
+
+/**
+ * Moves toward (x, z) for up to `sec` of game time, steering every tenth of
+ * a second: optionally jumping first (`jump`), flapping once near the top of
+ * the arc (`flap`), holding Jump to glide (`glide`), or pounding (Tail in the
+ * air) once falling (`pound`). Stops early once the dragon is standing within
+ * `near` of the target. Returns the final position, the peak height and the
+ * time taken.
+ */
+export async function airTo(h, x, z, sec = 3, o = {}) {
+  let peak = -1e9;
+  if (o.jump) await h.eval(() => window.wyrm.input.simulate('jump', true));
+  let flapped = false;
+  let pounded = false;
+  let t = 0;
+  for (; t < sec; t += 0.1) {
+    const s = await h.eval(([x, z, stop]) => {
+      const g = window.wyrm;
+      const p = g.player;
+      const d = Math.hypot(x - p.x, z - p.z);
+      g.cam.yaw = Math.atan2(x - p.x, z - p.z);
+      g.input.forceMove = d > stop ? { x: 0, y: 1 } : null;
+      return { d, y: p.y, vy: p.body.vy, grounded: p.body.grounded };
+    }, [x, z, o.stop ?? 0.4]);
+    peak = Math.max(peak, s.y);
+    if (o.jump && t >= 0.2 && !o.glide) await h.eval(() => window.wyrm.input.simulate('jump', false));
+    if (o.flap && !flapped && !s.grounded && s.vy < 1 && t > 0.2) {
+      flapped = true;
+      await h.eval(() => window.wyrm.input.simulate('jump', false));
+      await step(h, 1 / 30);
+      await h.eval(() => window.wyrm.input.simulate('jump', true));
+      await step(h, 1 / 30);
+      if (!o.glide) await h.eval(() => window.wyrm.input.simulate('jump', false));
+    }
+    if (o.pound && !pounded && !s.grounded && s.vy < -2 && s.d < (o.poundAt ?? 1) && t > 0.3) {
+      pounded = true;
+      await h.eval(() => window.wyrm.input.simulate('tail', true));
+      await step(h, 1 / 30);
+      await h.eval(() => window.wyrm.input.simulate('tail', false));
+    }
+    // Bounced: on to the next target.
+    if (o.then && s.vy > 12) {
+      [x, z] = o.then;
+      o = { ...o, then: undefined };
+    }
+    if (s.grounded && s.d < (o.near ?? 1.2) && t > 0.3) break;
+    await step(h, 0.1);
+  }
+  await h.eval(() => { const g = window.wyrm; g.input.forceMove = null; g.input.simulate('jump', false); });
+  await step(h, 0.1);
+  const p = await pos(h);
+  return { ...p, peak: +peak.toFixed(2), t: +t.toFixed(1) };
 }

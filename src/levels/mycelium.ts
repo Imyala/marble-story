@@ -265,6 +265,27 @@ function lazyEnemies(b: Builder, x: number, z: number, r: number, list: [string,
   });
 }
 
+/**
+ * A conversation the first time Aster stands within `r` of (x, z) (once per
+ * save): like b.story, but it waits until she is on her feet, so it never
+ * freezes her in mid-air (a big bounce passes right over some of these).
+ */
+function talkAt(b: Builder, id: string, x: number, z: number, r: number, fn: () => void): void {
+  const g = b.game;
+  const key = `story:mycelium:${id}`;
+  if (g.save.found[key]) return;
+  const y = b.y(x, z);
+  b.level.props.push({
+    update: () => {
+      if (g.save.found[key] || g.state !== 'play') return;
+      const p = g.player;
+      if (!p.alive || !p.body.grounded || Math.hypot(p.x - x, p.z - z) > r || Math.abs(p.y - y) > 3) return;
+      g.save.found[key] = true;
+      fn();
+    },
+  });
+}
+
 /** Flick's word the first time Aster comes near any of `pts` (once per save). */
 function firstNear(b: Builder, key: string, pts: [number, number][], r: number, text: string, secs = 7): void {
   const g = b.game;
@@ -655,7 +676,7 @@ function motherstalk(b: Builder): void {
   const g = b.game;
   const { x, z } = MOTHER;
   const y = b.y(x, z);
-  const h = 15;
+  const h = 13;
   const r = 9;
   const stalk = stalkMat();
   // A tapering, slightly twisted stalk with a skirt (the ring) partway up.
@@ -788,7 +809,7 @@ function capstair(b: Builder, pulses: Pulses): BounceCap {
   shelfCap(b, -7, 87.5, 6.5, 2.7, Math.PI / 2, SPORE.gold);
   const c2 = bounceCap(b, -7.4, 88.9, { power: 20, r: 1.2, color: SPORE.pink }, 6.5);
   shelfCap(b, -2.8, 93.4, 12.5, 2.6, Math.PI, SPORE.gold);
-  const c3 = bounceCap(b, -2.3, 94.3, { power: 18, big: 1.55, r: 1.25, color: SPORE.pink, signal: 'myc-bigbounce' }, 12.5);
+  const c3 = bounceCap(b, -2.3, 95.0, { power: 18, big: 1.7, r: 1.25, color: SPORE.pink, signal: 'myc-bigbounce' }, 12.5);
   b.gems(-7, 86.8, 'blue', 4, 1.4, 6.5);
   b.gems(-2.8, 92.6, 'blue', 4, 1.3, 12.5);
   b.puzzleHint(-2.8, 93.4, 3.5, [
@@ -861,7 +882,7 @@ function capstair(b: Builder, pulses: Pulses): BounceCap {
 function threadworks(b: Builder, pulses: Pulses): void {
   const g = b.game;
   b.checkpoint('threadworks', 6, 101, Math.PI * 0.9);
-  b.story('threadworks', 0, 103, 6, () => g.say([
+  talkAt(b, 'threadworks', 1, 104.5, 4.5, () => g.say([
     { who: 'flick', text: 'Whoa. Walls. Arches. Somebody BUILT this, Aster.' },
     { who: 'nyxa', text: 'The old dragons. They grew gardens under the world, before the Sanctum. Look at the threads... they carried light down here, like water.' },
     { who: 'aster', text: 'And now the threads are carrying it somewhere else.' },
@@ -1292,7 +1313,7 @@ function market(b: Builder): void {
   const g = b.game;
   const { x, z, y } = MARKET;
   b.checkpoint('market', 53.5, 162.5, Math.PI * 0.15);
-  b.story('market', 57, 160, 7, () => g.say([
+  talkAt(b, 'market', 57, 160, 7, () => g.say([
     { who: 'flick', text: 'Oh no. Oh no no no. Aster... those white bundles. There are PEOPLE in them.' },
     { who: 'nyxa', text: 'Cocooned. She wraps them up and keeps them glowing, to feed the threads. They\'re alive.' },
     { who: 'aster', text: 'Then we cut them out. All of them.' },
@@ -1567,7 +1588,8 @@ function thornpit(b: Builder): void {
   // The entry ledge's vent, and the one out on a rock in the thorns.
   const va = sporeVent(b, 85, 172, { r: 1.35, h: 9, period: 3.0, phase: 0 }, 16);
   b.box(98, y - 0.5, 170.5, 3.4, 1.9, 3.4, ROCK.mid, { yaw: 0.3, trim: ROCK.moss });
-  const vb = sporeVent(b, 98, 170.5, { r: 1.9, h: 9, reach: 12.5, period: 3.0, phase: 1.7 }, y + 1.4);
+  // Its puff is long, and starts a second after the first vent's: about when a dragon launched off that one glides in.
+  const vb = sporeVent(b, 98, 170.5, { r: 1.9, h: 9, reach: 12.5, period: 3.0, phase: 1.3, puff: 1.4 }, y + 1.4);
   void va;
   void vb;
   // The perch: high on the King's roots in the east wall.
@@ -1594,7 +1616,7 @@ function rootchoke(b: Builder, pulses: Pulses): void {
   layoutRealm(b, ROOTWAY);
   // The way in: roots grown across the passage. They burn.
   rootWall(b, 38.3, 181.4, 41.7, 187.6, 4.2, { element: 'fire', signal: 'myc-choke-in' });
-  b.story('rootchoke', 44, 181, 5, () => g.say([
+  talkAt(b, 'rootchoke', 44, 181, 5, () => g.say([
     { who: 'flick', text: 'Those roots... they\'re not hers. They\'re HIS. Look, the white threads are wrapped all round them.' },
     { who: 'nyxa', text: 'Her threads gather the light. His roots drink it. A marriage. I can hear him through them, Aster. He\'s... pleased.' },
     { who: 'aster', text: 'He won\'t be for long. Burn them, Flick?' },
@@ -1896,7 +1918,8 @@ function trackers(b: Builder, floor: BounceCap): void {
       if (!run || !body.grounded) return;
       const s: Solid | null = body.ground;
       if (s?.tag === CAP_TAG) return;
-      if (body.y > TOP - 0.6 && body.z > 97) g.skill('mycelium:capstair');
+      // The lip (rounded rock at the top of the headwall) counts as the top.
+      if (body.y > TOP - 7 && body.z > 95.5) g.skill('mycelium:capstair');
       run = false;
     },
   });

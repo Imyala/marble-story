@@ -109,7 +109,7 @@ export async function talk(h, re) {
 /**
  * Moves toward (x, z) for up to `sec` of game time, steering every tenth of
  * a second: optionally jumping first (`jump`), flapping once near the top of
- * the arc (`flap`), holding Jump to glide (`glide`), or pounding (Tail in the
+ * the arc (`flap`; with `then`, the arc after the bounce), holding Jump to glide (`glide`), or pounding (Tail in the
  * air) once falling (`pound`). Stops early once the dragon is standing within
  * `near` of the target. Returns the final position, the peak height and the
  * time taken.
@@ -131,7 +131,7 @@ export async function airTo(h, x, z, sec = 3, o = {}) {
     }, [x, z, o.stop ?? 0.4]);
     peak = Math.max(peak, s.y);
     if (o.jump && t >= 0.2 && !o.glide) await h.eval(() => window.wyrm.input.simulate('jump', false));
-    if (o.flap && !flapped && !s.grounded && s.vy < 1 && t > 0.2) {
+    if (o.flap && !flapped && !o.then && !s.grounded && s.vy < 1 && t > 0.2) {
       flapped = true;
       await h.eval(() => window.wyrm.input.simulate('jump', false));
       await step(h, 1 / 30);
@@ -145,8 +145,8 @@ export async function airTo(h, x, z, sec = 3, o = {}) {
       await step(h, 1 / 30);
       await h.eval(() => window.wyrm.input.simulate('tail', false));
     }
-    // Bounced: on to the next target.
-    if (o.then && s.vy > 12) {
+    // Bounced (faster than `thenVy` up): on to the next target.
+    if (o.then && s.vy > (o.thenVy ?? 12)) {
       [x, z] = o.then;
       o = { ...o, then: undefined };
     }
@@ -157,4 +157,51 @@ export async function airTo(h, x, z, sec = 3, o = {}) {
   await step(h, 0.1);
   const p = await pos(h);
   return { ...p, peak: +peak.toFixed(2), t: +t.toFixed(1) };
+}
+
+/**
+ * Swims toward (x, y, z) underwater, aiming the camera (and so the stroke)
+ * at it each step, until within `near` or out of time; dives first if at the
+ * surface. (As in hollow-secrets.)
+ */
+export async function swimTo(h, x, y, z, sec = 8, near = 1) {
+  for (let t = 0; t < sec; t += 0.1) {
+    const d = await h.eval(([x, y, z]) => {
+      const g = window.wyrm;
+      const p = g.player;
+      const dx = x - p.x;
+      const dz = z - p.z;
+      const dy = y - p.y;
+      const dh = Math.hypot(dx, dz);
+      g.cam.yaw = Math.atan2(dx, dz);
+      const elev = Math.max(-1.1, Math.min(1.1, Math.atan2(dy, Math.max(dh, 0.5))));
+      g.cam.pitch = 0.3 - elev / 1.25;
+      g.input.forceMove = { x: 0, y: dh + Math.abs(dy) > 0.5 ? 1 : 0 };
+      return Math.hypot(dh, dy);
+    }, [x, y, z]);
+    if (d < near) break;
+    const st = await pos(h);
+    if (st.st === 'swim' && !st.under && y < -1.5) {
+      await h.eval(() => window.wyrm.input.simulate('dodge', true));
+      await step(h, 0.3);
+      await h.eval(() => window.wyrm.input.simulate('dodge', false));
+    }
+    await step(h, 0.1);
+  }
+  await h.eval(() => { window.wyrm.input.forceMove = null; });
+  return pos(h);
+}
+
+/** Where the collectible `id` is (x, y, z), or null once taken. */
+export const where = (h, id) => h.eval((id) => {
+  const c = window.wyrm.level.props.find((p) => p.id === id && !p.taken);
+  return c ? { x: c.x, y: c.y, z: c.z } : null;
+}, id);
+
+/** A tap of an action (Horn, Tail...). */
+export async function tap(h, action) {
+  await h.eval((a) => window.wyrm.input.simulate(a, true), action);
+  await step(h, 1 / 15);
+  await h.eval((a) => window.wyrm.input.simulate(a, false), action);
+  await step(h, 0.4);
 }

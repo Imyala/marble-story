@@ -1212,8 +1212,17 @@ export class BlightCloud extends Hazard implements Hittable {
       const k = Math.exp(-7 * dt);
       p.body.vx *= k;
       p.body.vz *= k;
+      // And a steady push back out the way she came: running (or limping, stung) into it gets nowhere.
+      const nx = this.sin * this.entry;
+      const nz = this.cos * this.entry;
+      const out = p.body.vx * nx + p.body.vz * nz;
+      if (out < 4) {
+        p.body.vx += (4 - out) * nx;
+        p.body.vz += (4 - out) * nz;
+      }
     }
-    if (this.sting <= 0 && inside) {
+    // (It waits out a roll's grace rather than being dodged: no rolling clean through, and no Perfect Dodge off a cloud.)
+    if (this.sting <= 0 && inside && p.iframes <= 0) {
       this.sting = 0.5;
       const side = this.entry;
       p.takeHit(makeHit({

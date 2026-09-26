@@ -465,7 +465,8 @@ function bracket(b: Builder, x: number, y: number, z: number, r: number, yaw: nu
 
 /** One vaulted ceiling over the whole Deep: gold and teal glow-worms, stalactites, hanging spore sacs. */
 function ceiling(b: Builder): void {
-  const height = caveCeiling(b, 25, 118, 190, 310, 44, { rise: 20, glowworms: 520, wormColor: SPORE.gold, stalactites: 110 });
+  // Open to the dark over Mycora's grove: the Mother Cap she climbs into in the fight, and the roots that hold it, rise into the gloom.
+  const height = caveCeiling(b, 25, 118, 190, 310, 44, { rise: 20, glowworms: 520, wormColor: SPORE.gold, stalactites: 110, holes: [[GROVE.x, GROVE.z, 13]] });
   const teal = glowShared(SPORE.teal);
   const sac = glowShared(0xff9ae0);
   const r = b.decor.rng;
@@ -473,6 +474,7 @@ function ceiling(b: Builder): void {
     const x = -50 + r.next() * 160;
     const z = -25 + r.next() * 285;
     const y = height(x, z);
+    if (Math.hypot(x - GROVE.x, z - GROVE.z) < 18) continue;
     b.decor.add(GEO.blobLow(), i % 3 ? teal : sac, x, y - 0.6, z, 0.2, 0.2, 0.2, 0, 0, 0, false);
     if (i % 3 === 0) b.decor.add(GEO.strand(), teal, x, y - 0.4, z, 0.5, 1 + r.next() * 3, 0.5, 0, 0, 0, false);
     // Spore sacs on long threads, glowing pink.
@@ -543,7 +545,7 @@ function sporefall(b: Builder, pulses: Pulses): void {
   const ar = b.arena('nursery', 0, 38, 11, [
     [{ type: 'sporeling', x: -5, z: 44 }, { type: 'sporeling', x: 5, z: 44, delay: 0.2 }, { type: 'sporeling', x: 0, z: 47, delay: 0.4 }, { type: 'puffcap', x: 7, z: 33, delay: 0.6 }],
     [{ type: 'puffcap', x: -7, z: 42 }, { type: 'grunt', x: 4, z: 30, delay: 0.3 }, { type: 'sporeling', x: -3, z: 30, delay: 0.5 }, { type: 'sporeling', x: 7, z: 41, delay: 0.7 }],
-  ], 45);
+  ], 35);
   ar.onStart = () => {
     if (g.save.found['story:mycelium:nursery']) return;
     g.save.found['story:mycelium:nursery'] = true;
@@ -768,8 +770,9 @@ function glimmerPools(b: Builder): void {
   // A rock in the middle of the pool with a chest on it (swim over and climb out).
   const rx = DEEP.x + 2.5;
   const rz = DEEP.z + 3.5;
-  b.box(rx, -6, rz, 3.2, 6.6, 3.2, ROCK.mid, { yaw: 0.4, trim: ROCK.moss });
-  b.chest('pools', rx, rz, -0.8, { blue: 36, red: 2, green: 2 }, 0.6);
+  // Low enough (like a dock) for a swimmer to climb out onto.
+  b.box(rx, -6, rz, 3.2, 6 + WL + 0.7, 3.2, ROCK.mid, { yaw: 0.4, trim: ROCK.moss });
+  b.chest('pools', rx, rz, -0.8, { blue: 36, red: 2, green: 2 }, WL + 0.7);
   // Around the pools: caps, crystals, stalagmites.
   giantCap(b, 57, 22, 6.8, 3.8, SPORE.teal);
   giantCap(b, 60, 18, 4.5, 2.4, SPORE.violet);
@@ -790,7 +793,7 @@ function glimmerPools(b: Builder): void {
   const ar = b.arena('pools', 52, 11, 8.5, [
     [{ type: 'puffcap', x: 56, z: 6 }, { type: 'sporeling', x: 48, z: 8, delay: 0.2 }, { type: 'sporeling', x: 55, z: 15, delay: 0.4 }],
     [{ type: 'wisp', x: 50, z: 5 }, { type: 'puffcap', x: 47, z: 14, delay: 0.3 }, { type: 'sporeling', x: 57, z: 11, delay: 0.5 }, { type: 'sporeling', x: 52, z: 16, delay: 0.7 }],
-  ], 40);
+  ], 30);
   ar.onClear = () => g.hud.flick('That\'s the pools quiet. Now: that glow at the bottom of the deep one...', 5);
   // A choked grotto in the east wall: burn the blight for the crystal inside.
   blightCloud(b, 60.5, 27, 3.8, 3, Math.PI / 2, 5, { regrow: 12 });
@@ -812,6 +815,11 @@ function capstair(b: Builder, pulses: Pulses): BounceCap {
   const c3 = bounceCap(b, -2.3, 95.0, { power: 18, big: 1.7, r: 1.25, color: SPORE.pink, signal: 'myc-bigbounce' }, 12.5);
   b.gems(-7, 86.8, 'blue', 4, 1.4, 6.5);
   b.gems(-2.8, 92.6, 'blue', 4, 1.3, 12.5);
+  // Gems over each cap, on the bounce; the high ring over the floor cap is only for a pounded bounce (a nod to the west ledge).
+  b.gems(c1.x, c1.z, 'blue', 4, 0.6, 5);
+  b.gems(c2.x, c2.z, 'blue', 4, 0.5, 6.5 + 5);
+  b.gems(c3.x, c3.z, 'blue', 4, 0.5, 12.5 + 4.8);
+  b.gems(c1.x, c1.z, 'blue', 3, 0.5, 11.5);
   b.puzzleHint(-2.8, 93.4, 3.5, [
     'This cap\'s too feeble to reach the top on its own. Bounce, then pound down onto it (Tail in the air) for a huge bounce!',
     'Or breathe Earth on the cap first (select Earth with 4): it swells up, and the next bounce throws you sky-high.',
@@ -823,8 +831,8 @@ function capstair(b: Builder, pulses: Pulses): BounceCap {
   });
   b.trigger(0, 101, 5, () => b.level.emit('myc-top'), true, TOP);
   // A hidden ledge high on the west wall, for a dragon who pounds the floor cap.
-  shelfCap(b, -7.6, 77.5, 16.5, 2.3, Math.PI / 2, SPORE.gold);
-  b.gems(-7.4, 77.5, 'blue', 3, 0.9, 16.5);
+  shelfCap(b, -7.6, 77.5, 15.6, 2.3, Math.PI / 2, SPORE.gold);
+  b.gems(-7.4, 77.5, 'blue', 3, 0.9, 15.6);
   // The east wall: a tall table-cap. Burn it down, hop on, and ride it back up to the shelf beside it.
   const lift = liftCap(b, 5.4, 70, { high: 13, r: 2.2, color: SPORE.violet, signal: 'myc-lift' });
   shelfCap(b, 8, 75, 14.3, 2.5, -Math.PI / 2, SPORE.gold);
@@ -836,8 +844,6 @@ function capstair(b: Builder, pulses: Pulses): BounceCap {
     g.save.found['story:mycelium:lift'] = true;
     g.hud.flick('It\'s shrunk! Quick, hop on before it grows back!', 4);
   });
-  void c2;
-  void c3;
   // Glide rings from the top of the Capstair back down the chasm, out over the Sporefall.
   const pts: [number, number, number, number][] = [];
   const start = TOP + 3.4;
@@ -914,7 +920,7 @@ function threadworks(b: Builder, pulses: Pulses): void {
     [{ type: 'sporeling', x: -4, z: 123 }, { type: 'sporeling', x: 4, z: 123, delay: 0.2 }, { type: 'puffcap', x: 7, z: 113, delay: 0.4 }, { type: 'slinger', x: -7, z: 112, delay: 0.6 }],
     [{ type: 'puffcap', x: -6, z: 124 }, { type: 'puffcap', x: 6, z: 124, delay: 0.3 }, { type: 'sporeling', x: 0, z: 110, delay: 0.5 }, { type: 'grunt', x: 3, z: 120, delay: 0.7 },
       { type: 'sporeling', x: -3, z: 111, delay: 0.9 }],
-  ], 50);
+  ], 40);
   ar.onStart = () => {
     if (g.save.found['story:mycelium:garden-fight']) return;
     g.save.found['story:mycelium:garden-fight'] = true;
@@ -961,6 +967,7 @@ function threadworks(b: Builder, pulses: Pulses): void {
 
   // --- The terrace, and the vent that breathes you up onto it.
   const vent = sporeVent(b, -3, 127.6, { r: 1.35, h: 9.5, period: 3.4, signal: 'myc-vent1' }, Y);
+  for (const hy of [3.5, 6, 8.5]) b.gems(vent.x, vent.z, 'blue', 1, 0, Y + hy);
   firstNear(b, 'vent', [[vent.x, vent.z]], 7, 'That vent breathes out every few seconds. See the gold glow before it puffs? Step in right then!', 7);
   for (let i = -4; i <= 4; i++) {
     b.decor.add(GEO.box(), mat(0x6e6886, { rough: 0.9, flat: true }), i * 2.2, Y + 3.4, 130.4, 2.1, 7, 1.2, 0, 0, 0);
@@ -970,6 +977,7 @@ function threadworks(b: Builder, pulses: Pulses): void {
   const T = TERRACE;
   dragonStatue(b, -5.5, T.z + 4, Math.PI, { hornStyle: 'curled', tailStyle: 'club', slender: 0.5 }, { scale: 1.2, eyes: SPORE.gold, stone: 0x8a82a0 });
   b.gems(1, T.z - 3, 'blue', 5, 1.6, T.y);
+  b.crystal(-1.5, T.z + 4.5, 'blue', 20, false, T.y);
   caps(b, 5, T.z + 5, 5, [SPORE.teal, SPORE.violet], 1.2);
   lanternPost(b, 6.5, T.z - 2, SPORE.teal, Math.PI);
 
@@ -1326,7 +1334,7 @@ function market(b: Builder): void {
     [{ type: 'rootstalker', x: x - 7, z: z + 4 }, { type: 'slinger', x: x + 7, z: z + 9, delay: 0.3 }, { type: 'sporeling', x: x, z: z - 6, delay: 0.5 },
       { type: 'sporeling', x: x - 3, z: z - 6, delay: 0.6 }, { type: 'puffcap', x: x - 8, z: z + 10, delay: 0.8 }],
     [{ type: 'rootstalker', x: x + 6, z: z + 1 }, { type: 'rootstalker', x: x - 6, z: z + 1, delay: 0.3 }, { type: 'grunt', x: x, z: z + 9, delay: 0.6 }],
-  ], 55);
+  ], 45);
   ar.onStart = () => {
     if (g.save.found['story:mycelium:market-fight']) return;
     g.save.found['story:mycelium:market-fight'] = true;
@@ -1531,6 +1539,7 @@ function blightRow(b: Builder): void {
     clouds.push([(ax + cx) / 2, (az + cz) / 2, yaw]);
   }
   for (const [cx, cz, yaw] of clouds) blightCloud(b, cx, cz, 4.2, 3.2, yaw, 6.5, { regrow: 7 }, 16);
+  b.gemLine(pts.slice(0, 3), 'blue', 2);
   b.story('blightrow', 62, 164, 4, () => g.hud.flick('Blight Row. Three clouds of it, one after the other. Burn, run, burn, run!', 5));
   b.collectible('heart1', 'heart', NOOK.x + 0.5, NOOK.z - 0.5, 16);
   b.gems(NOOK.x, NOOK.z, 'blue', 6, 2, 16);
@@ -1630,7 +1639,7 @@ function rootchoke(b: Builder, pulses: Pulses): void {
       { type: 'puffcap', x: x + 4, z: z + 9, delay: 0.8 }],
     [{ type: 'brute', x: x, z: z + 5 }, { type: 'rootstalker', x: x - 6, z: z - 5, delay: 0.5 }, { type: 'sporeling', x: x + 6, z: z - 5, delay: 0.7 },
       { type: 'sporeling', x: x + 3, z: z - 8, delay: 0.9 }],
-  ], 60);
+  ], 50);
   ar.onStart = () => {
     if (g.save.found['story:mycelium:choke-fight']) return;
     g.save.found['story:mycelium:choke-fight'] = true;
@@ -1710,7 +1719,7 @@ function strangledHollow(b: Builder): void {
   const ar = b.arena('strangled', x, z, 8, [
     [{ type: 'thornspitter', x: x - 5, z: z - 4 }, { type: 'rootstalker', x: x + 4, z: z + 3, delay: 0.3 }, { type: 'sporeling', x: x, z: z - 5, delay: 0.5 }],
     [{ type: 'thornspitter', x: x + 5, z: z - 4 }, { type: 'rootstalker', x: x - 4, z: z + 4, delay: 0.3 }, { type: 'rootstalker', x: x + 2, z: z - 2, delay: 0.6 }],
-  ], 45);
+  ], 35);
   ar.onClear = () => g.hud.flick('That\'s the Hollow cleared. Something was scribbled on the wall back there...', 5);
   b.letter('root', x - 5, z - 5.5, y);
   hollowRoot(b, [[x - 8, y - 1, z - 3], [x - 5, y + 5, z - 6], [x, y + 9, z - 9], [x + 5, y + 3, z - 8]], 1.1);
@@ -1718,12 +1727,13 @@ function strangledHollow(b: Builder): void {
   b.breakables('urn', [[x + 6, z - 5], [x + 6.8, z - 3.8]]);
   crystalCluster(b, x + 6, z + 5, 0.8, SPORE.violet);
   b.gems(x, z, 'blue', 6, 3);
+  b.crystal(x - 5.5, z + 3, 'mixed', 25, true, y);
 }
 
 // --- Mycora's Grove ---------------------------------------------------------------------------------------
 
 /** Cocoons stuck round the grove's walls: the rest of the lost foragers, freed when Mycora falls. */
-const GROVE_COCOONS: [number, number, number][] = ([[-0.35, 27.8, 2.4], [0.4, 27.8, 3.2], [-0.95, 27.6, 2], [1.0, 27.6, 2.8], [-1.55, 27.4, 1.8], [1.6, 27.4, 2.4]] as [number, number, number][])
+const GROVE_COCOONS: [number, number, number][] = ([[-0.35, 27.8, 2.4], [0.4, 27.8, 3.2], [-1.15, 27.6, 2], [1.2, 27.6, 2.8], [-1.55, 27.4, 1.8], [1.6, 27.4, 2.4]] as [number, number, number][])
   .map(([a, r, h]) => [Math.sin(a) * r, 230 + Math.cos(a) * r, h]);
 
 function grove(b: Builder): void {
@@ -1734,8 +1744,9 @@ function grove(b: Builder): void {
   buildMycoraArena(b, x, z, r);
   b.story('grove', 0, 199, 5, () => g.hud.flick('Hear that hum? It\'s coming from in there. It\'s... singing?', 5));
   // Around the floor (never on it): tall caps at its rim, great brackets up the walls, the King's roots down out of the vault.
-  const rim: [number, number, number, number][] = [[2.2, 7, 2.9, 0xff6ab8], [-2.2, 8, 3.1, SPORE.violet], [1.35, 10, 3.1, SPORE.violet], [-1.3, 9, 2.9, 0xff6ab8],
-    [0.5, 12, 3.2, SPORE.violet], [-0.55, 11, 3.2, SPORE.pink], [2.65, 6, 2.6, SPORE.teal], [-2.7, 6.5, 2.6, SPORE.teal]];
+  // (The rim caps stand between, and under, the fight's own canopy caps, which lean in over the floor's edge.)
+  const rim: [number, number, number, number][] = [[2.2, 7, 2.9, 0xff6ab8], [-2.2, 8, 3.1, SPORE.violet], [1.8, 9, 3.1, SPORE.violet], [-1.8, 8.5, 2.9, 0xff6ab8],
+    [0.9, 10, 3.2, SPORE.violet], [-0.9, 9.5, 3.2, SPORE.pink], [2.65, 6, 2.6, SPORE.teal], [-2.7, 6.5, 2.6, SPORE.teal]];
   for (const [a, h, cr, c] of rim) giantCap(b, x + Math.sin(a) * 27.6, z + Math.cos(a) * 27.6, h, cr, c, y);
   for (let i = 0; i < 14; i++) {
     const a = -2.5 + (i / 13) * 5;

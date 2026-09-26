@@ -14,7 +14,8 @@ const door = (h, x, z) => h.eval(([x, z]) => {
 }, [x, z]);
 
 export default async function (h) {
-  await boot(h, { found: { 'story:mycelium:threadworks': true } });
+  // (The garden's fight counted as won: its foes would otherwise chase Aster through the gate and out onto the terrace.)
+  await boot(h, { found: { 'story:mycelium:threadworks': true, 'arena:mycelium:garden': true } });
   await noPartner(h);
   // --- The Garden Gate.
   await place(h, 4, 101.5, 0);
@@ -38,10 +39,15 @@ export default async function (h) {
   await place(h, 9.5, 140.5, Math.PI / 2, 32.05);
   await calm(h);
   const hp0 = await h.eval(() => window.wyrm.player.hp);
-  const into = await airTo(h, 18, 140, 1.5, { near: 0.5 });
+  // (Three seconds of running at it, and a roll into it: she gets nowhere, and stung for trying.)
+  const into = await airTo(h, 18, 140, 3, { near: 0.5 });
+  await h.eval(() => window.wyrm.input.simulate('dodge', true));
+  await step(h, 1 / 30);
+  await h.eval(() => window.wyrm.input.simulate('dodge', false));
+  const rolled = await airTo(h, 18, 140, 1.5, { near: 0.5 });
   await step(h, 0.4);
   const hp1 = await h.eval(() => window.wyrm.player.hp);
-  h.check('the blight stings and holds Aster back', hp1 < hp0 && into.x < 17.2, JSON.stringify({ hp0, hp1, into }));
+  h.check('the blight stings and holds Aster back (running or rolling)', hp1 < hp0 && into.x < 15 && rolled.x < 15, JSON.stringify({ hp0, hp1, into, rolled }));
   await h.eval(() => { const p = window.wyrm.player; p.hp = p.maxHp; });
   await place(h, 10.5, 140, Math.PI / 2, 32.05);
   await element(h, 'fire');

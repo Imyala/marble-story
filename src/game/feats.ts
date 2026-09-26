@@ -97,4 +97,9 @@ export const BESTIARY: Record<string, { blurb: string; tip: string }> = {
   frostDrake: { blurb: 'A Shade Drake grown fat on the Frostworks\' cold. Its spit rimes whatever it touches.', tip: 'Ice does nothing to it; fire does plenty. Keep moving when it rears to spit.' },
   stormDrake: { blurb: 'The fastest of the drakes, crackling with stolen storm. Its bolt flies straight and quick.', tip: 'Lightning passes through it; Earth knocks it flat. Dodge sideways, not back.' },
   totem: { blurb: 'A shard of the Gloom planted in the ground, shielding every foe near it.', tip: 'Smash the totem first and the others lose their ward.' },
+  // Act II: the Mycelium Deep.
+  sporeling: { blurb: 'Knee-high mushrooms that hop about in gangs. Mycora grows them by the hundred, and they burst into stinging spores when they pop.', tip: 'Finish them with Fire and the spores burn up with them; frozen ones shatter clean. Fire burns away a cloud that is already hanging there.' },
+  puffcap: { blurb: 'A fat, slow puffball that lobs spore bombs and coughs out a ring of spores when you get too close. It grows new sporelings while it lives.', tip: 'Jump the ring, and take it down first: its sporelings wither when it falls. It hates Fire, and Lightning stops it mid-puff.' },
+  rootstalker: { blurb: 'One of the Hollow King\'s roots, grown legs and a temper. It dives underground and bursts up beneath you.', tip: 'Watch the trail of broken earth and move when a ring glows under you. A Ground Pound on its trail, or Earth, flips it onto its soft belly; Fire drives it up.' },
+  thornspitter: { blurb: 'A rooted knot of thorny vine that spits thorns in fans and bursts, and pulls itself underground when you come close.', tip: 'Step back from the ring as it comes up, then hit it while it hangs dazed. Bat its thorns back with the Horn, and burn it: burning vines can\'t hide.' },
 };

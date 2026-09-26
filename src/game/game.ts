@@ -9,6 +9,8 @@ import { CameraRig } from './camera';
 import { Player } from '../player/player';
 import { Enemy } from '../enemies/enemy';
 import { ENEMIES, TOTEM_WARD } from '../enemies/defs';
+// Act II foes with brains of their own (the Mycelium Deep's): spawnEnemy builds their classes.
+import { ENEMY_CLASSES } from '../enemies/deep';
 import { Projectile, Shockwave, type ProjectileSpec } from '../entities/projectile';
 import { Gem, GemBatch, splitValue, type GemKind, GEM_COLORS } from '../entities/gems';
 import { StyleMeter } from '../combat/style';
@@ -778,7 +780,9 @@ export class Game {
   spawnEnemy(type: string, x: number, y: number, z: number, yaw: number, arena: boolean): Enemy {
     const def = ENEMIES[type];
     if (!def) throw new Error(`unknown enemy ${type}`);
-    const e = new Enemy(this, def, x, y, z, yaw);
+    // Most foes run the shared Enemy brain; a few have a subclass of their own (src/enemies/deep.ts).
+    const Ctor = ENEMY_CLASSES[type] ?? Enemy;
+    const e = new Ctor(this, def, x, y, z, yaw);
     if (!arena) {
       e.state = 'idle';
       e.model.root.visible = true;

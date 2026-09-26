@@ -1,5 +1,6 @@
 import type { EnemyDef } from './enemy';
 import { DrakeModel, RIME_DRAKE_LOOK, STORM_DRAKE_LOOK, ImpModel, WispModel, GolemModel, CrawlerModel, TotemModel, DummyModel } from './models';
+import { SporelingModel, PuffcapModel, RootstalkerModel, ThornspitterModel } from './models-deep';
 
 /**
  * The roster. Each enemy is built to ask a different question of the player:
@@ -12,6 +13,11 @@ import { DrakeModel, RIME_DRAKE_LOOK, STORM_DRAKE_LOOK, ImpModel, WispModel, Gol
  *   crawler      armored shell; flip it with a heavy hit first
  *   knight       elite; guards, lunges, punishes button mashing
  *   totem        shields allies near it; destroy it first
+ * Act II, the Mycelium Deep (brains and rules in deep.ts):
+ *   sporeling    swarms that burst into stinging spores; kill them with Fire (or ice) and they can't
+ *   puffcap      lobs spore bombs, puffs a jumpable ring, grows sporelings; kill it and its brood withers
+ *   rootstalker  burrows and erupts under you (watch the ring); Earth or a Ground Pound on its trail flips it
+ *   thornspitter a rooted turret that hides when you close in; hit it as it re-emerges, or bat its thorns back
  */
 
 export const ENEMIES: Record<string, EnemyDef> = {
@@ -204,49 +210,53 @@ export const ENEMIES: Record<string, EnemyDef> = {
     build: () => new DrakeModel(STORM_DRAKE_LOOK),
     styleValue: 1.5,
   },
-  // --- Act II: the Mycelium Deep (PLACEHOLDERS: stats and models borrowed from
-  // Act I foes so the realm can be built; the real families replace these). ---
+  // --- Act II: the Mycelium Deep. The Spore family (Mycora's children) and the
+  // Rootspawn (the Hollow King's roots given will); see deep.ts for their brains. ---
   sporeling: {
-    id: 'sporeling', name: 'Sporeling', hp: 26, radius: 0.45, height: 1.0, speed: 5, turnRate: 8, mass: 1.2, poise: 0,
-    resist: {}, statusResist: {}, aggroRange: 15,
+    id: 'sporeling', name: 'Sporeling', hp: 24, radius: 0.42, height: 0.95, speed: 5.4, turnRate: 9, mass: 1.35, poise: 0,
+    resist: { fire: 1.3 }, statusResist: { fire: 1.4, ice: 1.3 }, aggroRange: 15, panics: true,
     gems: { blue: 4 },
     attacks: [
-      { id: 'bump', pose: 'swing', range: 1.8, windup: 0.5, active: 0.2, recover: 0.5, cooldown: 1.2, weight: 1, kind: 'melee', damage: 7, knockback: 4, hitRange: 1.3, hitArc: 1.1, lunge: 4 },
+      { id: 'headbutt', pose: 'hop', range: 1.8, windup: 0.5, active: 0.22, recover: 0.5, cooldown: 1.3, weight: 3, kind: 'melee', damage: 7, knockback: 4, hitRange: 1.2, hitArc: 1.1, lunge: 6 },
+      { id: 'pounce', pose: 'hop', range: 5, minRange: 2.8, windup: 0.6, active: 0.35, recover: 0.6, cooldown: 3.5, weight: 1, kind: 'melee', damage: 8, knockback: 5, hitRange: 1.1, hitArc: 1.0, lunge: 12 },
     ],
-    build: () => new ImpModel({ skin: 0x6a4a8a, belly: 0xc890ff, eye: 0xb0ff60, scale: 0.8, bulk: 0.2, ears: 'long', weapon: 'none', offhand: 'none' }),
-    styleValue: 0.8,
+    build: () => new SporelingModel(),
+    styleValue: 0.7,
   },
   puffcap: {
-    id: 'puffcap', name: 'Puffcap', hp: 50, radius: 0.7, height: 1.6, speed: 2.5, turnRate: 5, mass: 0.6, poise: 10,
-    resist: {}, statusResist: {}, aggroRange: 17, keepAway: 8,
-    gems: { blue: 10, green: 1 },
+    id: 'puffcap', name: 'Puffcap', hp: 110, radius: 1.15, height: 2.6, speed: 1.1, turnRate: 3, mass: 0.14, poise: 45,
+    resist: { fire: 1.6, lightning: 1.2 }, statusResist: { fire: 1.5, lightning: 1.8, ice: 0.8 }, aggroRange: 17, keepAway: 7,
+    gems: { blue: 16, green: 2 },
     attacks: [
-      { id: 'puff', pose: 'cast', range: 14, windup: 0.9, active: 0.1, recover: 0.8, cooldown: 2.6, weight: 1, kind: 'projectile', damage: 8, knockback: 3,
-        projectile: { speed: 10, radius: 0.45, damage: 8, type: 'shadow', color: 0xb0ff60, life: 3, gravity: 6, explode: 2 } },
+      // Handled in deep.ts: 'lob' throws a spore bomb, 'puff' sends out a ring, 'grow' sprouts sporelings.
+      { id: 'lob', pose: 'lob', range: 16, minRange: 4.5, windup: 0.9, active: 0.1, recover: 0.8, cooldown: 3.0, weight: 3, kind: 'projectile', damage: 10, knockback: 6 },
+      { id: 'puff', pose: 'puff', range: 4.4, windup: 0.85, active: 0.2, recover: 0.9, cooldown: 3.2, weight: 4, kind: 'slam', damage: 10, knockback: 7, hitRange: 0.5, hitArc: 3.2,
+        shockwave: { radius: 5.2, speed: 8 }, telegraph: true },
+      { id: 'grow', pose: 'grow', range: 24, windup: 1.2, active: 0.1, recover: 0.6, cooldown: 9, weight: 6, kind: 'projectile', damage: 0, knockback: 0 },
     ],
-    build: () => new TotemModel(),
-    styleValue: 1.3,
+    build: () => new PuffcapModel(),
+    styleValue: 1.8,
   },
   rootstalker: {
-    id: 'rootstalker', name: 'Rootstalker', hp: 80, radius: 0.8, height: 1.4, speed: 4.4, turnRate: 5, mass: 0.5, poise: 20, armored: true,
-    resist: {}, statusResist: {}, aggroRange: 16,
-    gems: { blue: 14, red: 1 },
-    attacks: [
-      { id: 'bite', pose: 'bite', range: 2.4, windup: 0.5, active: 0.2, recover: 0.5, cooldown: 1.3, weight: 1, kind: 'melee', damage: 11, knockback: 6, hitRange: 1.6, hitArc: 0.9, lunge: 5 },
-    ],
-    build: () => new CrawlerModel(0x2a2230, 0x4a3a5a, 0xb04cff, 1.1),
-    styleValue: 1.7,
+    id: 'rootstalker', name: 'Rootstalker', hp: 100, radius: 0.85, height: 1.3, speed: 4.6, turnRate: 6, mass: 0.45, poise: 30,
+    resist: { fire: 1.3 }, statusResist: { fire: 1.2 }, aggroRange: 16,
+    gems: { blue: 16, red: 1 },
+    // Its rake and its burrow-and-erupt live in deep.ts (Rootstalker).
+    attacks: [],
+    build: () => new RootstalkerModel(),
+    styleValue: 1.9,
   },
   thornspitter: {
-    id: 'thornspitter', name: 'Thornspitter', hp: 70, radius: 0.8, height: 2.2, speed: 0, turnRate: 3, mass: 0, poise: 999,
-    resist: {}, statusResist: {}, aggroRange: 18,
-    gems: { blue: 12, green: 2 },
+    id: 'thornspitter', name: 'Thornspitter', hp: 85, radius: 0.9, height: 2.3, speed: 0, turnRate: 4, mass: 0, poise: 35,
+    resist: { fire: 1.6 }, statusResist: { fire: 1.5 }, aggroRange: 20,
+    gems: { blue: 14, green: 2 },
+    // Its volleys (a fan and an aimed burst) and its retreat underground live in deep.ts (Thornspitter).
     attacks: [
-      { id: 'thorns', pose: 'cast', range: 16, windup: 0.8, active: 0.1, recover: 0.8, cooldown: 2.2, weight: 1, kind: 'projectile', damage: 9, knockback: 4,
-        projectile: { speed: 16, radius: 0.3, damage: 9, type: 'shadow', color: 0x8a60a0, life: 2, gravity: 0, count: 3, spread: 0.18 } },
+      { id: 'fan', pose: 'spit', range: 18, windup: 0.95, active: 0.1, recover: 0.8, cooldown: 3.4, weight: 2, kind: 'projectile', damage: 8, knockback: 4 },
+      { id: 'burst', pose: 'spit', range: 16, windup: 0.75, active: 0.45, recover: 0.8, cooldown: 2.8, weight: 3, kind: 'projectile', damage: 7, knockback: 3 },
     ],
-    build: () => new TotemModel(),
-    styleValue: 1.4,
+    build: () => new ThornspitterModel(),
+    styleValue: 1.6,
   },
   dummy: {
     id: 'dummy', name: 'Training Dummy', hp: 60, radius: 0.55, height: 2.2, speed: 0, turnRate: 0, mass: 0.05, poise: 0,

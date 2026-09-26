@@ -57,7 +57,8 @@ export default async function (h) {
   const high = await pos(h);
   h.check('the steady column carries Aster up level with the tower', high.y > 41, JSON.stringify(high));
   await shot(h, 'myc-vents-column', false);
-  const tower = await airTo(h, WEST_TOWER[0], WEST_TOWER[1], 3, { jump: true, glide: true, flap: true, near: 1.5 });
+  // A jump and a flap carry her over (held in a glide she would sail straight past it).
+  const tower = await airTo(h, WEST_TOWER[0], WEST_TOWER[1], 3, { jump: true, flap: true, near: 1.5 });
   await step(h, 0.5);
   h.check('glide over to the tower and its egg', await found(h, 'mycelium:egg-vent'), JSON.stringify(tower));
   await skip(h);
@@ -82,6 +83,8 @@ export default async function (h) {
       const tz = window.__boosted ? 172 : 170.5;
       g.cam.yaw = Math.atan2(tx - p.x, tz - p.z);
       g.input.forceMove = Math.hypot(106 - p.x, 172 - p.z) > 0.6 ? { x: 0, y: 1 } : null;
+      // Over the perch, stop gliding and drop onto it (held, the glide sails on past).
+      if (window.__boosted && Math.hypot(106 - p.x, 172 - p.z) < 2.5) g.input.simulate('jump', false);
       return { x: p.x, y: p.y, vy: p.body.vy, d: Math.hypot(98 - p.x, 170.5 - p.z), grounded: p.body.grounded };
     });
     peak = Math.max(peak, s.y);

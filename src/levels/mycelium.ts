@@ -189,6 +189,8 @@ export const mycelium: LevelDef = {
       s.flatten(PIT.x, PIT.z, 9, PIT.y, 4);
       s.path([[73, 172, 16], [84, 172, 16]], 6, 2, false, false);
       s.flatten(PERCH.x, PERCH.z, 3.2, PERCH.y, 1.2);
+      // A lip toward the vents, so a glide that lands a little short still holds (the face below is too steep to stand on).
+      s.flatten(PERCH.x - 2.4, PERCH.z, 2.2, PERCH.y, 1.2);
       // --- the Rootchoke and the Strangled Hollow off its south side.
       s.flatten(CHOKE.x, CHOKE.z, 12, CHOKE.y, 5);
       s.flatten(HOLLOW.x, HOLLOW.z, 8.5, CHOKE.y, 5);

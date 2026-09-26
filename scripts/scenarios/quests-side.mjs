@@ -21,7 +21,7 @@ export async function talkTo(h, label) {
     const g = window.wyrm;
     const t = g.level.interactables.find((i) => i.label === label);
     if (!t) return false;
-    // Stand two paces off, on whichever side has solid, dry ground at about the same height.
+    // Stand two paces off, on whichever side has solid, dry, level ground at about the same height.
     const a0 = Math.atan2(g.player.x - t.x, g.player.z - t.z);
     let x = t.x;
     let z = t.z;
@@ -30,8 +30,11 @@ export async function talkTo(h, label) {
       const a = a0 + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * (Math.PI / 8);
       const cx = t.x + Math.sin(a) * 2.2;
       const cz = t.z + Math.cos(a) * 2.2;
-      const cy = g.col.groundAt(cx, cz, t.y + 3, 0.2).y;
-      if (cy > -1e3 && Math.abs(cy - t.y) < 2.6 && !g.isDeepWater(cx, cz, cy)) { x = cx; z = cz; y = cy; break; }
+      const gr = g.col.groundAt(cx, cz, t.y + 3, 0.2);
+      const cy = gr.y;
+      // Level enough to stand on (a bank steeper than a dragon can walk slides her off it).
+      const flat = !!gr.solid || g.col.terrainSlope(cx, cz, 0.5).slope < 1.1;
+      if (cy > -1e3 && Math.abs(cy - t.y) < 2.6 && flat && !g.isDeepWater(cx, cz, cy)) { x = cx; z = cz; y = cy; break; }
     }
     g.player.place(x, y + 0.05, z, Math.atan2(t.x - x, t.z - z));
     g.cam.snapBehind(Math.atan2(t.x - x, t.z - z), 0.3);

@@ -24,7 +24,8 @@ export default async function (h) {
   const feeble = await airTo(h, -2.3, 95, 1.5, { jump: true, stop: 0.2, near: 0.1 });
   h.check('a plain bounce on the top cap does not reach the lip', feeble.peak < 24.2, JSON.stringify(feeble));
   // ...but pounding down onto it on the way back down does, and on over the lip.
-  const lip = await airTo(h, -2.3, 95, 4, { stop: 0.15, pound: true, poundAt: 1.2, then: [0, 101], near: 2.5 });
+  // (Only a big bounce turns her toward the lip: the plain one she is still rising from must not.)
+  const lip = await airTo(h, -2.3, 95, 4, { stop: 0.15, pound: true, poundAt: 1.2, then: [0, 101], thenVy: 25, near: 2.5 });
   await skip(h);
   const top = await airTo(h, 0, 101, 2, { near: 1 });
   top.peak = lip.peak;

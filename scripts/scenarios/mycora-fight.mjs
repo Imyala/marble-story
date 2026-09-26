@@ -316,3 +316,36 @@ export default async function (h) {
   const s = await me(h);
   h.check('Aster alive at the end', s.alive, JSON.stringify(s));
 }
+
+/** Frozen mid-windup, she starts the warning over when she thaws: no blow without its full telegraph. */
+export async function stun(h) {
+  await grove(h, { awake: true });
+  await place(h, LAB.x, LAB.z - 8, 0);
+  await h.eval(() => { window.wyrm.player.invuln = true; const b = window.__boss; b.hp = b.maxHp * 0.6; b.settle(); b.setMode('idle'); });
+  await until(h, () => window.__boss.mode === 'stalk', 6);
+  const r = await h.eval(() => {
+    const b = window.__boss;
+    b.startSlam(true);
+    for (let k = 0; k < 15; k++) window.__step(1 / 30, 1 / 30);
+    // Frozen solid half way through the windup.
+    b.status.frozen = 2;
+    b.onStatus('freeze');
+    const marksWhileFrozen = [];
+    for (let k = 0; k < 30; k++) {
+      window.__step(1 / 30, 1 / 30);
+      marksWhileFrozen.push(b.marks.some((m) => m.active));
+    }
+    b.status.frozen = 0;
+    let t = 0;
+    let markBack = false;
+    let struckAt = -1;
+    for (let k = 0; k < 90 && struckAt < 0; k++) {
+      window.__step(1 / 30, 1 / 30);
+      t += 1 / 30;
+      if (b.marks.some((m) => m.active)) markBack = true;
+      if (b.struck && b.mode === 'slam') struckAt = t;
+    }
+    return { hiddenWhileFrozen: marksWhileFrozen.slice(3).every((m) => !m), markBack, struckAt: +struckAt.toFixed(2), st: b.state };
+  });
+  h.check('frozen, her warning goes; thawed, it comes back and runs its full length before the slam', r.hiddenWhileFrozen && r.markBack && r.struckAt >= 1.0, JSON.stringify(r));
+}

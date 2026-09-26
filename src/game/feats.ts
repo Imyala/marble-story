@@ -25,6 +25,8 @@ export interface ExtraStats {
   partnerKills?: number;
   /** Side quests finished, over every run (see src/game/quests.ts). */
   quests?: number;
+  /** Spore clouds and blight patches burned away with Fire (the Mycelium Deep). */
+  sporesBurnt?: number;
 }
 
 export function extra(s: SaveData): ExtraStats {
@@ -70,6 +72,8 @@ export const FEATS: FeatDef[] = [
   { id: 'letters', name: 'Archivist', desc: 'Read 16 lore letters.', goal: 16, reward: 150, progress: (s) => letters(s) },
   { id: 'together', name: 'Better Together', desc: 'Defeat 50 foes with Nyxa\'s help.', goal: 50, reward: 150, progress: (s) => extra(s).partnerKills ?? 0 },
   { id: 'helper', name: 'Helping Paw', desc: 'Finish 5 side quests for the folk of the realms.', goal: 5, reward: 150, progress: (s) => extra(s).quests ?? 0 },
+  // Act II.
+  { id: 'spores', name: 'Spore Sweeper', desc: 'Burn away 25 spore clouds and blight patches with Fire.', goal: 25, reward: 100, progress: (s) => extra(s).sporesBurnt ?? 0 },
 ];
 
 export const featKey = (id: string): string => `feat:${id}`;

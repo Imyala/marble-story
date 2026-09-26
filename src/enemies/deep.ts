@@ -10,6 +10,7 @@ import type { Projectile } from '../entities/projectile';
 import { approachAngle, yawOf, lerp, smoothstep } from '../core/math';
 import { rng } from '../core/rng';
 import { mat } from '../render/materials';
+import { bump } from '../game/feats';
 import { spike } from '../render/shapes';
 import { PuffcapModel, RootstalkerModel, ThornspitterModel, SPORE_GLOW, ROOT_VEIN, ROOT_HOT } from './models-deep';
 
@@ -154,6 +155,8 @@ function sporeFlash(g: Game, x: number, y: number, z: number, r: number): void {
     e.takeHit(makeHit({ damage: 8, type: 'fire', buildup: 45, dirX: (e.x - x) / n, dirZ: (e.z - z) / n, knockback: 3, stagger: 20, source: 'reaction', move: 'sporeFlash', ox: x, oz: z }));
   }
   g.style.bonus(25);
+  bump(g.save, 'sporesBurnt');
+  g.checkFeats();
 }
 
 /**

@@ -13,6 +13,7 @@ import { mat, matUnique, glow, glowShared, addRim } from '../../render/materials
 import { ellipsoid, spike, taperedTube, mergeStatic } from '../../render/shapes';
 import { angleDiff, approachAngle, clamp, damp, lerp, smoothstep, yawOf } from '../../core/math';
 import { rng } from '../../core/rng';
+import { THEMES } from '../../core/audio';
 import { GroundMark, lobSpore, sporeField, sproutSporeling, witherAll } from '../deep';
 import { SPORE_GLOW, ROOT_VEIN, ROOT_HOT } from '../models-deep';
 
@@ -1053,6 +1054,7 @@ export class Mycora extends Boss {
 
   /** Starts a windup: the flash, the threat arrow, the model's act. */
   private windup(a: AttackDef): void {
+    this.tele = a;
     this.attack = a;
     this.state = 'windup';
     this.stateT = 0;
@@ -1063,8 +1065,12 @@ export class Mycora extends Boss {
 
   private settle(): void {
     this.attack = null;
+    this.tele = null;
     this.state = 'chase';
   }
+
+  /** The windup in progress (kept apart from `attack`, which a freeze or a shock clears). */
+  private tele: AttackDef | null = null;
 
   // --- spore sacs --------------------------------------------------------------------
 
@@ -1214,6 +1220,8 @@ export class Mycora extends Boss {
     if (this.mode === 'dormant') {
       this.setMode('idle');
       this.nextIn = 1.5;
+      // Her own theme over the grove (the realm's bossFight starts the generic one).
+      if (THEMES.mycora && g.boss === this) g.audio.setMusic(THEMES.mycora);
       this.tell('start', 'See those glowing sacs on her? Burn them with Fire, Aster! That\'s what\'s keeping her strong!', 7);
     }
     this.checkPhase();
@@ -1825,6 +1833,8 @@ export class Mycora extends Boss {
     this.stats.falls++;
     this.final = this.hpFrac <= FINAL + 0.02;
     this.lashRoot.visible = false;
+    // Where she will land, for anyone underneath.
+    this.mark(this.grove.cx, this.grove.cz, this.def.radius + 0.8, 0.75);
     g.sfx('mycoraCry', this.x, this.y + HANG, this.z, 1.2, 1);
     this.say(this.final ? 'No... NO! My threads!' : 'Hnh! You... tore my threads!');
     return true;
@@ -1971,7 +1981,11 @@ export class Mycora extends Boss {
   private doDowned(): void {
     this.state = 'recover';
     this.hangY = 0;
-    // Down for good: she lies there for the finish.
+    // Weak enough now, she stays down for good: she lies there for the finish.
+    if (!this.final && this.hpFrac <= FINAL) {
+      this.final = true;
+      this.game.toast('Mycora can\'t rise again! Finish her!', 'good');
+    }
     if (this.final) return;
     if (this.modeT >= 6.5) {
       this.setMode('climb');
@@ -1994,7 +2008,7 @@ export class Mycora extends Boss {
     if (!tele.includes(this.mode)) return;
     if (this.mode === 'sweep' && this.state === 'active') return;
     this.modeT = 0;
-    if (this.attack) this.windup(this.attack);
+    if (this.tele) this.windup(this.tele);
     if (this.mode === 'slam') this.mark(this.slamX, this.slamZ, 3.2, (this.slams === 1 ? 1.05 : 0.85) / this.aggr);
     else if (this.mode === 'lash') this.mark(this.lashX, this.lashZ, 2.3, 0.95 / this.aggr);
     else if (this.mode === 'gasp') this.mark(this.x, this.z, 8, 1.0 / this.aggr);
@@ -2159,6 +2173,10 @@ export class Mycora extends Boss {
       this.cleanup(false);
       for (const mk of this.marks) mk.dispose();
       this.game.scene.remove(this.world);
+      // Her own props' geometry (the marks share theirs and are already done).
+      for (const o of [this.sweepRoot, this.lashRoot, ...this.ropes]) {
+        o.traverse((c) => (c as THREE.Mesh).geometry?.dispose());
+      }
       this.game.cam.extraDist = 0;
     }
     super.dispose();

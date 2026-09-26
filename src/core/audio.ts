@@ -863,6 +863,8 @@ export const THEMES: Record<string, MusicTheme> = {
   title: { bpm: 76, chords: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], scale: [0, 2, 4, 7, 9, 12], pad: 'sine', lead: 'triangle', mood: 'calm' },
   // Act II: the Hollow Gate. Slow and deep, minor with a raised sixth, glassy on top.
   hollow: { bpm: 72, chords: [[-5, -2, 2], [-8, -5, -1], [-3, 0, 4], [-7, -3, 0]], scale: [0, 2, 3, 7, 9, 12, 14], pad: 'sine', lead: 'triangle', mood: 'mysterious' },
+  // Mycora, the Spore Mother: a slow, heavy sway in a Phrygian minor, eerie on top.
+  mycora: { bpm: 116, chords: [[0, 3, 7], [1, 5, 8], [-2, 1, 5], [-4, -1, 3]], scale: [0, 1, 3, 5, 7, 8, 10, 12], pad: 'sawtooth', lead: 'triangle', mood: 'tense' },
 };
 
 export const audio = new Audio();

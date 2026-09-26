@@ -10,7 +10,7 @@ export default async function (h) {
   await place(h, LAB.x, LAB.z - 10, 0);
   await h.eval(() => { window.wyrm.player.invuln = true; });
   // Let her call her brood, then push her into the canopy phase so everything is out.
-  await h.eval(() => { const b = window.__boss; b.nextIn = 0; b.pattern = 2; });
+  await h.eval(() => { const b = window.__boss; b.nextIn = 0; b.pattern = 2; b.callCd = 0; });
   await until(h, () => window.wyrm.enemies.some((e) => e.alive && e.def.id === 'sporeling'), 8);
   await h.eval(() => { const b = window.__boss; b.hp = b.maxHp * 0.6; b.settle(); b.setMode('idle'); });
   await until(h, () => window.__boss.mode === 'stalk', 6);

@@ -97,15 +97,17 @@ export class Dialogue {
     // Small folk (the Burrowfolk, a firefly, a Gloomling cook): the camera comes down to their height and in closer.
     const short = ours ? this.lastShort : this.isShort(l.who);
     const focus = ours ? aster : other;
-    const mid = aster.clone().lerp(other, 0.5);
     const along = other.clone().sub(aster);
     along.y = 0;
     const len = Math.max(1, along.length());
     along.normalize();
     const wide = l.shot === 'wide';
-    const dist = wide ? len + 9 : short ? len * 0.7 + 3.4 : len * 0.8 + 4.5;
+    // A pair standing far apart: the shot centres on the one speaking, framed as if they stood 6 m apart.
+    const span = wide ? len : Math.min(len, 6);
+    const centre = focus.clone().lerp(ours ? other : aster, span / (2 * len));
+    const dist = wide ? len + 9 : short ? span * 0.7 + 3.4 : span * 0.8 + 4.5;
     const at = (side: THREE.Vector3): THREE.Vector3 => {
-      const pos = mid.clone().addScaledVector(side, dist).addScaledVector(along, l.who === 'aster' ? len * 0.35 : -len * 0.35);
+      const pos = centre.clone().addScaledVector(side, dist).addScaledVector(along, l.who === 'aster' ? span * 0.35 : -span * 0.35);
       pos.y += wide ? 4 : short ? 0.45 : 1.2;
       const gy = g.col.terrainAt(pos.x, pos.z);
       if (gy > -1e3 && pos.y < gy + 1) pos.y = gy + 1;
@@ -119,7 +121,7 @@ export class Dialogue {
       const alt = at(side.clone().negate());
       if (this.blockers(alt, aster, other) < inWay) pos = alt;
     }
-    const look = focus.clone().lerp(mid, short ? 0.3 : 0.4);
+    const look = focus.clone().lerp(centre, short ? 0.3 : 0.4);
     // Aimed a little low, so short heads sit clear above the text box.
     if (short && !wide) look.y -= 0.3;
     g.cam.setShot(pos, look);

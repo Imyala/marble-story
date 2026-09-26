@@ -2,7 +2,8 @@
  * The talk camera frames the short Burrowfolk (Mossa, Tallow, Pip) as it
  * does the dragons: each speaker's head is in the picture, above the
  * dialogue box and near the middle, with the camera down at their height
- * rather than looking over their heads.
+ * rather than looking over their heads. Dragon talks (eng-talk:dragons)
+ * frame the speaker, Aster's own lines included.
  *   node scripts/play.mjs eng-talk
  */
 import { boot, step, shot } from './hollow-lib.mjs';
@@ -70,7 +71,39 @@ async function endTalk(h) {
 /** The speaker's head is well framed: on screen, above the dialogue box, not squeezed to an edge. */
 const framed = (f) => !!f.head && f.head[2] && f.head[0] > 0.15 && f.head[0] < 0.85 && f.head[1] > 0.18 && f.head[1] < Math.min(0.62, (f.boxTop ?? 1) - 0.06);
 
+/**
+ * A dragon conversation (the Sanctum's welcome): Emberhold's line frames
+ * Emberhold, and Aster's own lines frame Aster from a few metres off (the
+ * camera used to sit inside her head for them).
+ */
+export async function dragons(h) {
+  await h.page.addInitScript(() => localStorage.clear());
+  await h.go('?level=sanctum&seed=3&quality=low&maxdt=0.1', 3000);
+  const seen = {};
+  for (let i = 0; i < 30 && Object.keys(seen).length < 2; i++) {
+    const who = await h.eval(() => window.wyrm.state === 'dialogue' ? window.wyrm.dialogueSpeaker : null);
+    if (!who) break;
+    if ((who === 'emberhold' || who === 'aster') && !seen[who]) {
+      await h.wait(1500);
+      seen[who] = await h.eval((who) => {
+        const g = window.wyrm;
+        const V = g.camera.position.constructor;
+        const at = who === 'aster' ? new V(g.player.x, g.player.y + 1.1, g.player.z) : (() => { const n = g.level.npcs.find((q) => q.id === who); return new V(n.x, n.y + 1.4 * n.rig.look.scale, n.z); })();
+        const v = at.clone().project(g.camera);
+        return { sx: +((v.x + 1) / 2).toFixed(2), sy: +((1 - v.y) / 2).toFixed(2), d: +g.camera.position.distanceTo(at).toFixed(1) };
+      }, who);
+      await h.shot(`eng-talk-${who}`);
+    }
+    await h.eval(() => { window.wyrm.dialogue.advance(); window.wyrm.dialogue.advance(); });
+    await h.wait(300);
+  }
+  const ok = (f) => !!f && f.sx > 0.1 && f.sx < 0.9 && f.sy > 0.15 && f.sy < 0.6;
+  h.check('Emberhold\'s line frames Emberhold', ok(seen.emberhold) && seen.emberhold.d < 14, JSON.stringify(seen.emberhold));
+  h.check('Aster\'s line frames Aster from a few metres off', ok(seen.aster) && seen.aster.d > 3 && seen.aster.d < 14, JSON.stringify(seen.aster));
+}
+
 export default async function (h) {
+  await dragons(h);
   await boot(h, 'hollow');
   for (const [id, re, from, shotName] of [['mossa', 'Mossa', [2.4, 2.8], 'eng-talk-mossa'], ['tallow', 'Tallow', [-0.4, 3.2], 'eng-talk-tallow'], ['pip', 'Pip', [0.2, -3.0], 'eng-talk-pip']]) {
     await talkTo(h, re, from);

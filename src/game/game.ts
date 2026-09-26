@@ -280,11 +280,12 @@ export class Game {
 
   private startPlaying(levelId: string, checkpoint: string | null): void {
     this.menus.hideAll();
-    this.fadeTo(() => {
+    // Waits on black only if the realm's code has yet to arrive.
+    this.fadeTo(() => this.whenLoaded(levelId, () => {
       this.input.wantPointerLock = true;
       this.input.requestLock();
-      return this.loadLevel(levelId, { checkpoint });
-    });
+      void this.loadLevel(levelId, { checkpoint });
+    }));
   }
 
   /**
@@ -316,7 +317,7 @@ export class Game {
       this.save.checkpoint = null;
       if (!this.save.unlocked.includes(target)) this.save.unlocked.push(target);
       writeSave(this.save);
-      this.loadLevel(target, { checkpoint: null });
+      void this.loadLevel(target, { checkpoint: null });
     }));
   }
 
@@ -741,7 +742,7 @@ export class Game {
   quitToTitle(): void {
     writeSave(this.save);
     this.menus.hideAll();
-    this.fadeTo(() => this.showTitle());
+    this.fadeTo(() => this.whenLoaded('fen', () => void this.showTitle()));
   }
 
   private simulate(dt: number): void {

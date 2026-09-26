@@ -140,6 +140,18 @@ export async function resume(h) {
   await letThrough();
   const s = await until(h, (s) => s.level === 'frostworks' && s.state !== 'transition', 20);
   h.check('Continue waits for the Frostworks\' code, then plays', held.state === 'transition' && held.level === 'fen' && s.level === 'frostworks' && (s.state === 'play' || s.state === 'dialogue'), JSON.stringify({ held, s }));
+  // Save & Quit to the title from a realm opened directly, before the Fen (behind the title) has arrived.
+  const letFen = await slow(h, 'fen');
+  await h.go(`?level=frostworks${Q}`, 1500);
+  await until(h, (s) => s.level === 'frostworks');
+  await h.skipDialogue(4000);
+  const fenBefore = await loaded(h, 'fen');
+  await h.eval(() => window.wyrm.quitToTitle());
+  const quitting = await until(h, (s) => s.state === 'transition' && /Loading Marshlight Fen/.test(s.veilText), 6);
+  await letFen();
+  const titled = await until(h, (s) => s.state === 'title' && s.level === 'fen' && s.fade < 0.05, 20);
+  const menu = await h.eval(() => !!document.querySelector('.title-screen h1'));
+  h.check('Save & Quit waits for the Fen, then shows the title', !fenBefore && quitting.state === 'transition' && titled.state === 'title' && menu, JSON.stringify({ fenBefore, quitting, titled, menu }));
 }
 
 /** A realm that will not load: a clear message, Try again, Stay here, Reload; never stuck on black. */

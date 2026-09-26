@@ -1,6 +1,7 @@
 import type { Game } from '../game/game';
 import {
   UPGRADES, nextCost, buyUpgrade, upgradeLevel, loadSave, DIFFICULTY, writeSave, eggsFound, SKINS, explored, skinUnlocked, recordTime, PAR_TIMES, clock, activeSlot, setActiveSlot, clearSave, SLOTS, type UpgradeTree, type Difficulty,
+  takeSetAsideSaves,
 } from '../game/progress';
 import type { Wardstone } from '../entities/props';
 import { RELICS, PROLOGUE, LEVEL_INFO } from '../game/story';
@@ -216,6 +217,10 @@ export class Menus {
       this.btn('Controls', () => this.showControls()),
       this.btn('Credits', () => this.showCredits()),
     );
+    // A save that could not be read was kept aside (src/game/progress.ts, loadSave): say so, once.
+    for (const bad of takeSetAsideSaves()) {
+      t.append(this.div('save-note', `The journey in Slot ${bad.slot} could not be read, so it was set aside (kept in this browser as <code>${bad.key}</code>). A new journey can begin here.`));
+    }
     t.append(list);
     m.append(t, this.div('menu-foot', 'A fan-made elemental dragon adventure &middot; best with mouse and keyboard or a gamepad'));
     this.push(m, null);

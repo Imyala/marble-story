@@ -1,5 +1,6 @@
 import type { DragonLook } from '../player/dragonRig';
 import type { Element } from './types';
+import { SAVE_VERSION, migrateSave } from './migrate';
 
 /**
  * Upgrades are bought with spirit gems (blue) at any Wardstone or from the
@@ -87,7 +88,8 @@ export const DIFFICULTY: Record<Difficulty, { enemyDamage: number; enemyHp: numb
 };
 
 export interface SaveData {
-  version: 1;
+  /** The save's shape (see SAVE_VERSION and the migrations in src/game/migrate.ts). */
+  version: number;
   level: string;
   checkpoint: string | null;
   elements: Element[];
@@ -199,8 +201,8 @@ export function ngScale(s: SaveData): { hp: number; dmg: number; aggro: number; 
   return { hp: 1 + 0.45 * n, dmg: 1 + 0.3 * n, aggro: Math.min(1.6, 1 + 0.12 * n), elite: 1 + n, gems: 1 + 0.25 * n };
 }
 
-/** Found-keys that belong to one run of the story, cleared for New Game+. */
-const RUN_KEY = /^(story|arena|ward):|:chest:|:rings:/;
+/** Found-keys that belong to one run of the story, cleared for New Game+ (`gate:` marks a realm gate opened). */
+const RUN_KEY = /^(story|arena|ward|gate):|:chest:|:rings:/;
 
 /**
  * Starts a Legend Run: the story, realms, fights and treasure chests begin
@@ -223,7 +225,7 @@ export function startNewGamePlus(s: SaveData): void {
 
 export function newSave(difficulty: Difficulty = 'normal'): SaveData {
   return {
-    version: 1,
+    version: SAVE_VERSION,
     level: 'fen',
     checkpoint: null,
     elements: [],
@@ -303,16 +305,60 @@ export function setActiveSlot(n: number): void {
   }
 }
 
+/** Slots whose save could not be read this session, set aside under a backup key (see loadSave). */
+const setAside: { slot: number; key: string }[] = [];
+
+/** Saves set aside since the last call (the title screen says so once). */
+export function takeSetAsideSaves(): { slot: number; key: string }[] {
+  return setAside.splice(0);
+}
+
+/**
+ * The slot's save, brought up to date (src/game/migrate.ts), or null if the
+ * slot is empty. A save that cannot be read at all is never thrown away: it
+ * is moved to a backup key (`<key>.corrupt`, then `.corrupt2`...) and the
+ * slot reads as empty, so the title offers a fresh start instead of failing.
+ */
 export function loadSave(slot = activeSlot()): SaveData | null {
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(slotKey(slot));
-    if (!raw) return null;
-    const s = JSON.parse(raw) as SaveData;
-    if (s.version !== 1 || typeof s.level !== 'string') return null;
-    // Fill anything a newer build added.
-    return { ...newSave(s.difficulty), ...s, stats: { ...newSave().stats, ...s.stats } };
+    raw = localStorage.getItem(slotKey(slot));
   } catch {
     return null;
+  }
+  if (!raw) return null;
+  let parsed: unknown;
+  let reason = '';
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    reason = 'not JSON';
+  }
+  if (!reason) {
+    const m = migrateSave(parsed);
+    if (m.ok) {
+      const s = m.save;
+      // Fill anything a newer build added (unknown fields stay as they are).
+      return { ...newSave(s.difficulty), ...s, stats: { ...newSave().stats, ...s.stats } };
+    }
+    reason = m.reason;
+  }
+  keepAside(slot, raw, reason);
+  return null;
+}
+
+/** Moves an unreadable save out of its slot to a backup key. */
+function keepAside(slot: number, raw: string, reason: string): void {
+  const key = slotKey(slot);
+  try {
+    let backup = `${key}.corrupt`;
+    for (let n = 2; localStorage.getItem(backup) !== null && localStorage.getItem(backup) !== raw; n++) backup = `${key}.corrupt${n}`;
+    localStorage.setItem(backup, raw);
+    localStorage.removeItem(key);
+    console.warn(`save in slot ${slot} could not be read (${reason}); kept aside as ${backup}`);
+    setAside.push({ slot, key: backup });
+  } catch {
+    /* storage blocked or full: leave it where it is */
   }
 }
 

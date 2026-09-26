@@ -17,8 +17,8 @@ if (seed) reseed(Number(seed));
 
 const root = document.getElementById('game-root')!;
 const game = new Game(root);
-window.wyrm = game;
-// Handles for automated tests and tinkering from the console.
+// Handles for automated tests and tinkering from the console (window.wyrm
+// appears below, once the first realm is built).
 (window as unknown as { wyrmDebug: unknown }).wyrmDebug = {
   MOVES,
   // Which realms exist and which have been fetched (realms load on demand).
@@ -47,7 +47,11 @@ if (level) {
 
 // The first realm's code arrives on its own (realms load on demand): the boot
 // screen stays up until it is built. A failure shows the loading veil's retry.
-const booted = () => document.getElementById('boot')?.classList.add('hidden');
+// Scripts wait for window.wyrm, so it too appears only once the game is playable.
+const booted = () => {
+  window.wyrm = game;
+  document.getElementById('boot')?.classList.add('hidden');
+};
 void first.then(booted);
 if (window.__bootTimer) clearTimeout(window.__bootTimer);
 

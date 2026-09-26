@@ -21,7 +21,7 @@ concurrency:
 jobs:
   scenarios:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -54,7 +54,10 @@ jobs:
                    features:critters features:powerups features:skills features:replay \
                    features:slots features:thief features:journal features:results \
                    features:placedgems fs-sanctum:library \
-                   quests-main hollow-fissure hollow-swim hollow-pairs hollow-quests; do
+                   quests-main hollow-fissure hollow-swim hollow-pairs hollow-quests \
+                   eng-lazy eng-slope gate-mycelium \
+                   myc-look:start myc-caps myc-threads myc-vents myc-secrets myc-boss myc-quest \
+                   foe-spore foe-root mycora-fight; do
             echo "::group::$s"
             if ! timeout 900 node scripts/play.mjs "$s"; then failed="$failed $s"; fi
             echo "::endgroup::"

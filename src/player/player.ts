@@ -130,6 +130,12 @@ export class Player {
   private wadeFx = 0;
   private flashT = 0;
   inWater = false;
+  /**
+   * Landings on terrain too steep to walk slide off it, and ledges on such
+   * terrain cannot be pulled up onto (Body.slideSteep). Only a test turns it
+   * off, to compare with how jump-spam used to climb cliffs.
+   */
+  slopeLimit = true;
   /** Seconds the combat music should stay up after a fight. */
   lastCombat = -99;
   private ledge: LedgeMove | null = null;
@@ -182,6 +188,8 @@ export class Player {
 
   constructor(game: Game) {
     this.game = game;
+    // Landing on terrain too steep to walk slides off it (no climbing cliffs by jumping at them).
+    this.body.slideSteep = true;
     this.breath = new BreathController(game, this);
     game.scene.add(this.rig.root);
     this.rig.root.traverse((o) => {
@@ -424,6 +432,8 @@ export class Player {
 
     const wasGrounded = b.grounded;
     const vyBefore = b.vy;
+    // A swimmer brushing a steep bank is not landing on it.
+    b.slideSteep = this.slopeLimit && this.state !== 'swim';
     g.col.move(b, dt);
     if (plat && !b.grounded) {
       b.vx += plat.pvx;
@@ -826,13 +836,18 @@ export class Player {
         else lo = mid;
       }
       const edge = hi;
+      // Never pull up onto bare terrain too steep to stand on: Aster would only slide off it
+      // again (and vaulting up a slope step by step would climb any cliff).
+      const tx = b.x + dx * (edge + b.radius + 0.1);
+      const tz = b.z + dz * (edge + b.radius + 0.1);
+      if (b.slideSteep && !col.groundAt(tx, tz, top + 0.3, 0.04).solid && col.terrainSlope(tx, tz, b.radius).slope > b.maxSlope) continue;
       const hang = air && rise > 1.05;
       const hx = b.x + dx * Math.max(0, edge - b.radius - 0.05);
       const hz = b.z + dz * Math.max(0, edge - b.radius - 0.05);
       this.ledge = {
         sx: b.x, sy: b.y, sz: b.z,
         hx, hy: hang ? top - 1.2 : b.y, hz,
-        tx: b.x + dx * (edge + b.radius + 0.1), ty: top, tz: b.z + dz * (edge + b.radius + 0.1),
+        tx, ty: top, tz,
         hang, pulling: !hang, t: 0,
       };
       this.yaw = yawOf(dx, dz);

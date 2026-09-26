@@ -203,6 +203,14 @@ export class Body {
   hitCeiling = false;
   /** Terrain slope this body refuses to climb, as rise over run. */
   maxSlope = 1.3;
+  /**
+   * Landings on terrain steeper than maxSlope slide off instead of standing
+   * (so repeated jumps cannot climb a slope too steep to walk). Off by default;
+   * the dragon turns it on.
+   */
+  slideSteep = false;
+  /** Set by the last move when the body touched down on too-steep terrain and is sliding off it. */
+  steep = false;
 
   constructor(radius: number, height: number) {
     this.radius = radius;
@@ -215,6 +223,10 @@ export class Body {
     this.z = z;
   }
 }
+
+/** How fast a body sliding off too-steep terrain picks up speed down it, and its top speed (m/s², m/s). */
+const SLIDE_ACCEL = 40;
+const SLIDE_MAX = 11;
 
 const CELL = 8;
 const cellKey = (ix: number, iz: number): number => (ix + 2048) * 4096 + (iz + 2048);
@@ -329,11 +341,66 @@ export class CollisionWorld {
     b.z += s.dz;
   }
 
+  /**
+   * The terrain's slope under a footprint of radius `r` at (x, z), as rise
+   * over run (0 where there is no terrain), and which way is downhill.
+   * Averaged across the footprint, so a lip or a crease in the heightfield
+   * does not count as a cliff.
+   */
+  terrainSlope(x: number, z: number, r: number): { slope: number; nx: number; nz: number } {
+    const t = this.terrain;
+    if (!t) return { slope: 0, nx: 0, nz: 0 };
+    const e = Math.max(0.2, r);
+    const hx0 = t.at(x - e, z);
+    const hx1 = t.at(x + e, z);
+    const hz0 = t.at(x, z - e);
+    const hz1 = t.at(x, z + e);
+    if (hx0 === -Infinity || hx1 === -Infinity || hz0 === -Infinity || hz1 === -Infinity) return { slope: 0, nx: 0, nz: 0 };
+    const gx = (hx1 - hx0) / (2 * e);
+    const gz = (hz1 - hz0) / (2 * e);
+    const slope = Math.hypot(gx, gz);
+    return slope > 1e-6 ? { slope, nx: -gx / slope, nz: -gz / slope } : { slope: 0, nx: 0, nz: 0 };
+  }
+
+  /**
+   * A body touching down on terrain too steep to stand on (see
+   * Body.slideSteep): it keeps no speed into the slope and slides down it,
+   * faster the longer it slides, and is not grounded (no jump from there).
+   * Returns false, changing nothing, when the ground is not too steep.
+   */
+  private slideOff(b: Body, dt: number, groundY: number): boolean {
+    const s = this.terrainSlope(b.x, b.z, b.radius);
+    if (s.slope <= b.maxSlope) return false;
+    // A jump that only just made a ledge: flat ground within a step of the feet, just uphill.
+    // Standing there (and walking on up) is the old forgiveness; the long face below it is not.
+    const lx = b.x - s.nx * (b.radius + 0.25);
+    const lz = b.z - s.nz * (b.radius + 0.25);
+    if (this.terrainAt(lx, lz) - b.y <= b.stepUp && this.terrainSlope(lx, lz, b.radius).slope <= b.maxSlope) return false;
+    // Pressed into the face (the air lets a body in up to its step height): out of it
+    // sideways, never up it; a landing that lifted it onto the face would climb it.
+    if (b.y < groundY) {
+      const out = (groundY - b.y) / s.slope + 0.01;
+      b.x += s.nx * out;
+      b.z += s.nz * out;
+    }
+    const down = b.vx * s.nx + b.vz * s.nz;
+    // Nothing into the slope; downhill, gravity along it (capped).
+    const along = Math.min(SLIDE_MAX, Math.max(0, down) + SLIDE_ACCEL * dt);
+    b.vx += (along - down) * s.nx;
+    b.vz += (along - down) * s.nz;
+    b.vy = Math.min(b.vy, -along * Math.min(s.slope, 4));
+    b.grounded = false;
+    b.ground = null;
+    b.steep = true;
+    return true;
+  }
+
   /** Integrates a body one step and resolves it against the world. */
   move(b: Body, dt: number): void {
     const wasGrounded = b.grounded;
     b.hitWall = false;
     b.hitCeiling = false;
+    b.steep = false;
 
     // Horizontal, in substeps small enough that nothing tunnels.
     const hx = b.vx * dt;
@@ -382,6 +449,8 @@ export class CollisionWorld {
     b.groundY = g.y;
     const snap = wasGrounded ? 0.4 : 0;
     if (b.vy <= 0 && b.y <= g.y + snap && g.y > -Infinity) {
+      // Touching down on bare terrain too steep to stand on: slide off it instead.
+      if (b.slideSteep && !wasGrounded && !g.solid && this.slideOff(b, dt, g.y)) return;
       b.y = g.y;
       b.vy = 0;
       b.grounded = true;

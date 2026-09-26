@@ -179,16 +179,7 @@ export const hollow: LevelDef = {
     greatRoots(b);
     dressFloor(b);
     b.level.props.push(new Glints(g));
-    // Nothing worth standing on is this high: a dragon who has scrambled up the cavern walls is set back down.
-    b.level.props.push({
-      update: () => {
-        const p = g.player;
-        if (p.body.grounded && p.y > 26 && p.state === 'move') {
-          g.hud.flick('Too steep up here, Aster! Back down we go.', 3);
-          g.playerFell();
-        }
-      },
-    });
+    // (The cavern walls need no guard of their own: landings on terrain too steep to walk slide off it, see Body.slideSteep.)
   },
 
   onEnter(g, fresh) {

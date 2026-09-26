@@ -95,6 +95,17 @@ export default async function (h) {
   await step(h, 0.6);
   await shot(h, 'foe-rootstalker-flipped', false);
   await clearFoes(h);
+  // Burrowing: the glowing ripple and its trail of broken earth, running at Aster.
+  await h.eval(() => window.wyrm.cam.clearShot());
+  await place(h, LAB.x, LAB.z - 9, 0);
+  await spawn(h, 'rootstalker', LAB.x + 4, LAB.z + 5, Math.PI, { noElite: true, aggro: true });
+  await h.eval(() => { const e = window.__foes[0]; e.burrowCd = 0; e.globalCd = 0; });
+  for (let t = 0; t < 6 && (await foe(h, 0)).mode !== 'tunnel'; t += 0.1) await step(h, 0.1);
+  await step(h, 0.9);
+  await h.eval(() => { const g = window.wyrm; g.cam.snapBehind(Math.PI * 0.15, 0.45); });
+  await step(h, 0.1);
+  await shot(h, 'foe-rootstalker-tunnel', false);
+  await clearFoes(h);
 
   // Thornspitter: idle, winding up a fan, pulled in, and dazed.
   await spawn(h, 'thornspitter', LAB.x, LAB.z, Math.PI, { noElite: true });

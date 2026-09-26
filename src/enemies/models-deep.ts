@@ -515,13 +515,13 @@ export class RootstalkerModel extends DeepModel {
         th.position.set(sx * 0.22, 0.34 + Math.cos(z) * 0.06, z);
         th.rotation.set(-0.55, 0, sx * -0.45);
         this.shell.add(th);
-        const v = ellipsoid(0.09, 0.05, 0.12, this.veinMat, 6);
+        const v = ellipsoid(0.12, 0.06, 0.16, this.veinMat, 6);
         v.position.set(sx * 0.22, 0.33 + Math.cos(z) * 0.06, z + 0.02);
         this.shell.add(v);
       }
     }
     // A glowing seam down the spine.
-    const seam = ellipsoid(0.05, 0.05, 1.05, this.veinMat, 6);
+    const seam = ellipsoid(0.08, 0.06, 1.1, this.veinMat, 6);
     seam.position.set(0, 0.4, -0.1);
     this.shell.add(seam);
     // The soft belly, with the glowing heart that shows when it is flipped.

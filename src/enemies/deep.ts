@@ -722,6 +722,7 @@ export class Rootstalker extends Enemy {
   private readonly mound = new THREE.Group();
   private readonly mark = new GroundMark(0xff3a5a);
   private readonly trail: { m: THREE.Mesh; t: number }[] = [];
+  private readonly moundGlow: THREE.MeshBasicMaterial;
   private trailI = 0;
   private lastTrail = new THREE.Vector2();
   /** Where the ripple has been lately, for Ground Pounds "on its trail". */
@@ -750,18 +751,26 @@ export class Rootstalker extends Enemy {
       this.mound.add(th);
     }
     const vein = new THREE.MeshBasicMaterial({ color: ROOT_VEIN });
-    for (const sx of [-1, 1]) {
+    for (const sx of [-1, 0, 1]) {
       const v = new THREE.Mesh(new THREE.SphereGeometry(1, 6, 4), vein);
-      v.scale.set(0.05, 0.05, 0.5);
-      v.position.set(sx * 0.3, 0.33, 0);
+      v.scale.set(0.07, 0.07, 0.6);
+      v.position.set(sx * 0.3, 0.33 + (sx ? 0 : 0.04), 0);
       this.mound.add(v);
     }
+    // A glow in the earth round it, so the ripple reads on a dark floor.
+    this.moundGlow = new THREE.MeshBasicMaterial({ color: 0xb050ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+    const halo = new THREE.Mesh(new THREE.CircleGeometry(1.6, 20), this.moundGlow);
+    halo.rotation.x = -Math.PI / 2;
+    halo.position.y = 0.14;
+    halo.renderOrder = 22;
+    this.mound.add(halo);
     this.mound.visible = false;
     this.world.add(this.mound, this.mark.root);
-    // Broken earth left along the trail.
+    // Broken earth left along the trail, still glowing faintly where the root went through.
     const clod = new THREE.DodecahedronGeometry(0.28, 0);
+    const clodM = mat(0x3a2a48, { rough: 1, flat: true, emissive: 0x6a2aa0, emissiveIntensity: 0.55 });
     for (let i = 0; i < 18; i++) {
-      const m = new THREE.Mesh(clod, dirt);
+      const m = new THREE.Mesh(clod, clodM);
       m.visible = false;
       this.world.add(m);
       this.trail.push({ m, t: 99 });
@@ -1077,6 +1086,7 @@ export class Rootstalker extends Enemy {
     const b = this.body;
     this.mound.position.set(b.x, b.y + Math.sin(g.time * 18) * 0.06, b.z);
     this.mound.rotation.y = this.trailYaw;
+    this.moundGlow.opacity = 0.45 + 0.25 * Math.sin(g.time * 9);
     this.fxT -= dt;
     if (this.fxT <= 0) {
       this.fxT = 0.05;
@@ -1207,6 +1217,7 @@ export class Rootstalker extends Enemy {
     super.dispose();
     this.game.scene.remove(this.world);
     this.mark.dispose();
+    this.moundGlow.dispose();
   }
 }
 

@@ -32,4 +32,9 @@ if (existsSync(PUBLISH_DIR)) {
   rmSync(PUBLISH_DIR, { recursive: true, force: true });
 }
 cpSync('dist', PUBLISH_DIR, { recursive: true });
-console.log(`build finished: dist/index.html, mirrored to ${PUBLISH_DIR}/`);
+// Realms load on demand, one chunk each (src/levels/index.ts): a chunk missing
+// from the mirror would only show up when a player first travels there.
+const chunks = readdirSync('dist/assets');
+const missing = chunks.filter((f) => !existsSync(`${PUBLISH_DIR}/assets/${f}`));
+if (missing.length > 0) throw new Error(`${PUBLISH_DIR}/assets is missing ${missing.join(', ')}`);
+console.log(`build finished: dist/index.html and ${chunks.length} assets, mirrored to ${PUBLISH_DIR}/`);

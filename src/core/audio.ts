@@ -15,7 +15,9 @@ export type Sfx =
   | 'hurt' | 'death' | 'ui' | 'uiConfirm' | 'uiBack' | 'checkpoint' | 'fury' | 'dragonTimeOn'
   | 'dragonTimeOff' | 'unlock' | 'door' | 'torch' | 'switch' | 'splash' | 'charge' | 'pound'
   | 'levelUp' | 'talk' | 'launch' | 'counter' | 'relic' | 'cue' | 'woodBreak' | 'potBreak' | 'chest' | 'page' | 'egg' | 'thunder'
-  | 'bleat' | 'croak' | 'squeak' | 'chirr';
+  | 'bleat' | 'croak' | 'squeak' | 'chirr'
+  // Act II: the Mycelium Deep's foes and Mycora.
+  | 'sporePuff' | 'squelch' | 'cough' | 'sporeFlash' | 'burrow' | 'erupt' | 'thornVolley' | 'sacBurst' | 'mycoraCry' | 'rootRip';
 
 export type LoopId = 'breath' | 'glide' | 'charge' | 'rain';
 
@@ -621,6 +623,56 @@ export class Audio {
       case 'chirr':
         for (let i = 0; i < 4; i++) this.tone(3600 * p, 0.025, 'sine', 0.025 * v, { delay: i * 0.05 });
         break;
+      // Act II: spores, roots and the Spore Mother.
+      case 'sporePuff':
+        // A soft whump, then the hiss of spores.
+        this.tone(110 * p, 0.25, 'sine', 0.3 * v, { slide: 60 * p });
+        this.noise(0.6, 0.28 * v, { type: 'bandpass', freq: 1400 * p, freqEnd: 500, q: 0.7, attack: 0.03 });
+        break;
+      case 'squelch':
+        this.tone(240 * p, 0.14, 'sine', 0.3 * v, { slide: 90 * p });
+        this.noise(0.18, 0.3 * v, { type: 'lowpass', freq: 900 * p, freqEnd: 250 });
+        this.tone(520 * p, 0.08, 'triangle', 0.08 * v, { slide: 300, delay: 0.05 });
+        break;
+      case 'cough':
+        for (let i = 0; i < 2; i++) this.noise(0.09, 0.2 * v, { type: 'bandpass', freq: 700 * p + i * 120, q: 1.4, delay: i * 0.13, attack: 0.005 });
+        break;
+      case 'sporeFlash':
+        this.noise(0.5, 0.45 * v, { type: 'lowpass', freq: 3000, freqEnd: 400, attack: 0.01 });
+        this.noise(0.3, 0.25 * v, { type: 'highpass', freq: 3500, freqEnd: 1500 });
+        this.tone(160 * p, 0.3, 'sawtooth', 0.1 * v, { slide: 70, filter: 900 });
+        break;
+      case 'burrow':
+        // Earth giving way: a low crunch and a scatter of grit.
+        this.noise(0.35, 0.35 * v, { type: 'lowpass', freq: 500 * p, freqEnd: 120, attack: 0.02 });
+        for (let i = 0; i < 3; i++) this.noise(0.04, 0.12 * v, { type: 'bandpass', freq: 1500 + Math.random() * 1500, q: 2, delay: 0.05 + i * 0.06 });
+        break;
+      case 'erupt':
+        this.noise(0.5, 0.6 * v, { type: 'lowpass', freq: 1400 * p, freqEnd: 90 });
+        this.tone(75 * p, 0.45, 'sine', 0.6 * v, { slide: 35 });
+        this.noise(0.12, 0.3 * v, { type: 'highpass', freq: 2500 });
+        break;
+      case 'thornVolley':
+        for (let i = 0; i < 3; i++) this.noise(0.12, 0.16 * v, { type: 'bandpass', freq: 2600 * p + i * 400, freqEnd: 900, q: 2.5, delay: i * 0.03 });
+        this.tone(300 * p, 0.1, 'triangle', 0.08 * v, { slide: 180 });
+        break;
+      case 'sacBurst':
+        this.tone(90 * p, 0.35, 'sine', 0.6 * v, { slide: 45 });
+        this.noise(0.7, 0.5 * v, { type: 'lowpass', freq: 2200, freqEnd: 200, attack: 0.01 });
+        this.tone(400 * p, 0.25, 'triangle', 0.12 * v, { slide: 120, delay: 0.05 });
+        break;
+      case 'mycoraCry':
+        // Deep, wet and choral: three voices sliding down together.
+        for (const [f, d] of [[110, 0], [138.6, 0.04], [165, 0.08]] as [number, number][]) {
+          this.tone(f * p, 1.4, 'sawtooth', 0.12 * v, { slide: f * p * 0.62, filter: 900, attack: 0.15, delay: d });
+        }
+        this.noise(1.3, 0.3 * v, { type: 'bandpass', freq: 600, freqEnd: 250, q: 1.2, attack: 0.15 });
+        break;
+      case 'rootRip':
+        for (let i = 0; i < 5; i++) this.noise(0.08, 0.3 * v, { type: 'bandpass', freq: 400 + Math.random() * 700, q: 1.5, delay: i * 0.07 });
+        this.tone(60 * p, 0.8, 'sine', 0.5 * v, { slide: 30 });
+        this.noise(0.9, 0.35 * v, { type: 'lowpass', freq: 600, freqEnd: 80, delay: 0.1 });
+        break;
     }
   }
 
@@ -811,6 +863,8 @@ export const THEMES: Record<string, MusicTheme> = {
   title: { bpm: 76, chords: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], scale: [0, 2, 4, 7, 9, 12], pad: 'sine', lead: 'triangle', mood: 'calm' },
   // Act II: the Hollow Gate. Slow and deep, minor with a raised sixth, glassy on top.
   hollow: { bpm: 72, chords: [[-5, -2, 2], [-8, -5, -1], [-3, 0, 4], [-7, -3, 0]], scale: [0, 2, 3, 7, 9, 12, 14], pad: 'sine', lead: 'triangle', mood: 'mysterious' },
+  // Mycora, the Spore Mother: a slow, heavy sway in a Phrygian minor, eerie on top.
+  mycora: { bpm: 116, chords: [[0, 3, 7], [1, 5, 8], [-2, 1, 5], [-4, -1, 3]], scale: [0, 1, 3, 5, 7, 8, 10, 12], pad: 'sawtooth', lead: 'triangle', mood: 'tense' },
 };
 
 export const audio = new Audio();

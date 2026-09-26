@@ -499,9 +499,12 @@ class Burrowfolk implements Prop {
   private lamp = new THREE.Group();
   private yaw: number;
   private t = rng.next() * 10;
+  /** Height of the face above the feet: where the talk camera looks (see Dialogue's speakerPos). */
+  readonly talkY: number;
 
   constructor(private game: Game, readonly id: string, readonly x: number, readonly y: number, readonly z: number, yaw: number, look: FolkLook) {
     this.yaw = yaw;
+    this.talkY = 1.1 * look.scale;
     const fur = mat(look.fur, { rough: 1 });
     const belly = mat(look.belly, { rough: 1 });
     const cloth = mat(look.cloth, { rough: 0.9 });

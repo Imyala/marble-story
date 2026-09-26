@@ -86,26 +86,94 @@ export class Dialogue {
       return;
     }
     const aster = new THREE.Vector3(g.player.x, g.player.y + 1.1, g.player.z);
-    const other = this.speakerPos(l.who) ?? this.lastOther ?? aster.clone().add(new THREE.Vector3(Math.sin(g.player.yaw) * 3, 0.5, Math.cos(g.player.yaw) * 3));
-    if (l.who !== 'aster' && l.who !== 'flick' && this.speakerPos(l.who)) this.lastOther = other.clone();
-    const focus = l.who === 'aster' || l.who === 'flick' ? aster : other;
+    const ours = l.who === 'aster' || l.who === 'flick';
+    // The one Aster is talking with: this speaker, or (for Aster's and Flick's own lines) the last one.
+    const found = ours ? null : this.speakerPos(l.who);
+    const other = found ?? this.lastOther ?? aster.clone().add(new THREE.Vector3(Math.sin(g.player.yaw) * 3, 0.5, Math.cos(g.player.yaw) * 3));
+    if (found) {
+      this.lastOther = other.clone();
+      this.lastShort = this.isShort(l.who);
+    }
+    // Small folk (the Burrowfolk, a firefly, a Gloomling cook): the camera comes down to their height and in closer.
+    const short = ours ? this.lastShort : this.isShort(l.who);
+    const focus = ours ? aster : other;
     const mid = aster.clone().lerp(other, 0.5);
     const along = other.clone().sub(aster);
     along.y = 0;
     const len = Math.max(1, along.length());
     along.normalize();
-    const side = new THREE.Vector3(-along.z, 0, along.x);
     const wide = l.shot === 'wide';
-    const dist = wide ? len + 9 : len * 0.8 + 4.5;
-    const pos = mid.clone().addScaledVector(side, dist).addScaledVector(along, l.who === 'aster' ? len * 0.35 : -len * 0.35);
-    pos.y += wide ? 4 : 1.2;
-    const gy = g.col.terrainAt(pos.x, pos.z);
-    if (gy > -1e3 && pos.y < gy + 1) pos.y = gy + 1;
-    const look = focus.clone().lerp(mid, 0.4);
+    const dist = wide ? len + 9 : short ? len * 0.7 + 3.4 : len * 0.8 + 4.5;
+    const at = (side: THREE.Vector3): THREE.Vector3 => {
+      const pos = mid.clone().addScaledVector(side, dist).addScaledVector(along, l.who === 'aster' ? len * 0.35 : -len * 0.35);
+      pos.y += wide ? 4 : short ? 0.45 : 1.2;
+      const gy = g.col.terrainAt(pos.x, pos.z);
+      if (gy > -1e3 && pos.y < gy + 1) pos.y = gy + 1;
+      return pos;
+    };
+    // One side of the pair or the other: the usual one, unless Nyxa or the scenery is in the way there and not on the far side.
+    const side = new THREE.Vector3(-along.z, 0, along.x);
+    let pos = at(side);
+    const inWay = this.blockers(pos, aster, other);
+    if (inWay > 0) {
+      const alt = at(side.clone().negate());
+      if (this.blockers(alt, aster, other) < inWay) pos = alt;
+    }
+    const look = focus.clone().lerp(mid, short ? 0.3 : 0.4);
+    // Aimed a little low, so short heads sit clear above the text box.
+    if (short && !wide) look.y -= 0.3;
     g.cam.setShot(pos, look);
   }
 
+  /** How many of the two speakers the camera at `pos` would not see: Nyxa standing in front, or rock, walls and huts between. */
+  private blockers(pos: THREE.Vector3, ...who: THREE.Vector3[]): number {
+    const g = this.game;
+    const partner = g.partner.present && !g.partner.hidden ? new THREE.Vector3(g.partner.x, g.partner.y + 1, g.partner.z) : null;
+    const seg = new THREE.Line3();
+    const near = new THREE.Vector3();
+    let n = 0;
+    for (const t of who) {
+      seg.set(pos, t);
+      if (partner && partner.distanceTo(t) > 1.2 && seg.closestPointToPoint(partner, true, near).distanceTo(partner) < 1.3) {
+        n++;
+        continue;
+      }
+      const d = t.clone().sub(pos);
+      const L = d.length();
+      if (L < 0.5) continue;
+      d.divideScalar(L);
+      if (g.col.raycast(pos.x, pos.y, pos.z, d.x, d.y, d.z, L - 0.6, true, true).t < L - 0.6) n++;
+    }
+    return n;
+  }
+
   private lastOther: THREE.Vector3 | null = null;
+  /** Whether the last other speaker was one of the small folk (for Aster's and Flick's replies). */
+  private lastShort = false;
+
+  /** Height of the face above the feet for small folk that do not say (a firefly elder, a Gloomling cook). */
+  private static readonly FOLK_TALK_Y = 1.0;
+
+  /**
+   * A speaker who is not a dragon but a prop of the realm with that id (the
+   * Burrowfolk, the side quests' firefly and Gloomling givers). Such a prop
+   * may give `talkY`, the height of its face above its feet.
+   */
+  private folk(who: string): { x: number; y: number; z: number; talkY?: number } | null {
+    for (const p of this.game.level?.props ?? []) {
+      const f = p as unknown as { id?: unknown; x?: unknown; y?: unknown; z?: unknown; talkY?: unknown };
+      if (f.id === who && typeof f.x === 'number' && typeof f.y === 'number' && typeof f.z === 'number') {
+        return { x: f.x, y: f.y, z: f.z, ...(typeof f.talkY === 'number' ? { talkY: f.talkY } : {}) };
+      }
+    }
+    return null;
+  }
+
+  /** One of the small folk: the talk camera frames them lower and closer than a dragon. */
+  private isShort(who: string): boolean {
+    const f = this.folk(who);
+    return !!f && (f.talkY ?? Dialogue.FOLK_TALK_Y) < 1.5;
+  }
 
   private speakerPos(who: string): THREE.Vector3 | null {
     const g = this.game;
@@ -113,6 +181,8 @@ export class Dialogue {
     if (who === 'flick') return g.flick.position.clone();
     const npc = g.level?.npcs.find((n) => n.id === who);
     if (npc) return new THREE.Vector3(npc.x, npc.y + 1.4 * npc.rig.look.scale, npc.z);
+    const folk = this.folk(who);
+    if (folk) return new THREE.Vector3(folk.x, folk.y + (folk.talkY ?? Dialogue.FOLK_TALK_Y), folk.z);
     if (g.boss && g.boss.speakerId === who) return new THREE.Vector3(g.boss.x, g.boss.y + g.boss.height * 0.7, g.boss.z);
     // Nyxa travelling as Aster's partner (not standing as an NPC).
     if (who === 'nyxa' && g.partner.present && !g.partner.hidden) return new THREE.Vector3(g.partner.x, g.partner.y + 1.9, g.partner.z);
@@ -136,6 +206,7 @@ export class Dialogue {
     this.topBar.classList.remove('on');
     this.botBar.classList.remove('on');
     this.lastOther = null;
+    this.lastShort = false;
     const d = this.done;
     this.done = null;
     d?.();

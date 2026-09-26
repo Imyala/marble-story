@@ -28,7 +28,8 @@ export default async function (h) {
   h.check('the main quest leads to the Burrowfolk before Aster has met them', /Burrowfolk/.test(m0.text) && m0.spot?.level === 'hollow', JSON.stringify(m0));
   await talk(h, 'Mossa');
   const m1 = await h.eval(() => window.wyrm.quests.main());
-  h.check('after Mossa, the main quest speaks of the sealed gates', /seal the four gates/.test(m1.text), JSON.stringify(m1));
+  // Act II's main thread (this round): Mossa's rite sends Aster after twelve eggs for the Mycelium gate.
+  h.check('after Mossa, the main quest speaks of the Mycelium gate', /Mycelium gate/.test(m1.text), JSON.stringify(m1));
 
   // --- Lamp Oil ---
   const gems0 = await h.eval(() => window.wyrm.save.gems);

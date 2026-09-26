@@ -350,7 +350,7 @@ export async function look(h) {
   await h.skipDialogue(3000);
   await view('quests-look-flame', 7.4, 57.4, 2.2, 4, 1.8);
   for (const [lvl, label] of [['sanctum', 'Talk to Quillon'], ['sanctum', 'Talk to Keeper Hesper'], ['falls', 'Talk to Old Brisa'], ['frostworks', 'Talk to Maud'], ['plains', 'Talk to Tamsin'], ['keep', 'Talk to Old Brine']]) {
-    await h.eval((l) => { const g = window.wyrm; if (g.level.def.id !== l) g.loadLevel(l, {}); }, lvl);
+    await h.eval((l) => { const g = window.wyrm; if (g.level.def.id !== l) return g.loadLevel(l, {}); }, lvl);
     await h.skipDialogue(8000);
     [x, z, yaw] = await at(label);
     await view(`quests-look-${label.split(' ').pop().toLowerCase()}`, x, z, yaw, 5.5, 2.6);

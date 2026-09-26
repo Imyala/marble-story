@@ -25,7 +25,7 @@ import { BESTIARY, bump, extra, featKey, newlyDone } from './feats';
 import { SKILLS, SKILL_REWARD, skillKey } from './skills';
 import { Level, Builder, type LevelDef } from '../world/level';
 import type { Wardstone, Collectible, Arena } from '../entities/props';
-import { LEVELS } from '../levels';
+import { ensureLevel, hasLevel, levelDef, prefetchLevels } from '../levels';
 import { Hud } from '../ui/hud';
 import { Menus } from '../ui/menus';
 import { BACKDROPS } from '../render/backdrop';
@@ -38,7 +38,7 @@ import { PhotoMode } from '../ui/photo';
 import { Dialogue, type Line } from '../ui/dialogue';
 import { Flick } from '../player/flick';
 import { Companion, isPartnerMove, PARTNER_COLOR } from '../player/companion';
-import { RELICS } from './story';
+import { RELICS, LEVEL_INFO } from './story';
 import type { Boss } from '../enemies/boss';
 import { rng } from '../core/rng';
 import { Quests } from './quests';
@@ -136,9 +136,14 @@ export class Game {
   private gemChainT = 0;
   private firePatches: FirePatch[] = [];
   private spikes: Spikes[] = [];
-  private transitionFn: (() => void) | null = null;
+  private transitionFn: (() => void | Promise<unknown>) | null = null;
   private transitionT = 0;
-  private transitionPhase: 'out' | 'in' = 'out';
+  /** 'hold': black, waiting for a realm's code to arrive (see whenLoaded). */
+  private transitionPhase: 'out' | 'hold' | 'in' = 'out';
+  /** Bumped by every loadLevel, so a realm that arrives late never replaces a newer choice. */
+  private loadSeq = 0;
+  /** A realm's code failed to arrive: what the loading veil's buttons (and keys) do. */
+  private loadFail: { retry: () => void; cancel: (() => void) | null } | null = null;
   private stateBeforeTransition: GameState = 'play';
   private interactTarget: import('../entities/props').Interactable | null = null;
   private autosaveT = 0;
@@ -230,11 +235,12 @@ export class Game {
 
   // --- lifecycle ------------------------------------------------------------------
 
-  showTitle(): void {
+  /** The title screen over the Fen. The Promise settles once the Fen behind it is built. */
+  showTitle(): Promise<void> {
     this.state = 'title';
     this.input.wantPointerLock = false;
     this.input.releaseLock();
-    this.loadLevel('fen', { title: true });
+    const ready = this.loadLevel('fen', { title: true });
     if (!this.titleDragon) {
       const rig = new DragonRig(this.player.rig.look);
       rig.root.traverse((o) => { if ((o as THREE.Mesh).isMesh) o.castShadow = true; });
@@ -243,6 +249,7 @@ export class Game {
     }
     this.menus.showTitle();
     this.audio.setMusic(THEMES.title!);
+    return ready;
   }
 
   newGame(difficulty: Difficulty): void {
@@ -275,15 +282,20 @@ export class Game {
 
   private startPlaying(levelId: string, checkpoint: string | null): void {
     this.menus.hideAll();
-    this.fadeTo(() => {
+    // Waits on black only if the realm's code has yet to arrive.
+    this.fadeTo(() => this.whenLoaded(levelId, () => {
       this.input.wantPointerLock = true;
       this.input.requestLock();
-      this.loadLevel(levelId, { checkpoint });
-    });
+      void this.loadLevel(levelId, { checkpoint });
+    }));
   }
 
-  /** Fade out, run fn, fade in. fn may change the state it resumes to. */
-  fadeTo(fn: () => void): void {
+  /**
+   * Fade out, run fn, fade in. fn may change the state it resumes to. If fn
+   * returns a Promise (a realm still loading), the screen stays black until
+   * it settles.
+   */
+  fadeTo(fn: () => void | Promise<unknown>): void {
     if (this.state !== 'transition') this.stateBeforeTransition = this.state;
     this.transitionFn = fn;
     this.transitionT = 0;
@@ -301,21 +313,110 @@ export class Game {
       return;
     }
     this.audio.play('uiConfirm');
-    this.fadeTo(() => {
+    // The realm's code arrives first (the save only changes once it has).
+    this.fadeTo(() => this.whenLoaded(target, () => {
       this.save.level = target;
       this.save.checkpoint = null;
       if (!this.save.unlocked.includes(target)) this.save.unlocked.push(target);
       writeSave(this.save);
-      this.loadLevel(target, { checkpoint: null });
+      void this.loadLevel(target, { checkpoint: null });
+    }));
+  }
+
+  /** Where an unknown realm id (a newer build's save, a typo in ?level=) lands instead. */
+  private fallbackLevel(): string {
+    return this.save.unlocked.includes('sanctum') ? 'sanctum' : 'fen';
+  }
+
+  /**
+   * Builds realm `id` and places Aster at the checkpoint (or the realm's
+   * start). Realms load on demand (src/levels/index.ts): one whose code has
+   * already arrived is built at once, otherwise it is fetched first behind a
+   * loading veil. Either way the Promise settles once the realm is built (or
+   * the build is dropped because a later loadLevel call came first).
+   */
+  loadLevel(id: string, opts: { checkpoint?: string | null; title?: boolean } = {}): Promise<void> {
+    const seq = ++this.loadSeq;
+    return this.whenLoaded(id, () => {
+      if (seq === this.loadSeq) this.buildLevel(id, opts);
+    }) ?? Promise.resolve();
+  }
+
+  /**
+   * Runs `fn` at once if realm `id`'s code is loaded (unknown ids stand for
+   * their fallback). Otherwise fetches it, with the loading veil up after a
+   * moment, and runs `fn` when it arrives; returns the Promise of that. If
+   * the fetch fails (offline, or a stale deploy), the veil says so and offers
+   * a retry, and, when there is a realm to go back to, a way to stay put, in
+   * which case the Promise settles without running `fn`.
+   */
+  whenLoaded(id: string, fn: () => void): Promise<void> | undefined {
+    // A realm registered at runtime (a test floor) counts as loaded.
+    const need = hasLevel(id) || levelDef(id) ? id : this.fallbackLevel();
+    if (levelDef(need)) {
+      fn();
+      return undefined;
+    }
+    const name = LEVEL_INFO[need]?.name ?? need;
+    return new Promise<void>((resolve) => {
+      let fails = 0;
+      const attempt = () => {
+        this.loadFail = null;
+        this.hud.loading(`Loading ${name}...`);
+        ensureLevel(need).then(() => {
+          this.hud.loading(null);
+          fn();
+          resolve();
+        }, (err: unknown) => {
+          fails++;
+          console.warn(`could not load realm "${need}"`, err);
+          // Staying put is only possible with a realm to stay in (not at boot).
+          const stay = this.level ? () => {
+            this.loadFail = null;
+            this.hud.loading(null);
+            // Back where Aster was: the title, or playing on in the old realm.
+            if (this.player.hidden) {
+              this.state = 'title';
+              this.menus.showTitle();
+            } else {
+              this.state = 'play';
+              this.input.wantPointerLock = true;
+            }
+            resolve();
+          } : null;
+          this.loadFail = { retry: attempt, cancel: stay };
+          // (Browsers may remember a failed fetch for the rest of the page's life: then only a reload helps.)
+          this.hud.loadFailed(name, attempt, stay, fails > 1);
+        });
+      };
+      attempt();
     });
   }
 
-  loadLevel(id: string, opts: { checkpoint?: string | null; title?: boolean } = {}): void {
-    let def: LevelDef | undefined = LEVELS[id];
+  /**
+   * After a realm is built, fetches in the background (once the page is idle)
+   * the realms Aster can reach from here: every unlocked realm, the Sanctum,
+   * and wherever this realm's portals lead. Travel then stays instant.
+   */
+  private prefetchSoon(): void {
+    const ids = new Set<string>(['fen', this.save.level, ...this.save.unlocked]);
+    if (this.save.unlocked.length > 1) ids.add('sanctum');
+    for (const it of this.level?.interactables ?? []) {
+      const t = (it as { target?: unknown }).target;
+      if (typeof t === 'string') ids.add(t);
+    }
+    const go = () => void prefetchLevels(ids);
+    const idle = (window as Window & { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+    if (idle) idle(go, { timeout: 2500 });
+    else setTimeout(go, 600);
+  }
+
+  private buildLevel(id: string, opts: { checkpoint?: string | null; title?: boolean }): void {
+    let def: LevelDef | undefined = levelDef(id);
     if (!def) {
       // A save from a newer build, or a typo in ?level=: land somewhere safe.
       console.warn(`unknown level "${id}", loading a safe fallback`);
-      def = this.save.unlocked.includes('sanctum') ? LEVELS.sanctum! : LEVELS.fen!;
+      def = levelDef(this.fallbackLevel()) ?? levelDef('fen')!;
       opts = { ...opts, checkpoint: null };
     }
     this.clearLevel();
@@ -380,6 +481,7 @@ export class Game {
       def.onEnter?.(this, fresh);
       this.quests.notify('enter', { level: id });
     } else this.hud.show(false);
+    this.prefetchSoon();
   }
 
   /**
@@ -444,6 +546,17 @@ export class Game {
     this.realTime += dt;
     WIND.value += dt;
     this.input.update(dt);
+    // A realm that would not load: the veil's buttons, from the keyboard or a pad (before any menu sees the press).
+    const fail = this.loadFail;
+    if (fail) {
+      if (this.input.take('confirm', 0.2) || this.input.take('interact', 0.2)) {
+        if (!this.hud.pressVeil()) fail.retry();
+      } else if (fail.cancel && this.input.take('back', 0.2)) {
+        // The same Esc also reads as Pause: eat it, or staying would pause at once.
+        this.input.consume('pause');
+        fail.cancel();
+      }
+    }
 
     switch (this.state) {
       case 'title':
@@ -485,7 +598,7 @@ export class Game {
         break;
       case 'transition':
         this.updateTransition(dt);
-        if (this.stateBeforeTransition !== 'title' && this.level && !this.player.hidden) this.simulate(dt * 0.2);
+        if (this.transitionPhase !== 'hold' && this.stateBeforeTransition !== 'title' && this.level && !this.player.hidden) this.simulate(dt * 0.2);
         break;
     }
 
@@ -581,11 +694,27 @@ export class Game {
         this.transitionPhase = 'in';
         this.transitionT = 0;
         this.state = this.stateBeforeTransition;
-        fn?.();
+        const wait = fn?.();
+        if (wait instanceof Promise) {
+          // A realm still loading: stay black until it is built (or the veil's "stay" is chosen).
+          const back = this.state;
+          this.transitionPhase = 'hold';
+          this.state = 'transition';
+          void wait.then(() => {
+            if (this.transitionPhase !== 'hold') return;
+            this.stateBeforeTransition = this.state === 'transition' ? back : this.state;
+            this.state = 'transition';
+            this.transitionPhase = 'in';
+            this.transitionT = 0;
+          });
+          return;
+        }
         // Whatever state fn left us in is where the fade-in lands.
         this.stateBeforeTransition = this.state;
         this.state = 'transition';
       }
+    } else if (this.transitionPhase === 'hold') {
+      this.hud.fade(1);
     } else {
       this.hud.fade(1 - Math.min(1, this.transitionT / 0.5));
       if (this.transitionT >= 0.5) {
@@ -616,7 +745,7 @@ export class Game {
   quitToTitle(): void {
     writeSave(this.save);
     this.menus.hideAll();
-    this.fadeTo(() => this.showTitle());
+    this.fadeTo(() => this.whenLoaded('fen', () => void this.showTitle()));
   }
 
   private simulate(dt: number): void {

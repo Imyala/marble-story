@@ -2,6 +2,7 @@ import './ui/style.css';
 import { Game } from './game/game';
 import { reseed } from './core/rng';
 import { MOVES } from './player/moves';
+import { ensureLevel, hasLevel, levelDef, LEVEL_IDS } from './levels';
 
 declare global {
   interface Window {
@@ -18,7 +19,11 @@ const root = document.getElementById('game-root')!;
 const game = new Game(root);
 window.wyrm = game;
 // Handles for automated tests and tinkering from the console.
-(window as unknown as { wyrmDebug: unknown }).wyrmDebug = { MOVES };
+(window as unknown as { wyrmDebug: unknown }).wyrmDebug = {
+  MOVES,
+  // Which realms exist and which have been fetched (realms load on demand).
+  levels: { ids: LEVEL_IDS, has: hasLevel, loaded: (id: string) => !!levelDef(id), ensure: ensureLevel },
+};
 
 // Automated tests run on slow software rendering; let them keep real time.
 const maxdt = Number(params.get('maxdt'));
@@ -32,14 +37,18 @@ if (q === 'low' || q === 'medium' || q === 'high') {
 
 // ?level=<id> skips the title screen (development and automated tests).
 const level = params.get('level');
+let first: Promise<void>;
 if (level) {
   game.input.wantPointerLock = true;
-  game.loadLevel(level, { checkpoint: params.get('cp') });
+  first = game.loadLevel(level, { checkpoint: params.get('cp') });
 } else {
-  game.showTitle();
+  first = game.showTitle();
 }
 
-document.getElementById('boot')?.classList.add('hidden');
+// The first realm's code arrives on its own (realms load on demand): the boot
+// screen stays up until it is built. A failure shows the loading veil's retry.
+const booted = () => document.getElementById('boot')?.classList.add('hidden');
+void first.then(booted);
 if (window.__bootTimer) clearTimeout(window.__bootTimer);
 
 let last = performance.now();

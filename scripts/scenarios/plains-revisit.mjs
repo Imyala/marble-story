@@ -34,7 +34,7 @@ export default async function (h) {
     const g = window.wyrm;
     g.save.levelsDone.plains = true;
     if (!g.save.elements.includes('earth')) g.learnElement('earth');
-    g.loadLevel('plains', { checkpoint: 'burrow' });
+    return g.loadLevel('plains', { checkpoint: 'burrow' });
   });
   await h.wait(2500);
   await h.skipDialogue();

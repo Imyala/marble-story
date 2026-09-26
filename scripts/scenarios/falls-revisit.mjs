@@ -11,7 +11,7 @@ export default async function (h) {
     if (!g.save.unlocked.includes('sanctum')) g.save.unlocked.push('sanctum');
     g.save.found['story:sanctum:arrive'] = true;
     g.save.found['story:sanctum:lesson-done'] = true;
-    g.loadLevel('falls', { checkpoint: null });
+    return g.loadLevel('falls', { checkpoint: null });
   });
   await step(h, 0.5);
   await skip(h);

@@ -221,7 +221,7 @@ export async function survey(h) {
   await h.skipDialogue(6000);
   let i = 0;
   for (const { lvl, r } of list) {
-    await h.eval((l) => { const g = window.wyrm; if (g.level.def.id !== l) g.loadLevel(l, {}); }, lvl);
+    await h.eval((l) => { const g = window.wyrm; if (g.level.def.id !== l) return g.loadLevel(l, {}); }, lvl);
     await h.skipDialogue(4000);
     await h.eval(() => { const g = window.wyrm; g.map.open(); g.map.close(); });
     const url = await h.eval(([x0, z0, x1, z1]) => {

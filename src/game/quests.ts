@@ -1,5 +1,5 @@
 import type { Game } from './game';
-import type { QuestSave, SaveData } from './progress';
+import { eggsFound, type QuestSave, type SaveData } from './progress';
 import { bump, extra, type ExtraStats } from './feats';
 import { LEVEL_INFO } from './story';
 
@@ -87,7 +87,7 @@ export interface MainQuest {
   title: string;
   text: string;
   spot: QuestSpot | null;
-  /** Act I's chapters, in order, with the ones behind Aster ticked off. */
+  /** The story's chapters so far (Act I's, then Act II's once the Keep is won), with the ones behind Aster ticked off. */
   chapters: { title: string; done: boolean }[];
 }
 
@@ -115,6 +115,9 @@ const ACT_I: Chapter[] = [
   { level: 'plains', title: 'The Earth Warden', warden: 'Stonehide', boss: 'Graveljaw, the Burrow Wyrm' },
   { level: 'keep', title: 'Beneath the Eclipse', boss: 'Nyxa, Shadow of the Eclipse' },
 ];
+
+/** Dragon eggs the Mycelium gate asks for (Mossa's rite: see gates() in src/levels/hollow.ts). */
+export const MYCELIUM_EGGS = 12;
 
 /** Save counters watched for the events of the same names. */
 const COUNTERS: [keyof ExtraStats, QuestEvent][] = [['critters', 'critter'], ['butterflies', 'butterfly'], ['chests', 'chest'], ['rings', 'ring']];
@@ -397,6 +400,8 @@ export class Quests {
     const done = (l: string) => !!s.levelsDone[l];
     const lessonDone = !!s.found['story:sanctum:lesson-done'];
     const chapters = ACT_I.map((c) => ({ title: c.title, done: c.level === 'sanctum' ? lessonDone : done(c.level) }));
+    // Act II's chapters join once the Keep is won.
+    if (done('keep')) chapters.push({ title: 'The Hollow Below', done: !!s.found['story:hollow:mossa'] }, { title: 'The Mycelium Deep', done: done('mycelium') });
     const out = (title: string, text: string, spot: QuestSpot | null = null): MainQuest => ({ title, text, spot, chapters });
     /** The next fight in this realm, or its boss once the fights are won. */
     const next = (lvl: string): { label: string; spot: QuestSpot } | null => {
@@ -446,20 +451,52 @@ export class Quests {
     if (s.levelsDone.keep) {
       const hollow = 'hollow';
       const fissure: QuestSpot = { level: 'sanctum', x: 0, z: -25, label: 'The fissure' };
+      const myc = 'mycelium';
+      const met = !!s.found['story:hollow:mossa'];
+      // Inside the Mycelium Deep: what feeds the roots (the Rootchoke, deep in the realm), then the one
+      // feeding them, in her grove (the fight starts at (0, 204); see src/levels/mycelium.ts).
+      if (here === myc && !done(myc)) {
+        const n = next(myc);
+        if (n?.label === 'boss' || s.found['story:mycelium:rootchoke']) {
+          return out(title, 'Defeat Mycora, the Spore Mother', { level: myc, x: 0, z: 204, label: 'Mycora\'s Grove' });
+        }
+        return out(title, 'Find what feeds the roots in the Mycelium Deep', { level: myc, x: 24, z: 188, label: 'The Rootchoke' });
+      }
       if (here === hollow) {
         const n = next(hollow);
         if (n?.label === 'boss') return out(title, 'Something waits at the heart of the Hollow', n.spot);
-        if (!s.found['story:hollow:mossa']) return out(title, 'Follow the lights down to the Burrowfolk\'s camp by the lake', { level: hollow, x: 0, z: -54, label: 'Lanternhollow' });
-        return out(title, 'The Hollow King\'s roots seal the four gates. Help the Hollow\'s folk while you look for a way through', n?.spot ?? null);
+        if (!met) return out(title, 'Follow the lights down to the Burrowfolk\'s camp by the lake', { level: hollow, x: 0, z: -54, label: 'Lanternhollow' });
       }
-      if (!s.unlocked.includes(hollow)) {
+      if (!s.unlocked.includes(hollow) && here !== hollow) {
         return here === 'sanctum'
           ? out(title, 'The ground has split open in the Sanctum. Go down through the fissure', fissure)
           : out(title, 'Something stirs beneath the Sanctum. Return there', this.nearestWard());
       }
-      return here === 'sanctum'
-        ? out(title, `Go back down through the fissure to ${inText(hollow)}`, fissure)
-        : out(title, `Return to ${inText(hollow)}, through the Sanctum's fissure or the Wardgate`, this.nearestWard());
+      /** The way back to the Hollow Gate from here: the fissure in the Sanctum, else a Wardstone home. */
+      const wayDown = here === 'sanctum' ? fissure : this.nearestWard();
+      if (!met) {
+        return here === 'sanctum'
+          ? out(title, `Go back down through the fissure to ${inText(hollow)}`, fissure)
+          : out(title, `Return to ${inText(hollow)}, through the Sanctum's fissure or the Wardgate`, this.nearestWard());
+      }
+      // Mossa's rite: twelve returned eggs open the Mycelium gate (sealedGate in src/world/kits.ts).
+      const gate: QuestSpot = { level: hollow, x: 100, z: 16, label: 'The Mycelium gate' };
+      if (!done(myc)) {
+        if (!s.found['gate:mycelium']) {
+          const eggs = eggsFound(s);
+          if (eggs < MYCELIUM_EGGS) return out(title, `Return ${MYCELIUM_EGGS} dragon eggs to open the Mycelium gate (${eggs}/${MYCELIUM_EGGS})`, gate);
+          return out(title, `${MYCELIUM_EGGS} eggs returned: take their warmth to the Mycelium gate${here === hollow ? '' : ` in ${inText(hollow)}`}`, here === hollow ? gate : wayDown);
+        }
+        if (here === 'sanctum' && s.unlocked.includes(myc)) return out(title, `The Mycelium gate is open: take the Wardgate to ${inText(myc)}`, { level: 'sanctum', x: 0, z: 48, label: 'The Wardgate' });
+        return out(title, 'The Mycelium gate is open: go through', here === hollow ? gate : this.nearestWard());
+      }
+      // Mycora has fallen: home to Mossa, and then the next gate (a later chapter).
+      if (!s.found['story:hollow:mossa-mycelium']) {
+        if (here === hollow) return out(title, 'Return to Elder Mossa', { level: hollow, x: -3, z: -57, label: 'Elder Mossa' });
+        // From the Deep, the portal home that opens in Mycora's grove.
+        return out(title, `Return to Elder Mossa in ${inText(hollow)}`, here === myc ? { level: myc, x: -3.2, z: 200.5, label: 'The way home' } : wayDown);
+      }
+      return out(title, 'The Drowned City\'s gate still holds. More of the Hollow\'s folk need you', null);
     }
     return out(title, 'Find where the story goes next', null);
   }

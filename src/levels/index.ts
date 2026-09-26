@@ -7,6 +7,7 @@ import { plains } from './plains';
 import { sanctum } from './sanctum';
 // Act II.
 import { hollow } from './hollow';
+import { mycelium } from './mycelium';
 
 export const LEVELS: Record<string, LevelDef> = {
   fen,
@@ -16,4 +17,5 @@ export const LEVELS: Record<string, LevelDef> = {
   plains,
   sanctum,
   hollow,
+  mycelium,
 };

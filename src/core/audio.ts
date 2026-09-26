@@ -22,7 +22,7 @@ export type LoopId = 'breath' | 'glide' | 'charge' | 'rain';
 /** A realm's background soundscape. */
 export type AmbienceKind = 'fen' | 'sanctum' | 'falls' | 'frostworks' | 'plains' | 'keep'
   // Act II.
-  | 'hollow';
+  | 'hollow' | 'mycelium';
 
 interface AmbienceDef {
   /** Continuous bed: filtered noise, with slow gusts. */
@@ -40,6 +40,8 @@ const AMBIENCE: Record<AmbienceKind, AmbienceDef> = {
   keep: { bed: { type: 'lowpass', freq: 300, q: 0.6, vol: 0.04, gust: 0.4, drone: [55, 82.4] }, calls: [['crow', 6, 14], ['chime', 9, 20]] },
   // The Hollow Gate: a deep cave hum, water dripping into the lake, the roots creaking far off, crystals ringing.
   hollow: { bed: { type: 'lowpass', freq: 240, q: 0.8, vol: 0.05, gust: 0.35, drone: [41.2, 61.7] }, calls: [['drip', 0.8, 3], ['drip', 2, 6], ['groan', 14, 30], ['crystal', 7, 16]] },
+  // The Mycelium Deep: a soft, breathing hush, spores puffing from the caps, drips, and far off the Spore Mother's hum.
+  mycelium: { bed: { type: 'lowpass', freq: 320, q: 0.9, vol: 0.042, gust: 0.5, drone: [36.7, 55, 82.4] }, calls: [['puff', 2, 6], ['drip', 1.4, 4.5], ['hum', 15, 30], ['crystal', 9, 18], ['groan', 22, 44]] },
 };
 
 export interface MusicTheme {
@@ -372,6 +374,17 @@ export class Audio {
         const f = [523, 659, 784, 988][Math.floor(r() * 4)]!;
         this.tone(f, 2.4, 'sine', 0.02, { ...b, attack: 0.01 });
         this.tone(f * 2.01, 1.6, 'sine', 0.008, { ...b, attack: 0.01 });
+        break;
+      }
+      case 'puff':
+        // A cap somewhere letting go of its spores: a soft breath out.
+        this.noise(0.5 + r() * 0.4, 0.02, { type: 'bandpass', freq: 700 + r() * 500, freqEnd: 300, q: 1.2, attack: 0.04, bus: pan });
+        break;
+      case 'hum': {
+        // The Spore Mother, far off, singing to her threads: two voices a hair apart.
+        const f = [110, 123.5, 98][Math.floor(r() * 3)]!;
+        this.tone(f, 3.2, 'sine', 0.014, { ...b, attack: 1.2 });
+        this.tone(f * 1.502, 3, 'sine', 0.008, { ...b, attack: 1.4, delay: 0.3 });
         break;
       }
     }
@@ -811,6 +824,8 @@ export const THEMES: Record<string, MusicTheme> = {
   title: { bpm: 76, chords: [[0, 4, 7], [-3, 0, 4], [-7, -3, 0], [-5, -1, 2]], scale: [0, 2, 4, 7, 9, 12], pad: 'sine', lead: 'triangle', mood: 'calm' },
   // Act II: the Hollow Gate. Slow and deep, minor with a raised sixth, glassy on top.
   hollow: { bpm: 72, chords: [[-5, -2, 2], [-8, -5, -1], [-3, 0, 4], [-7, -3, 0]], scale: [0, 2, 3, 7, 9, 12, 14], pad: 'sine', lead: 'triangle', mood: 'mysterious' },
+  // The Mycelium Deep: slow and wondering, lydian (the raised fourth glows), sliding to minor as it darkens.
+  mycelium: { bpm: 66, chords: [[0, 4, 7], [2, 6, 9], [-3, 0, 4], [-1, 2, 6]], scale: [0, 2, 4, 6, 7, 11, 12, 14], pad: 'sine', lead: 'sine', mood: 'mysterious' },
 };
 
 export const audio = new Audio();

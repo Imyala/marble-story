@@ -27,6 +27,10 @@ export const SKILLS: SkillDef[] = [
   { id: 'plains:boss', level: 'plains', name: 'Unbitten', desc: 'Defeat Graveljaw without taking a single hit.' },
   { id: 'keep:star', level: 'keep', name: 'Star Power', desc: 'Defeat 6 foes just by touching them while Invincible, in the Keep.' },
   { id: 'keep:boss', level: 'keep', name: 'Flawless', desc: 'Defeat Nyxa without taking a single hit.' },
+  // Act II: the Mycelium Deep.
+  { id: 'mycelium:capstair', level: 'mycelium', name: 'Cap Hopper', desc: 'Climb the Capstair from its floor cap to the top touching nothing but mushrooms.' },
+  { id: 'mycelium:blight', level: 'mycelium', name: 'Blightburner', desc: 'Burn away every blight cloud in the Mycelium Deep in a single visit.' },
+  { id: 'mycelium:boss', level: 'mycelium', name: 'Spore-Free', desc: 'Defeat Mycora without taking a single hit.' },
 ];
 
 export const skillKey = (id: string): string => `skill:${id}`;

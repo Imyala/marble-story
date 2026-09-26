@@ -9,6 +9,7 @@ import { taperedTube, mergeStatic } from '../render/shapes';
 import { fbm } from '../core/math';
 import { rng } from '../core/rng';
 import type { Game } from '../game/game';
+import { eggsFound } from '../game/progress';
 import type { Element, Hit, HitResult, Hittable } from '../game/types';
 import type { Arena, Prop, SpawnSpec } from '../entities/props';
 import { Talker } from '../entities/props';
@@ -651,6 +652,31 @@ export interface GateOpts {
   /** Glow of the seal and sigil. */
   color?: number;
   stone?: number;
+  /** A gate that opens once Aster has what it asks for (see GateOpening). Without it, the gate never opens. */
+  opens?: GateOpening;
+}
+
+/**
+ * What a realm gate needs before its roots let go, and where it leads. Every
+ * need given must be met. Until `flag` is set, the gate looks like any
+ * sealed gate; after, its use prompt counts what it needs ("9/12 eggs") and
+ * Flick says what is missing. Once met, walking up to it plays the opening
+ * (once per run, saved as `found['gate:<id>']`), and from then on the
+ * doorway holds a portal to `target`.
+ */
+export interface GateOpening {
+  /** The realm the open gate leads to. */
+  target: string;
+  /** Dragon eggs returned (eggsFound). */
+  eggs?: number;
+  /** Spirit gems held (not spent). */
+  gems?: number;
+  /** A `found` key that must be set; until it is, the need stays unspoken. */
+  flag?: string;
+  /** Flick's line while the need is known but not met; `missing` reads like "3 more dragon eggs". */
+  hint?: (missing: string) => string;
+  /** Flick's line as the roots let go. */
+  opened?: string;
 }
 
 /**
@@ -658,7 +684,8 @@ export interface GateOpts {
  * a door slab behind, and the Hollow King's roots grown across it. Walking
  * up shows its name (the use prompt) and Flick says `line` once; pressing
  * Use says it again. Solid all the way across. Faces `yaw` (toward where the
- * dragon approaches from).
+ * dragon approaches from). With `o.opens` it is a gate that can open (see
+ * GateOpening).
  */
 export function sealedGate(b: Builder, id: string, x: number, z: number, yaw: number, name: string, line: string, o: GateOpts = {}): void {
   const g = b.game;
@@ -689,6 +716,10 @@ export function sealedGate(b: Builder, id: string, x: number, z: number, yaw: nu
   ring.position.set(x + fx * 1.34, y + h + 1.2, z + fz * 1.34);
   ring.rotation.y = yaw;
   b.addStatic(ring);
+  if (o.opens) {
+    openingGate(b, id, x, y, z, yaw, w, h, color, name, line, o.opens);
+    return;
+  }
   // The door itself, a dark slab with a dim seam of light.
   b.box(x - fx * 0.6, y - 0.5, z - fz * 0.6, w + 0.6, h + 0.5, 1, 0x2a2634, { yaw });
   const seam = new THREE.Mesh(new THREE.BoxGeometry(0.14, h - 1, 0.1), glowShared(shade(color, 0.6)));
@@ -705,6 +736,223 @@ export function sealedGate(b: Builder, id: string, x: number, z: number, yaw: nu
   b.level.props.push(talk);
   b.level.interactables.push(talk);
   b.story(`gate-${id}`, x + fx * 6, z + fz * 6, 6, say);
+}
+
+/**
+ * The door, seal and roots of a gate that can open (sealedGate with
+ * `opens`). Built open when the save says it has opened; otherwise sealed,
+ * with its roots, slab and seam kept as separate pieces so the opening can
+ * burn, sink and blaze them away.
+ */
+function openingGate(b: Builder, id: string, x: number, y: number, z: number, yaw: number, w: number, h: number, color: number,
+  name: string, line: string, need: GateOpening): void {
+  const g = b.game;
+  const level = b.level;
+  const key = `gate:${id}`;
+  const rx = Math.cos(yaw);
+  const rz = -Math.sin(yaw);
+  const fx = Math.sin(yaw);
+  const fz = Math.cos(yaw);
+  const dx = x - fx * 0.6;
+  const dz = z - fz * 0.6;
+  // The doorway once open: a sheet of the seal's light (brightest at the threshold), and a portal in it.
+  const sheetGeo = new THREE.PlaneGeometry(w + 0.4, h + 0.4, 1, 6);
+  const sp = sheetGeo.getAttribute('position');
+  const cols: number[] = [];
+  const c0 = new THREE.Color(color);
+  for (let i = 0; i < sp.count; i++) {
+    const k = 1 - (sp.getY(i) / (h + 0.4) + 0.5);
+    const c = c0.clone().multiplyScalar(0.25 + 0.95 * k * k);
+    cols.push(c.r, c.g, c.b);
+  }
+  sheetGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+  const sheetMat = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+  const sheet = new THREE.Mesh(sheetGeo, sheetMat);
+  sheet.position.set(dx, y + h / 2 - 0.2, dz);
+  sheet.rotation.y = yaw;
+  sheet.visible = false;
+  level.root.add(sheet);
+  let open = !!g.save.found[key];
+  let portalMade = false;
+  const makePortal = () => {
+    if (portalMade || g.level !== level) return;
+    portalMade = true;
+    sheet.visible = true;
+    b.portal(dx + fx * 0.2, dz + fz * 0.2, yaw, need.target, `Enter ${name}`, color);
+  };
+  if (open) {
+    sheetMat.opacity = 0.7;
+    makePortal();
+  }
+  // Sealed: the slab (with its own solid, so it can sink), the seam, and the roots.
+  let slab: THREE.Mesh | null = null;
+  let slabSolid: Solid | null = null;
+  let seam: THREE.Mesh | null = null;
+  let seamMat: THREE.MeshBasicMaterial | null = null;
+  let roots: RootGate | null = null;
+  let arch: THREE.Object3D[] = [];
+  if (!open) {
+    slabSolid = makeBox(dx, dz, (w + 0.6) / 2, 0.5, y - 0.5, y + h, yaw);
+    b.col.add(slabSolid);
+    slab = new THREE.Mesh(new THREE.BoxGeometry(w + 0.6, h + 0.5, 1), mat(0x2a2634, { rough: 0.9, flat: true }));
+    slab.position.set(dx, y - 0.5 + (h + 0.5) / 2, dz);
+    slab.rotation.y = yaw;
+    slab.castShadow = true;
+    slab.receiveShadow = true;
+    level.root.add(slab);
+    seamMat = new THREE.MeshBasicMaterial({ color: shade(color, 0.6) });
+    seam = new THREE.Mesh(new THREE.BoxGeometry(0.14, h - 1, 0.1), seamMat);
+    seam.position.set(x - fx * 0.05, y + (h - 1) / 2, z - fz * 0.05);
+    seam.rotation.y = yaw;
+    level.root.add(seam);
+    // The roots across the door: a root gate only the opening burns (no breath or blow reaches it).
+    roots = rootWall(b, x - rx * (w / 2 + 0.4) + fx * 0.3, z - rz * (w / 2 + 0.4) + fz * 0.3, x + rx * (w / 2 + 0.4) + fx * 0.3, z + rz * (w / 2 + 0.4) + fz * 0.3,
+      h * 0.8, { thick: 1, element: 'fire' });
+    const hi = roots ? level.hittables.indexOf(roots) : -1;
+    if (hi >= 0) level.hittables.splice(hi, 1);
+    // The great root arching over the gate, kept out of the static merge so it can wither.
+    const n0 = level.root.children.length;
+    hollowRoot(b, [[x - rx * (w / 2 + 2.5), y - 0.5, z - rz * (w / 2 + 2.5)], [x - rx * 1.5 + fx * 0.8, y + h * 0.6, z - rz * 1.5 + fz * 0.8],
+      [x + rx * 2 + fx * 0.6, y + h + 1.5, z + rz * 2 + fz * 0.6], [x + rx * (w / 2 + 3), y + h * 0.4, z + rz * (w / 2 + 3)]], 0.7);
+    arch = level.root.children.slice(n0);
+    for (const m of arch) m.userData.static = false;
+  }
+
+  /** Found and wanted, for the prompt and Flick. */
+  const counts = () => {
+    const out: { have: number; want: number; what: 'eggs' | 'gems' }[] = [];
+    if (need.eggs) out.push({ have: eggsFound(g.save), want: need.eggs, what: 'eggs' });
+    if (need.gems) out.push({ have: g.save.gems, want: need.gems, what: 'gems' });
+    return out;
+  };
+  const known = () => !need.flag || !!g.save.found[need.flag];
+  const met = () => known() && counts().every((c) => c.have >= c.want);
+  const label = () => {
+    const c = counts();
+    if (!known() || !c.length) return `${name} (sealed)`;
+    return `${name} — ${c.map((k) => `${Math.min(k.have, k.want)}/${k.want} ${k.what}`).join(', ')}`;
+  };
+  /** Flick on the gate; `asked` (the Use key) jumps his queue. */
+  const say = (asked = false) => {
+    if (open) return;
+    if (!known()) {
+      g.hud.flick(line, 6, asked);
+      return;
+    }
+    const missing = counts().filter((c) => c.have < c.want).map((c) => {
+      const n = c.want - c.have;
+      return `${n} more ${c.what === 'gems' ? 'spirit gems' : n === 1 ? 'dragon egg' : 'dragon eggs'}`;
+    }).join(' and ');
+    if (!missing) return;
+    g.hud.flick(need.hint ? need.hint(missing) : `${name}: still sealed. ${missing[0]!.toUpperCase()}${missing.slice(1)} to go.`, 7, asked);
+  };
+  const talk = new Talker(g, x + fx * 3, y, z + fz * 3, label(), () => say(true));
+  talk.enabled = !open;
+  level.props.push(talk);
+  level.interactables.push(talk);
+  b.story(`gate-${id}`, x + fx * 6, z + fz * 6, 6, () => say());
+
+  // The opening: roots burn and shrivel, the seam blazes, the slab sinks with a rumble, and the doorway lights up.
+  let t = -1;
+  let pollT = 0;
+  let travelled = false;
+  const slabY = slab ? slab.position.y : 0;
+  const archY = arch.map((m) => m.position.y);
+  const begin = () => {
+    t = 0;
+    open = true;
+    talk.enabled = false;
+    g.hud.prompt(null);
+    // Saved at once: the moment plays once, however it ends.
+    g.save.found[key] = true;
+    if (!g.save.unlocked.includes(need.target)) g.save.unlocked.push(need.target);
+    g.saveNow();
+    const p = g.player;
+    p.setState('locked');
+    p.body.vx = p.body.vz = 0;
+    p.iframes = Math.max(p.iframes, 4.5);
+    g.cam.setShot(new THREE.Vector3(x + fx * 16 + rx * 4, y + 5.5, z + fz * 16 + rz * 4), new THREE.Vector3(x, y + h * 0.45, z));
+    roots?.takeHit({
+      type: 'fire', damage: 1e3, dirX: 0, dirZ: 1, knockback: 0, launch: 0, stagger: 0, hitstop: 0, buildup: 0, heavy: false, spike: false,
+      source: 'burst', move: 'gate', fromPlayer: false, ox: x, oz: z,
+    });
+    g.sfx('rumble', x, y, z, 0.7, 1);
+    g.shake(0.35, 2.2);
+    g.hud.flick(need.opened ?? 'The roots... they\'re letting go!', 6, true);
+  };
+  level.props.push({
+    update: (dt: number) => {
+      if (g.level !== level) return;
+      const p = g.player;
+      if (!open) {
+        pollT -= dt;
+        if (pollT > 0) return;
+        pollT = 0.4;
+        talk.label = label();
+        // Walking up to it with what it asks for opens it (once no foe is pressing Aster).
+        const near = Math.hypot(p.x - (x + fx * 6), p.z - (z + fz * 6)) < 9;
+        const beset = () => g.enemies.some((e) => e.alive && e.aggro && Math.hypot(e.x - p.x, e.z - p.z) < 22);
+        if (near && g.state === 'play' && p.state === 'move' && p.body.grounded && met() && !beset()) begin();
+        return;
+      }
+      if (t >= 0) {
+        t += dt;
+        const k = (a: number, d: number) => Math.min(1, Math.max(0, (t - a) / d));
+        // The seam blazes, widening into a sheet of light.
+        if (seam && seamMat) {
+          const s = k(0, 1.2);
+          seam.scale.set(1 + s * 18, 1, 1);
+          seamMat.color.setHex(color).multiplyScalar(0.6 + s * 1.6);
+          seam.visible = t < 2.6;
+        }
+        // The slab sinks into the floor; the arching root withers down into it.
+        const sink = k(0.8, 1.6);
+        if (slab) slab.position.y = slabY - sink * sink * (h + 0.6);
+        if (slabSolid && sink >= 1) slabSolid.enabled = false;
+        const wither = k(0.4, 1.8);
+        arch.forEach((m, i) => {
+          m.scale.y = Math.max(0.02, 1 - wither);
+          m.position.y = archY[i]! * (1 - wither);
+          m.visible = wither < 1;
+        });
+        if (t < 2.4 && Math.random() < 0.7) {
+          g.fx.emit(x + rx * (Math.random() - 0.5) * w, y + Math.random() * h, z + rz * (Math.random() - 0.5) * w, {
+            count: 1, speed: 1.4, dir: [0, 1, 0], life: [0.5, 1], size: [0.25, 0.5], sizeEnd: 0.1, color: 0xffb050, colorEnd: color, bright: 1.8, gravity: -1.5,
+          });
+        }
+        if (sink > 0 && sink < 1 && Math.random() < 0.5) g.fx.dust(dx + rx * (Math.random() - 0.5) * w, y, dz + rz * (Math.random() - 0.5) * w, 2);
+        // The doorway lights up, and the way through is there.
+        const glowK = k(2.2, 1);
+        if (glowK > 0) {
+          makePortal();
+          sheetMat.opacity = glowK * 0.7;
+        }
+        if (t > 3.6) {
+          t = -1;
+          if (slab) slab.visible = false;
+          g.cam.clearShot();
+          if (p.state === 'locked' && g.state === 'play') p.setState('move');
+          g.fx.motes(dx, y + 2, dz, color, 40);
+          g.sfx('unlock', dx, y, dz);
+        }
+        return;
+      }
+      sheetMat.opacity = 0.62 + Math.sin(g.time * 2.2) * 0.1;
+      // Motes drift up out of the lit doorway.
+      if (Math.random() < 0.3 && Math.hypot(p.x - dx, p.z - dz) < 45) {
+        g.fx.emit(dx + rx * (Math.random() - 0.5) * w + fx * 0.4, y + Math.random() * h * 0.5, dz + rz * (Math.random() - 0.5) * w + fz * 0.4, {
+          count: 1, speed: 0.5, dir: [0, 1, 0], spread: 0.3, life: [1.4, 2.4], size: [0.08, 0.15], sizeEnd: 0.3, color, bright: 2, gravity: -0.3,
+        });
+      }
+      // Walking into the lit doorway goes through.
+      const u = (p.x - dx) * rx + (p.z - dz) * rz;
+      const d = (p.x - dx) * fx + (p.z - dz) * fz;
+      if (!travelled && portalMade && g.state === 'play' && Math.abs(u) < w / 2 - 0.6 && d < 0.5 && d > -1.5 && p.y < y + h && p.y > y - 2) {
+        travelled = true;
+        g.travel(need.target);
+      }
+    },
+  });
 }
 
 // --- water ---------------------------------------------------------------------------------------

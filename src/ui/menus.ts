@@ -12,6 +12,10 @@ import { ENEMIES } from '../enemies/defs';
 import { HERO_LOOK } from '../player/dragonRig';
 import { ELEMENTS } from '../game/types';
 import { TRIALS, type TrialGround } from '../levels/trials';
+import { hasLevel } from '../levels';
+
+/** Act II's realms in the Wardgate's order: each is listed once unlocked (the hub by its fissure, the rest by their gates). */
+const ACT_II_REALMS = ['hollow', 'mycelium', 'drowned', 'mine', 'hatchery'];
 import { RANKS } from '../combat/style';
 import { forInput } from './keys';
 
@@ -463,9 +467,10 @@ export class Menus {
       const pct = Math.round(e * 100);
       return `<div class="lvl-explored"><i style="width:${pct}%"></i></div><p class="lvl-pct">${pct}% explored</p>`;
     };
-    // Act II's hub joins the list once Aster has been down the Sanctum's fissure.
-    for (const id of ['fen', 'falls', 'frostworks', 'plains', 'keep', ...(g.save.unlocked.includes('hollow') ? ['hollow'] : [])]) {
-      const info = LEVEL_INFO[id]!;
+    // Act II's hub joins the list once Aster has been down the Sanctum's fissure, and its realms as their gates open.
+    const act2 = ACT_II_REALMS.filter((id) => g.save.unlocked.includes(id) && hasLevel(id));
+    for (const id of ['fen', 'falls', 'frostworks', 'plains', 'keep', ...act2]) {
+      const info = LEVEL_INFO[id] ?? { name: id, blurb: '', collectibles: 0 };
       const unlocked = g.save.unlocked.includes(id);
       const b = document.createElement('button');
       b.className = `lvl${g.save.levelsDone[id] ? ' done' : ''}`;

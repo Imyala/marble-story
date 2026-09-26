@@ -3,6 +3,8 @@ import type { LevelDef, Builder } from '../world/level';
 import { Npc } from '../world/level';
 import { ambient, jitter, mix } from './common';
 import { NYXA_FREED } from '../game/story';
+import { eggsFound } from '../game/progress';
+import { MYCELIUM_EGGS } from '../game/quests';
 import type { Game } from '../game/game';
 import type { Line } from '../ui/dialogue';
 import { Talker, type Prop } from '../entities/props';
@@ -837,10 +839,25 @@ function lazyEnemies(b: Builder, x: number, z: number, r: number, list: [string,
 // --- the sealed gates -------------------------------------------------------------------------------
 
 function gates(b: Builder): void {
-  sealedGate(b, 'mycelium', 107.5, 16, -Math.PI / 2, 'The Mycelium Deep', 'The Mycelium Deep... sealed tight by the roots. Not yet, Aster.', { color: 0xc890ff, stone: 0x7a6a98 });
-  sealedGate(b, 'drowned', 50.5, -49.5, Math.atan2(-10, 7), 'The Drowned City', 'The Drowned City. The roots are holding the door shut, right under the water. Not yet.', { color: 0x6ae0ff, stone: 0x5a88a0 });
-  sealedGate(b, 'mine', -107.5, 12, Math.PI / 2, 'The Crystal Mine', 'The Crystal Mine. I can hear crystals singing on the other side... but the roots won\'t budge. Not yet.', { color: 0xa8f0ff, stone: 0x8a8aa4 });
-  sealedGate(b, 'hatchery', -46.5, -71.5, Math.atan2(1, 0.3), 'The First Hatchery', 'The First Hatchery, where the old dragons kept their eggs. Sealed by the roots... not yet.', { color: 0xffd08a, stone: 0x9a8878 });
+  // The Mycelium gate remembers eggs: once Mossa has told Aster the rite, twelve returned eggs open it (Act II's main thread).
+  sealedGate(b, 'mycelium', 107.5, 16, -Math.PI / 2, 'The Mycelium Deep', 'The Mycelium Deep... sealed tight by the roots. Not yet, Aster.', {
+    color: 0xc890ff, stone: 0x7a6a98,
+    opens: {
+      target: 'mycelium', eggs: MYCELIUM_EGGS, flag: 'story:hollow:mossa',
+      hint: (missing) => `The roots won't budge yet. Mossa said the old gates remember eggs: ${missing} and they'll wither.`,
+      opened: 'Whoa! The roots are shrivelling! The gate remembers the eggs, Aster, just like Mossa said!',
+    },
+  });
+  // The other three open in later rounds: each only waits for its flag to be set.
+  sealedGate(b, 'drowned', 50.5, -49.5, Math.atan2(-10, 7), 'The Drowned City', 'The Drowned City. The roots are holding the door shut, right under the water. Not yet.', {
+    color: 0x6ae0ff, stone: 0x5a88a0, opens: { target: 'drowned', flag: 'story:hollow:gate-drowned-ready' },
+  });
+  sealedGate(b, 'mine', -107.5, 12, Math.PI / 2, 'The Crystal Mine', 'The Crystal Mine. I can hear crystals singing on the other side... but the roots won\'t budge. Not yet.', {
+    color: 0xa8f0ff, stone: 0x8a8aa4, opens: { target: 'mine', flag: 'story:hollow:gate-mine-ready' },
+  });
+  sealedGate(b, 'hatchery', -46.5, -71.5, Math.atan2(1, 0.3), 'The First Hatchery', 'The First Hatchery, where the old dragons kept their eggs. Sealed by the roots... not yet.', {
+    color: 0xffd08a, stone: 0x9a8878, opens: { target: 'hatchery', flag: 'story:hollow:gate-hatchery-ready' },
+  });
   // Rock heaped either side, so each gate sits in the wall rather than in front of it, and a glow of crystal at its feet.
   for (const [x, z, yaw, c] of [[107.5, 16, -Math.PI / 2, 0xc890ff], [-107.5, 12, Math.PI / 2, 0xa8f0ff], [-46.5, -71.5, Math.atan2(1, 0.3), 0xffd08a],
     [50.5, -49.5, Math.atan2(-10, 7), 0x6ae0ff]] as [number, number, number, number][]) {
@@ -973,13 +990,61 @@ function talkMossa(g: Game): void {
       { who: 'mossa', text: 'The Mycelium Deep. The Drowned City. The Crystal Mine. And the First Hatchery, where the old dragons kept their eggs.' },
       // Act II's main thread goes on from here (src/game/quests.ts, main()): what feeds the roots over the four gates.
       { who: 'mossa', text: 'Something down there is feeding those roots. Find it, and the gates may open again. Until then, our fire is yours.' },
+      ...mossaRite(g),
     ], () => {
       g.saveNow();
       nyxaReturns(g);
     });
     return;
   }
-  g.say([{ who: 'mossa', text: 'The roots are still thick on the gates, dear. Whatever feeds them is deeper than any of us dare go.' }]);
+  // Saves that met her before the rite was part of her tale hear it now.
+  if (!g.save.found['story:hollow:mossa-rite']) {
+    g.say(mossaRite(g), () => g.saveNow());
+    return;
+  }
+  const eggs = eggsFound(g.save);
+  if (g.save.levelsDone.mycelium) {
+    if (!g.save.found['story:hollow:mossa-mycelium']) {
+      g.save.found['story:hollow:mossa-mycelium'] = true;
+      g.say([
+        { who: 'mossa', text: 'The lamps! Did you see? Every one in the Hollow came up bright at once, the moment the Spore Mother fell.' },
+        { who: 'mossa', text: 'Whatever she fed into those roots, it has stopped. The Deep breathes again. Thank you, dear. All of Lanternhollow thanks you.' },
+        { who: 'aster', text: 'The other gates are still shut.' },
+        { who: 'mossa', text: 'The Drowned City\'s is next, out under the canal. The roots there drink from something else. Something that swims.' },
+        { who: 'mossa', text: 'Not yet, dear. Rest a while, help our folk, and listen to the water. It will tell us when.' },
+      ], () => g.saveNow());
+      return;
+    }
+    g.say([{ who: 'mossa', text: 'The Drowned City\'s gate still holds, dear. Listen to the water, and help our folk while it makes up its mind.' }]);
+    return;
+  }
+  if (g.save.found['gate:mycelium']) {
+    g.say([{ who: 'mossa', text: 'The Mycelium gate stands open! Go through, dear, and mind the spores. Whatever feeds those roots is down there.' }]);
+    return;
+  }
+  g.say([{
+    who: 'mossa',
+    text: eggs >= MYCELIUM_EGGS
+      ? `${eggs} eggs' warmth on you! Go now, dear, to the Mycelium gate, east past the Glowcap Wood, before the roots think better of it.`
+      : `${eggs} eggs, dear. ${MYCELIUM_EGGS - eggs} more and the Mycelium gate will know you. The realms you came through still hide a few, and so does the Hollow.`,
+  }]);
+}
+
+/**
+ * Mossa's rite: the old dragons' gates remember eggs, and twelve rescued
+ * eggs carried to the Mycelium gate will wither its roots (see gates()).
+ */
+function mossaRite(g: Game): Line[] {
+  g.save.found['story:hollow:mossa-rite'] = true;
+  const eggs = eggsFound(g.save);
+  return [
+    { who: 'mossa', text: 'But you, dear... you might open one sooner. The old dragons built those gates, and a dragon\'s gate remembers eggs.' },
+    { who: 'mossa', text: `Carry the warmth of ${MYCELIUM_EGGS} rescued eggs to the Mycelium gate, east past the Glowcap Wood, and its roots will wither. That's the old rite.` },
+    { who: 'flick', text: 'Eggs! We\'ve been finding lost eggs everywhere! How many have we got, Aster?' },
+    eggs >= MYCELIUM_EGGS
+      ? { who: 'mossa', text: `${eggs}? Then don't sit here listening to an old woman. Go now, dear, before the roots think better of it.` }
+      : { who: 'mossa', text: `${eggs ? `${eggs}. Then ${MYCELIUM_EGGS - eggs} more` : 'None yet? Then look for them'}, dear. The realms you came through still hide a few, I'd wager, and so does the Hollow.` },
+  ];
 }
 
 function talkTallow(g: Game): void {

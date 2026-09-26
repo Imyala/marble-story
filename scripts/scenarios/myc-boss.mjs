@@ -1,7 +1,7 @@
 /**
  * Mycora's Grove: the roots across its mouth wither once the Rootchoke is
  * won; the trigger at (0, 204) starts the fight (Mycora speaks, the barrier
- * rises); defeating her (hp set here) plays the outro, frees the grove's
+ * rises); defeating her (put straight into her last, downed state here) plays the outro, frees the grove's
  * foragers, sets levelsDone.mycelium and opens a portal home.
  *   node scripts/play.mjs myc-boss
  */
@@ -44,6 +44,10 @@ export default async function (h) {
   // Defeat her.
   await h.eval(() => {
     const b = window.wyrm.boss;
+    // Mycora never skips a phase and only dies downed on the floor in her last one:
+    // put her there (the fight itself is tested beat by beat in mycora-fight).
+    b.phase = 3;
+    b.setMode?.('downed');
     b.hp = 1;
     b.takeHit({ damage: 999, type: 'fire', dirX: 0, dirZ: 1, knockback: 0, launch: 0, stagger: 0, hitstop: 0, buildup: 0, heavy: true, spike: false, source: 'melee', move: 'test', fromPlayer: true, ox: b.x, oz: b.z - 1 });
   });
